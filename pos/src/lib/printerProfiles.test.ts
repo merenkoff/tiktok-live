@@ -4,7 +4,9 @@
 
 // Shared printer profiles on the till (TechDocs/POS_PRINTER_PROFILES.md): the
 // owner's own pick wins, an approved profile for the driver comes next, the
-// third document printed with an own pick reports it — once.
+// third document printed with an own pick is reported by the next sync pass —
+// once. The counting half (`lib/printerProfiles.ts`) is network-free; the
+// sending half is `offline/printerProfilesSync.ts`.
 
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,11 +21,11 @@ import {
   chooseEncoding,
   forgetOwnEncoding,
   notePrinted,
-  refreshSharedProfiles,
   resetPrinterProfilesForTests,
   resolvePrinterEncoding,
   sharedFor,
 } from './printerProfiles';
+import { refreshSharedProfiles, sendPendingReports, syncPrinterProfiles } from '../offline/printerProfilesSync';
 
 const XP = { driver: 'XP-58', title: 'Xprinter XP-58IIH', table: 'cp866' as const, esc_t: 17 };
 const posRequest = vi.mocked(api.posRequest);
@@ -94,29 +96,34 @@ describe('the approved list on a printer', () => {
 });
 
 describe('reporting the owner’s pick', () => {
+  /** A few prints, then the sync pass that sends what they marked. */
+  async function print(n: number, width = 58) {
+    for (let i = 0; i < n; i++) await notePrinted('Каса', width);
+    await sendPendingReports();
+  }
+
   it('reports at the third document, once, with the number the profile selects', async () => {
     posRequest.mockResolvedValue({ ok: true });
     await savePrinterEncoding('Каса', { table: 'cp866', esc_t: null });
-    await notePrinted('Каса', 58);
-    await notePrinted('Каса', 58);
+    await print(2);
     expect(reports()).toHaveLength(0);
-    await notePrinted('Каса', 58);
+    await print(1);
     expect(reports()).toEqual([
       ['post', '/printer-profiles/report', { driver: 'XP-58', table: 'cp866', esc_t: 17, prints: 3, paper_width_mm: 58 }],
     ]);
-    await notePrinted('Каса', 58);
+    await print(3);
     expect(reports()).toHaveLength(1);
   });
 
-  it('a changed profile counts again; a failed report is tried at the next print', async () => {
+  it('a changed profile counts again; a failed report is sent at the next pass', async () => {
     await savePrinterEncoding('Каса', { table: 'cp866', esc_t: null });
-    await notePrinted('Каса', 80);
+    await print(1, 80);
     await savePrinterEncoding('Каса', { table: 'windows1251', esc_t: 73 });
     posRequest.mockRejectedValueOnce(new Error('offline'));
-    for (let i = 0; i < 3; i++) await notePrinted('Каса', 80);
-    expect(reports()).toHaveLength(1); // tried and failed at the third
+    await print(3, 80);
+    expect(reports()).toHaveLength(1); // tried and failed
     posRequest.mockResolvedValue({ ok: true });
-    await notePrinted('Каса', 80);
+    await print(1, 80);
     expect(reports()).toHaveLength(2);
     expect(reports()[1][2]).toMatchObject({ table: 'windows1251', esc_t: 73, prints: 4, paper_width_mm: 80 });
   });
@@ -124,18 +131,25 @@ describe('reporting the owner’s pick', () => {
   it('never reports the approved profile or the default, nor a printer without a driver', async () => {
     posRequest.mockResolvedValue({ profiles: [XP] });
     await refreshSharedProfiles();
-    for (let i = 0; i < 4; i++) await notePrinted('Каса', 58);
+    await print(4);
     printersAre([{ name: 'PDF', driver: '' }]);
     resetPrinterProfilesForTests();
     await savePrinterEncoding('PDF', { table: 'cp866', esc_t: null });
     for (let i = 0; i < 4; i++) await notePrinted('PDF', 58);
+    await sendPendingReports();
     expect(reports()).toHaveLength(0);
   });
 
-  it('a print counts itself in the background', async () => {
-    posRequest.mockResolvedValue({ ok: true });
+  it('a print counts itself, and a sync pass sends it and fetches the list once it is old', async () => {
+    posRequest.mockImplementation(async (method: string) => (method === 'get' ? { profiles: [] } : { ok: true }));
     await savePrinterEncoding('Каса', { table: 'cp866', esc_t: null });
     for (let i = 0; i < 3; i++) await printReceipt('Каса', { items: [] } as unknown as ReceiptData);
-    await vi.waitFor(() => expect(reports()).toHaveLength(1));
+    await vi.waitFor(async () => expect((await db.meta.get('printerProfileReport:Каса'))?.value).toMatchObject({ prints: 3 }));
+    await syncPrinterProfiles();
+    expect(reports()).toHaveLength(1);
+    expect(posRequest).toHaveBeenCalledWith('get', '/printer-profiles');
+    posRequest.mockClear();
+    await syncPrinterProfiles(); // the list is fresh, nothing waiting
+    expect(posRequest).not.toHaveBeenCalled();
   });
 });

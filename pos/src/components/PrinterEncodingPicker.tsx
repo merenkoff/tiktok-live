@@ -4,10 +4,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { printEncodingTest, savePrinterEncoding, type ReceiptPaperWidth } from '../lib/printer';
+import { api } from '@pos/platform';
 import {
   forgetOwnEncoding,
-  refreshSharedProfiles,
   resolvePrinterEncoding,
+  saveSharedProfiles,
   type PrinterEncodingSource,
   type SharedPrinterProfile,
 } from '../lib/printerProfiles';
@@ -82,9 +83,13 @@ export function PrinterEncodingPicker({
       setEscText(resolved.encoding.esc_t === null ? '' : String(resolved.encoding.esc_t));
       setEscError(false);
     };
-    // What is kept first, then again once the approved list is fresh.
+    // What is kept first, then again once the approved list is fresh. The api
+    // comes through `@pos/platform`: a host component reaching the singleton
+    // relatively would get a second copy (`check:platform-boundary`).
     void show()
-      .then(() => refreshSharedProfiles())
+      .then(() => api.posRequest<{ profiles?: unknown }>('get', '/printer-profiles'))
+      .then((data) => saveSharedProfiles(data?.profiles))
+      .catch(() => undefined)
       .then(() => show());
     return () => {
       alive = false;

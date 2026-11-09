@@ -8,8 +8,8 @@
 // (`printerEncoding:<name>`, `lib/printer.ts`). Two things are added here:
 //
 //   * REPORT: once three documents have printed with a profile the owner picked
-//     by hand, the till sends «this DRIVER prints with this profile» to the
-//     server, once per profile. The driver is the operating system's name for
+//     by hand, the print is marked for reporting «this DRIVER prints with this
+//     profile», once per profile. The driver is the operating system's name for
 //     it (Rust `os_printers.rs`), not the printer's own name, which is whatever
 //     the shop called it.
 //   * SHARE: the super admin approves one profile per driver; the till keeps
@@ -17,11 +17,18 @@
 //     still has it) and prints through it on a printer whose owner has not
 //     picked a profile. A profile the owner picked always wins.
 //
+// This file talks to no server: it is part of the `@pos/platform` chunk
+// (`lib/printer.ts` is), and the api singleton must not be reached from there
+// (`npm run check:platform-boundary`). What crosses the network — sending the
+// marked reports, fetching the approved list — is the host's
+// `offline/printerProfilesSync.ts`, run with every sync pass. Both halves meet
+// in the device's settings, which is also why nothing here keeps a copy in
+// memory: the host's copy of this file and the platform chunk's must agree.
+//
 // Nothing here may break printing: every function swallows its own failures.
 
 import { invoke } from '@tauri-apps/api/core';
-import { getMeta, setMeta } from '../offline/db';
-import { api } from '../services/api';
+import { db, getMeta, setMeta } from '../offline/db';
 import {
   DEFAULT_PRINTER_ENCODING,
   effectiveEscT,
@@ -34,9 +41,8 @@ import {
 /** A till reports after this many documents printed with one profile — the server's `REPORT_AFTER_PRINTS`. */
 export const REPORT_AFTER_PRINTS = 3;
 
-/** How long the approved list is trusted before the till asks again. */
-const SHARED_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-const SHARED_KEY = 'printerProfiles:shared';
+/** Where the approved list is kept on the device. */
+export const SHARED_PROFILES_KEY = 'printerProfiles:shared';
 
 export interface SharedPrinterProfile {
   driver: string;
@@ -84,7 +90,7 @@ export function chooseEncoding(
   return { encoding: { ...DEFAULT_PRINTER_ENCODING }, source: 'default' };
 }
 
-function isProfile(p: unknown): p is SharedPrinterProfile {
+export function isSharedProfile(p: unknown): p is SharedPrinterProfile {
   if (!p || typeof p !== 'object') return false;
   const o = p as Record<string, unknown>;
   return (
@@ -124,49 +130,30 @@ export async function driverOf(printerName: string): Promise<string> {
 
 // ── The approved list ─────────────────────────────────────────────────────
 
-interface SharedCache {
+export interface SharedProfilesCache {
+  /** `Date.now()` of the last answer from the server; 0 = never. */
   fetched_at: number;
   profiles: SharedPrinterProfile[];
 }
 
-let sharedMemo: SharedCache | null = null;
-let refreshing: Promise<SharedPrinterProfile[]> | null = null;
-
-async function readShared(): Promise<SharedCache> {
-  if (sharedMemo) return sharedMemo;
+/** The kept list as it is on the device; empty when never fetched or unreadable. */
+export async function readSharedProfiles(): Promise<SharedProfilesCache> {
   try {
-    const raw = await getMeta<SharedCache>(SHARED_KEY);
-    const profiles = Array.isArray(raw?.profiles) ? raw!.profiles.filter(isProfile) : [];
-    sharedMemo = { fetched_at: typeof raw?.fetched_at === 'number' ? raw.fetched_at : 0, profiles };
+    const raw = await getMeta<SharedProfilesCache>(SHARED_PROFILES_KEY);
+    return {
+      fetched_at: typeof raw?.fetched_at === 'number' ? raw.fetched_at : 0,
+      profiles: Array.isArray(raw?.profiles) ? raw!.profiles.filter(isSharedProfile) : [],
+    };
   } catch {
-    sharedMemo = { fetched_at: 0, profiles: [] };
+    return { fetched_at: 0, profiles: [] };
   }
-  return sharedMemo;
 }
 
-/** Asks the server for the approved list and keeps it. Never throws: the kept list stays on any failure. */
-export function refreshSharedProfiles(): Promise<SharedPrinterProfile[]> {
-  refreshing ??= (async () => {
-    try {
-      const data = await api.posRequest<{ profiles?: unknown }>('get', '/printer-profiles');
-      const profiles = Array.isArray(data?.profiles) ? data.profiles.filter(isProfile) : [];
-      sharedMemo = { fetched_at: Date.now(), profiles };
-      await setMeta(SHARED_KEY, sharedMemo).catch(() => undefined);
-      return profiles;
-    } catch {
-      return (await readShared()).profiles;
-    } finally {
-      refreshing = null;
-    }
-  })();
-  return refreshing;
-}
-
-/** The kept list, refreshed in the background once it is old — a print never waits for the network. */
-export async function sharedProfiles(): Promise<SharedPrinterProfile[]> {
-  const cache = await readShared();
-  if (Date.now() - cache.fetched_at > SHARED_MAX_AGE_MS) void refreshSharedProfiles();
-  return cache.profiles;
+/** Keeps a fresh answer from the server (`offline/printerProfilesSync.ts`). */
+export async function saveSharedProfiles(profiles: unknown): Promise<SharedPrinterProfile[]> {
+  const list = Array.isArray(profiles) ? profiles.filter(isSharedProfile) : [];
+  await setMeta(SHARED_PROFILES_KEY, { fetched_at: Date.now(), profiles: list } satisfies SharedProfilesCache);
+  return list;
 }
 
 // ── Resolving and reporting ───────────────────────────────────────────────
@@ -179,7 +166,7 @@ export async function resolvePrinterEncoding(printerName: string): Promise<Resol
   } catch {
     own = null;
   }
-  const profiles = await sharedProfiles();
+  const { profiles } = await readSharedProfiles();
   // The OS is asked for the driver only when it can matter: a list to match
   // against, or the owner's own pick to report.
   const needDriver = profiles.length > 0 || (own !== null && typeof own === 'object');
@@ -193,19 +180,45 @@ export function forgetOwnEncoding(printerName: string): Promise<void> {
   return setMeta(printerEncodingMetaKey(printerName), null);
 }
 
-interface ReportState {
+/** What one printer's count stands at — `printerProfileReport:<name>` on the device. */
+export interface PrinterReportState {
   /** `driver|table|esc_t` — a changed profile starts the count again. */
   key: string;
+  driver: string;
+  table: PrinterEncodingTable;
+  /** The number the profile selects (the standard one filled in). */
+  esc_t: number;
+  paper_width_mm: 58 | 80;
   prints: number;
+  /** The server has it. Until then a count of `REPORT_AFTER_PRINTS` or more is waiting to be sent. */
   reported: boolean;
 }
 
-const reportKey = (printerName: string) => `printerProfileReport:${printerName}`;
+export const REPORT_KEY_PREFIX = 'printerProfileReport:';
+
+/** Counts waiting to be sent: the third document or later, not yet reported. */
+export async function pendingReports(): Promise<Array<{ metaKey: string; state: PrinterReportState }>> {
+  try {
+    const rows = await db.meta.where('key').startsWith(REPORT_KEY_PREFIX).toArray();
+    return rows
+      .map((row) => ({ metaKey: row.key, state: row.value as PrinterReportState }))
+      .filter(({ state }) => state && !state.reported && state.prints >= REPORT_AFTER_PRINTS && Boolean(state.driver));
+  } catch {
+    return [];
+  }
+}
+
+/** The server took a report: unless the profile changed meanwhile, it is not sent again. */
+export async function markReported(metaKey: string, key: string): Promise<void> {
+  const state = await getMeta<PrinterReportState>(metaKey);
+  if (state && state.key === key) await setMeta(metaKey, { ...state, reported: true });
+}
 
 /**
- * After a document printed: count it toward the owner's own profile and, at
- * the third, report it. Only the owner's own pick is reported — the approved
- * profile is already known, and the default says nothing. Never throws.
+ * After a document printed: count it toward the owner's own profile. At the
+ * third the count is waiting to be sent (`pendingReports`). Only the owner's
+ * own pick is counted — the approved profile is already known, and the default
+ * says nothing. Never throws.
  */
 export function notePrinted(printerName: string, paperWidthMm: number): Promise<void> {
   // One at a time: two documents printed back to back must count as two.
@@ -223,25 +236,23 @@ async function countPrint(printerName: string, paperWidthMm: number): Promise<vo
     const driver = await driverOf(printerName);
     if (!driver) return;
     const encoding = normalizeEncoding(own);
-    const key = `${driver}|${encoding.table}|${effectiveEscT(encoding)}`;
-    const saved = await getMeta<ReportState>(reportKey(printerName));
-    const state: ReportState =
-      saved && saved.key === key ? { ...saved, prints: saved.prints + 1 } : { key, prints: 1, reported: false };
-    if (state.prints >= REPORT_AFTER_PRINTS && !state.reported) {
-      try {
-        await api.posRequest('post', '/printer-profiles/report', {
-          driver,
-          table: encoding.table,
-          esc_t: effectiveEscT(encoding),
-          prints: state.prints,
-          paper_width_mm: paperWidthMm === 80 ? 80 : 58,
-        });
-        state.reported = true;
-      } catch {
-        // No network or no session: the next print tries again.
-      }
-    }
-    await setMeta(reportKey(printerName), state);
+    const escT = effectiveEscT(encoding);
+    const key = `${driver}|${encoding.table}|${escT}`;
+    const metaKey = `${REPORT_KEY_PREFIX}${printerName}`;
+    const saved = await getMeta<PrinterReportState>(metaKey);
+    const state: PrinterReportState =
+      saved && saved.key === key
+        ? { ...saved, prints: saved.prints + 1 }
+        : {
+            key,
+            driver,
+            table: encoding.table,
+            esc_t: escT,
+            paper_width_mm: paperWidthMm === 80 ? 80 : 58,
+            prints: 1,
+            reported: false,
+          };
+    await setMeta(metaKey, state);
   } catch {
     // Never in the way of printing.
   }
@@ -251,7 +262,5 @@ async function countPrint(printerName: string, paperWidthMm: number): Promise<vo
 export function resetPrinterProfilesForTests(): void {
   drivers.clear();
   driversRead = null;
-  sharedMemo = null;
-  refreshing = null;
   noting = Promise.resolve();
 }
