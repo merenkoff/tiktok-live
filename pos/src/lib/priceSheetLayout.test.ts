@@ -100,7 +100,10 @@ describe('where each tag goes', () => {
         expect(layout.perSheet, msg).toBeGreaterThanOrEqual(other.cols * other.rows);
       }
     }
-  });
+    // 181 × 371 sizes with six assertions each: well under a second alone, but
+    // on a CI worker shared with the rest of the suite it has crossed the 5 s
+    // default (PR #414), so the sweep gets its own budget.
+  }, 30_000);
 
   it('holds a whole number of the presets the dialog offers', () => {
     for (const p of LABEL_PRESETS) {
