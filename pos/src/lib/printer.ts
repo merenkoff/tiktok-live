@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { invoke } from '@tauri-apps/api/core';
-import { getMeta, setMeta } from '../offline/db';
+import { setMeta } from '../offline/db';
 import {
   DEFAULT_PRINTER_ENCODING,
   normalizeEncoding,
@@ -11,10 +11,17 @@ import {
   type EncodingCandidate,
   type PrinterEncoding,
 } from './printerEncoding';
+import { notePrinted, rememberDrivers, resolvePrinterEncoding } from './printerProfiles';
 
 export interface PrinterInfo {
   name: string;
   is_default: boolean;
+  /**
+   * The operating system's driver for the printer — the key shared printer
+   * profiles are approved under (TechDocs/POS_PRINTER_PROFILES.md). Absent
+   * from a desktop built before 2.9.1; '' when the system names none.
+   */
+  driver?: string;
 }
 
 export interface ReceiptItem {
@@ -157,24 +164,38 @@ export interface ReceiptData {
   feedback_url?: string | null;
 }
 
-export function listPrinters(): Promise<PrinterInfo[]> {
-  return invoke('list_printers');
+export async function listPrinters(): Promise<PrinterInfo[]> {
+  const printers = await invoke<PrinterInfo[]>('list_printers');
+  rememberDrivers(printers);
+  return printers;
 }
 
 /**
  * The character profile this device prints a printer's Cyrillic with
- * (`hardware/encoding.rs`), kept per printer name in the device's settings
- * and set on «Обладнання» by looking at a test sheet. Never throws: a printer
- * that was never set up, or a settings store that cannot be read, prints with
- * the default profile — Windows-1251 at its standard number — which is exactly
- * what every release before profiles printed with.
+ * (`hardware/encoding.rs`): the one kept per printer name in the device's
+ * settings, set on «Обладнання» by looking at a test sheet; else the profile
+ * the super admin approved for the printer's driver (`lib/printerProfiles.ts`);
+ * else the default — Windows-1251 at its standard number — which is exactly
+ * what every release before profiles printed with. Never throws.
  */
 export async function loadPrinterEncoding(printerName: string): Promise<PrinterEncoding> {
   try {
-    return normalizeEncoding(await getMeta<unknown>(printerEncodingMetaKey(printerName)));
+    return (await resolvePrinterEncoding(printerName)).encoding;
   } catch {
     return { ...DEFAULT_PRINTER_ENCODING };
   }
+}
+
+/** One document to a printer, then — in the background — counted toward reporting its profile. */
+async function printThrough(
+  command: string,
+  printerName: string,
+  paperWidthMm: ReceiptPaperWidth,
+  args: Record<string, unknown>
+): Promise<void> {
+  const encoding = await loadPrinterEncoding(printerName);
+  await invoke(command, { printerName, ...args, paperWidthMm, encoding });
+  void notePrinted(printerName, paperWidthMm);
 }
 
 export function savePrinterEncoding(printerName: string, encoding: PrinterEncoding): Promise<void> {
@@ -205,8 +226,7 @@ export async function printReceipt(
   receipt: ReceiptData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH,
 ): Promise<void> {
-  const encoding = await loadPrinterEncoding(printerName);
-  return invoke('print_receipt', { printerName, receipt, paperWidthMm, encoding });
+  return printThrough('print_receipt', printerName, paperWidthMm, { receipt });
 }
 
 /** One line of a kitchen ticket — what to make, how many, and how. */
@@ -247,8 +267,7 @@ export async function printKitchenTicket(
   ticket: KitchenTicketData,
   paperWidthMm: ReceiptPaperWidth
 ): Promise<void> {
-  const encoding = await loadPrinterEncoding(printerName);
-  return invoke('print_kitchen_ticket', { printerName, ticket, paperWidthMm, encoding });
+  return printThrough('print_kitchen_ticket', printerName, paperWidthMm, { ticket });
 }
 
 /** One line of a pre-bill: what was served, how many, at what the round locked. */
@@ -296,8 +315,7 @@ export async function printPrecheck(
   bill: PrecheckData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH
 ): Promise<void> {
-  const encoding = await loadPrinterEncoding(printerName);
-  return invoke('print_precheck', { printerName, bill, paperWidthMm, encoding });
+  return printThrough('print_precheck', printerName, paperWidthMm, { bill });
 }
 
 /** One line of a non-fiscal slip: what, how much, and — when it matters — for how much. */
@@ -341,6 +359,5 @@ export async function printSlip(
   slip: SlipData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH
 ): Promise<void> {
-  const encoding = await loadPrinterEncoding(printerName);
-  return invoke('print_slip', { printerName, slip, paperWidthMm, encoding });
+  return printThrough('print_slip', printerName, paperWidthMm, { slip });
 }
