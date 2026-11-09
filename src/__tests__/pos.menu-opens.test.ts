@@ -326,6 +326,11 @@ describe.skipIf(!hasDb)('menu opens — counting and the television snapshot', (
 
     it('counts today for every place, draws the plan only where a table was scanned, and moves the cursor', async () => {
       await clear();
+      // Other suites on the same database open menu pages too, and those opens
+      // are counted now: read from the cursor as it stood before ours, and
+      // look only at our own stores' events.
+      const before = Number((await pool.query(`SELECT COALESCE(max(id), 0)::bigint AS m FROM pos_menu_opens`)).rows[0].m);
+      const ofOurs = (e: { storeId: number }) => e.storeId === cafe.storeId || e.storeId === bistro.storeId;
       const keys = await getTableKeys(cafe.storeId);
       await open(`/m/${token}?t=${tableA}&k=${keys.get(tableA)}`);
       await open(`/m/${token}?t=${tableA}`);
@@ -335,7 +340,7 @@ describe.skipIf(!hasDb)('menu opens — counting and the television snapshot', (
       await open(`/m/${bistroToken}`);
       await settleMenuOpens();
 
-      const res = await wall(`?key=${menuWallKey()}`);
+      const res = await wall(`?key=${menuWallKey()}&after=${before}`);
       expect(res.statusCode).toBe(200);
       expect(res.headers['cache-control']).toBe('no-store');
       const snap = res.json() as MenuWallSnapshot;
@@ -368,8 +373,8 @@ describe.skipIf(!hasDb)('menu opens — counting and the television snapshot', (
       expect(b.halls).toBeNull();
       expect(b.tablesTotal).toBe(1);
 
-      // Events: every open of ours today, oldest first, with the table named.
-      const ours = snap.events.filter((e) => e.storeId === cafe.storeId || e.storeId === bistro.storeId);
+      // Events: every open of ours since the cursor, oldest first, with the table named.
+      const ours = snap.events.filter(ofOurs);
       expect(ours.map((e) => [e.storeId, e.tableName, e.hallName])).toEqual([
         [cafe.storeId, '1', 'Зал'],
         [cafe.storeId, '1', 'Зал'],
@@ -378,19 +383,19 @@ describe.skipIf(!hasDb)('menu opens — counting and the television snapshot', (
         [cafe.storeId, null, null],
         [bistro.storeId, null, null],
       ]);
-      expect(snap.lastId).toBe(Math.max(...snap.events.map((e) => e.id)));
+      expect(snap.lastId).toBeGreaterThanOrEqual(Math.max(...ours.map((e) => e.id)));
 
-      // The next read with the cursor sees nothing new, and the same totals.
+      // The next read with the cursor sees nothing new of ours, and no fewer opens.
       const again = (await wall(`?key=${menuWallKey()}&after=${snap.lastId}`)).json() as MenuWallSnapshot;
-      expect(again.events).toEqual([]);
-      expect(again.lastId).toBe(snap.lastId);
-      expect(again.total).toBe(snap.total);
+      expect(again.events.filter(ofOurs)).toEqual([]);
+      expect(again.lastId).toBeGreaterThanOrEqual(snap.lastId);
+      expect(again.total).toBeGreaterThanOrEqual(snap.total);
 
-      // One more open: exactly it comes back as the event.
+      // One more open: exactly it comes back as our event.
       await open(`/m/${bistroToken}`);
       await settleMenuOpens();
       const next = (await wall(`?key=${menuWallKey()}&after=${snap.lastId}`)).json() as MenuWallSnapshot;
-      expect(next.events.map((e) => e.storeId)).toEqual([bistro.storeId]);
+      expect(next.events.filter(ofOurs).map((e) => e.storeId)).toEqual([bistro.storeId]);
       expect(next.lastId).toBeGreaterThan(snap.lastId);
     });
 
