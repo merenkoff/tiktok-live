@@ -43,6 +43,7 @@
 | Перенацелить модуль | `POST /api/pos/super/module-remotes/repoint {module_id, url, store_ids?}` | панель «Перенацілити модуль»: id, новый URL (версия из URL, проба манифеста), чекбоксы магазинов; отчёт `updated / skipped / failed` |
 | Новый магазин | `POST /api/pos/super/stores {name, slug, template_store_id, owner_login, owner_password, owner_name?}` → 201 / 400 / 409 | кнопка «Новий магазин»: назва, код (підказка з назви), шаблон, власник, пароль; після — плашка «Передайте власнику» без пароля ([POS_ONBOARDING.md](POS_ONBOARDING.md)) |
 | Лиды с сайта | `GET /api/pos/super/leads?status=&interest=&q=&limit=&offset=`, `GET /api/pos/super/leads/:id`, `PATCH /api/pos/super/leads/:id {status?, note?}` | вкладка «Ліди» (`/super/leads`): статус-чипи, фільтр за продуктом, пошук; картка з історією заявок, статусом і нотаткою ([CRM_LEADS.md](CRM_LEADS.md)) |
+| Відкриття QR-меню | `GET /api/pos/super/menu-scans` (зведення), `GET /api/pos/super/menu-wall-key` (ключ телевізора), `GET /api/pos/super/menu-wall?key=&after=` (знімок — за ключем, не за токеном) | вкладка «QR-меню» (`/super/menu-scans`): плитки сьогодні / 7 д / 30 д / усього, таблиця закладів, кнопка «📺 Відкрити віджет» → `/super/wall?key=…` ([POS_MENU_WALL.md](POS_MENU_WALL.md)) |
 
 **Валидация та же, что у владельца** (`sanitizeEnabledModules`,
 `sanitizeModuleRemotes`, `assertSingleFiscalRemote` с провайдером магазина):
@@ -82,6 +83,15 @@
 возвращается); PIN владелец добавит сам. Код магазина — `^[a-z0-9][a-z0-9-]{2,40}$`, в нижнем
 регистре, потому что `loginWithPin` сравнивает введённое в нижнем регистре; занятый (в любом
 регистре) — 409. Если в шаблоне есть модуль `tables`, создаётся один пустой зал «Зала».
+
+## Відкриття QR-меню і телевізор офісу (POS_MENU_WALL.md, 2026-11-09)
+
+Вкладка «QR-меню» рахує, як часто гості відкривають меню закладів (кожне відкриття HTML-сторінки
+`/m/<key>` чи `/m/<key>/d/<id>` — рядок у `pos_menu_opens`, міграція `099`; прев'ю месенджерів і роботи
+не рахуються; IP і User-Agent не зберігаються), і відкриває віджет для телевізора `/super/wall?key=…`.
+Ключ — `HMAC(POS_SUPER_PASSWORD, 'menu-wall-v1')`, лише на читання лічильників і назв закладів і столів:
+телевізор не входить в адмінку й не тримає 12-годинний токен, зміна пароля відкликає ключ. Знімок несе
+нічого з продажів. Деталі, рішення і фази — у `POS_MENU_WALL.md`.
 
 ## Не в v1
 

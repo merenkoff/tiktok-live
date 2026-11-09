@@ -82,6 +82,30 @@ export function verifySuperToken(token: string, now = Date.now()): boolean {
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
 
+// ---- the television's read-only key -------------------------------------------
+
+const MENU_WALL_SALT = 'menu-wall-v1';
+
+/**
+ * The key `/super/wall?key=…` carries (TechDocs/POS_MENU_WALL.md, Д4): an
+ * HMAC of a fixed salt under the super password, 32 hex characters. The
+ * television never logs in and never holds a 12-hour token — it reads one
+ * snapshot of counters — and rotating the password revokes the key. Null
+ * while the password is not configured.
+ */
+export function menuWallKey(): string | null {
+  const configured = configuredPassword();
+  if (!configured) return null;
+  return createHmac('sha256', configured).update(MENU_WALL_SALT).digest('hex').slice(0, 32);
+}
+
+/** Constant-time check of a key from the address. False when not configured. */
+export function isMenuWallKey(key: unknown): boolean {
+  const expected = menuWallKey();
+  if (!expected || typeof key !== 'string' || key.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(key), Buffer.from(expected));
+}
+
 // ---- login rate limiting (per IP, in memory) --------------------------------
 
 const failures = new Map<string, { count: number; lockedUntil: number }>();

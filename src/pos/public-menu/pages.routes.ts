@@ -31,6 +31,7 @@ import { corkageCardLine } from './format.js';
 import { findMenuStore, findMenuTable, listMenuTables, loadPublicMenu, menuOgImageUrl } from './menu.service.js';
 import { menuOgImage } from './og-image.js';
 import { logger } from '../../logger.js';
+import { recordMenuOpen } from '../menu-opens.service.js';
 import { getTableKeys, verifyPrintLink, verifyTableKey } from './table-keys.js';
 import {
   MENU_PAGE_HEADERS,
@@ -46,6 +47,30 @@ function sendPage(reply: FastifyReply, status: number, html: string) {
 
 const queryParam = (request: FastifyRequest, name: 't' | 'k' | 'p'): unknown =>
   (request.query as Record<string, unknown> | undefined)?.[name];
+
+/**
+ * Count this open for the office television (TechDocs/POS_MENU_WALL.md):
+ * the HTML menu and dish pages only — never the JSON the page polls, never
+ * the print pages. Fire-and-forget: the guest's page is already on its way.
+ */
+function countOpen(
+  request: FastifyRequest,
+  storeId: number,
+  key: string,
+  table: { id: number } | null,
+  keyed: boolean,
+  page: 'menu' | 'dish'
+): void {
+  recordMenuOpen({
+    storeId,
+    tableId: table?.id ?? null,
+    keyed,
+    key,
+    page,
+    query: request.query,
+    userAgent: request.headers['user-agent'],
+  });
+}
 
 /**
  * The absolute address of the store's Open Graph picture (F15), made on the
@@ -69,6 +94,7 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
     if (!found) return sendPage(reply, 404, renderUnavailable());
     const table = await findMenuTable(found.store.id, queryParam(request, 't'));
     const keyed = table !== null && (await verifyTableKey(found.store.id, table.id, queryParam(request, 'k')));
+    countOpen(request, found.store.id, token, table, keyed, 'menu');
     return sendPage(
       reply,
       200,
@@ -117,6 +143,7 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
         : found.menu.categories.flatMap((c) => c.products).find((p) => p.id === productId) ?? null;
     const table = await findMenuTable(found.store.id, queryParam(request, 't'));
     const keyed = table !== null && (await verifyTableKey(found.store.id, table.id, queryParam(request, 'k')));
+    countOpen(request, found.store.id, token, table, keyed, 'dish');
     return sendPage(
       reply,
       200,

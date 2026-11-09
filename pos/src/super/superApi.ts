@@ -150,6 +150,90 @@ export interface SuperLicenseDetail extends SuperLicenseSummary {
   instances: SuperLicenseInstance[];
 }
 
+/** One place in the super admin's «QR-меню» tab (TechDocs/POS_MENU_WALL.md). */
+export interface MenuScansStoreRow {
+  id: number;
+  name: string;
+  slug: string;
+  menu_enabled: boolean;
+  today: number;
+  last7d: number;
+  last30d: number;
+  total: number;
+  table_today: number;
+  tables_total: number;
+  last_at: string | null;
+}
+
+export interface MenuScansSummary {
+  /** The Kyiv day the counts are of. */
+  day: string;
+  today: number;
+  last7d: number;
+  last30d: number;
+  total: number;
+  table_today: number;
+  stores: MenuScansStoreRow[];
+}
+
+/** The television's snapshot — `src/pos/menu-opens.service.ts` is the source of these shapes. */
+export interface MenuWallTable {
+  id: number;
+  name: string;
+  pos_x: number;
+  pos_y: number;
+  width: number;
+  height: number;
+  shape: 'rect' | 'round';
+  today: number;
+  lastAt: string | null;
+}
+
+export interface MenuWallHall {
+  id: number;
+  name: string;
+  tables: MenuWallTable[];
+}
+
+export interface MenuWallStore {
+  id: number;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  today: number;
+  lastHour: number;
+  last3h: number;
+  lastAt: string | null;
+  hourly: number[];
+  tableToday: number;
+  tablesScanned: number;
+  tablesTotal: number;
+  /** The floor plan, only for a place whose tables were scanned today. */
+  halls: MenuWallHall[] | null;
+}
+
+export interface MenuWallEvent {
+  id: number;
+  storeId: number;
+  tableId: number | null;
+  tableName: string | null;
+  hallName: string | null;
+  openedAt: string;
+}
+
+export interface MenuWallSnapshot {
+  now: string;
+  day: string;
+  total: number;
+  yesterdaySameTime: number;
+  hourly: number[];
+  tableToday: number;
+  bestDay: { day: string; count: number } | null;
+  stores: MenuWallStore[];
+  events: MenuWallEvent[];
+  lastId: number;
+}
+
 export function getSuperToken(): string | null {
   try {
     return sessionStorage.getItem(SUPER_TOKEN_KEY);
@@ -279,6 +363,27 @@ export class SuperApi {
   }
 
   /** Licence activations, most recently seen first (TechDocs/POS_LICENSING.md). */
+  /** The «QR-меню» tab: opens of the guest menu per place (TechDocs/POS_MENU_WALL.md). */
+  async menuScans(): Promise<MenuScansSummary> {
+    const { data } = await this.client.get<MenuScansSummary>('/menu-scans');
+    return data;
+  }
+
+  /** The read-only key the television's page carries in its address. */
+  async menuWallKey(): Promise<string> {
+    const { data } = await this.client.get<{ key: string }>('/menu-wall-key');
+    return data.key;
+  }
+
+  /**
+   * The television's snapshot. Gated by the key, not the super token: the
+   * screen never logs in. `after` is the cursor of the last seen open.
+   */
+  async menuWall(key: string, after: number): Promise<MenuWallSnapshot> {
+    const { data } = await this.client.get<MenuWallSnapshot>('/menu-wall', { params: { key, after } });
+    return data;
+  }
+
   async listLicenses(): Promise<SuperLicenseSummary[]> {
     const { data } = await this.client.get<SuperLicenseSummary[]>('/licenses');
     return data;
