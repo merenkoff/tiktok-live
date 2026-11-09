@@ -177,7 +177,7 @@ Web-шелл, поза guard і поза `SuperAdminApp` (без вкладок 
 | W1 | Міграція `099_pos_menu_opens.sql`, `menu-opens.service.ts` (`recordMenuOpen`, `isPreviewAgent`, `settleMenuOpens`), запис у `pages.routes.ts`; тест: сторінка й страва пишуть рядок зі столом/без, JSON і `/qr` — ні, робот — ні, `via` по slug | зроблено 2026-11-09 |
 | W2 | Знімок і зведення в сервісі; ключ (`menuWallKey`, `isMenuWallKey`) у `superAuth.ts`; три маршрути в `super.routes.ts`; тести: ключ (503/403/200), знімок (доба, вчора, bestDay, зали лише зі сканами столів, події за курсором) | зроблено 2026-11-09 |
 | W3 | Вкладка «QR-меню» в `SuperAdminApp`, `MenuScansPage.tsx`, методи в `superApi.ts` | зроблено 2026-11-09 |
-| W4 | `/super/wall`: `MenuWallPage`, `WallBoard`, чисті `menuWall.ts` (ранжування, кольори, святкування, час), `MenuWall.css`; маршрут у `renderRoutes.tsx` | зроблено 2026-11-09 |
+| W4 | `/super/wall`: `MenuWallPage`, `WallBoard`, чисті `menuWall.ts` (ранжування, кольори, святкування, час), `menu-wall.css`; маршрут у `renderRoutes.tsx` | зроблено 2026-11-09 |
 | W5 | `HallPlan` + `packHalls` (чисте, з тестами): усі зали на екрані, тепло столів, пульс | зроблено 2026-11-09 |
 | W6 | `WallCelebration`, `wallSound.ts`, `wallDevice.ts`, ніч, налаштування | зроблено 2026-11-09 |
 | W7 | lint/typecheck/тести (сервер `pos.menu-opens.test.ts`, чисті `menuWall.test.ts` / `hallPack.test.ts`, e2e `pos/e2e/menu-wall.spec.ts` на мок-знімку), скриншоти екрана на мок-даних (1920×1080: старт, «Заклади», план залів, святкування), CLAUDE.md, POS_SUPER_ADMIN.md, PR | зроблено 2026-11-09 |
@@ -197,7 +197,7 @@ Web-шелл, поза guard і поза `SuperAdminApp` (без вкладок 
   `src/pos/routes/super.routes.ts`. Тести: `src/__tests__/pos.menu-opens.test.ts`.
 - Клієнт: `pos/src/super/MenuScansPage.tsx`, `pos/src/super/wall/` (`MenuWallPage.tsx`, `WallBoard.tsx`,
   `HallPlan.tsx`, `WallCelebration.tsx`, `menuWall.ts`, `hallPack.ts`, `wallSound.ts`, `wallDevice.ts`,
-  `MenuWall.css`), методи в `pos/src/super/superApi.ts`, маршрут `/super/wall` у
+  `menu-wall.css`), методи в `pos/src/super/superApi.ts`, маршрут `/super/wall` у
   `pos/src/modules/renderRoutes.tsx`. Тести: `menuWall.test.ts`, `hallPack.test.ts`, `pos/e2e/menu-wall.spec.ts`.
 
 ## 10. Що перевірити на живому стенді після деплою

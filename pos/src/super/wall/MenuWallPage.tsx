@@ -32,7 +32,7 @@ import {
 } from './menuWall';
 import { playWallSound, resumeWallSound, unlockWallSound, type WallSound } from './wallSound';
 import { enterWallFullscreen, keepScreenAwake } from './wallDevice';
-import './MenuWall.css';
+import './menu-wall.css';
 
 const SOUND_BY_KIND: Record<Celebration['kind'], WallSound> = {
   open: 'open',
