@@ -1,0 +1,1015 @@
+/*
+ * The office television (TechDocs/POS_MENU_WALL.md): a dark screen so the
+ * places' colours glow, everything in em from one size tied to the smaller of
+ * vw / vh — the same picture on a 55" TV and on a laptop turned to the wall.
+ * Carried over from the «Малин» stop-sticker widget, with restaurants and
+ * their floor plans in place of bus stops.
+ */
+body.mw-mode {
+  background: #0f1420;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.mw {
+  --bg: #0f1420;
+  --card: rgba(255, 255, 255, 0.055);
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #f4f6fb;
+  --muted: rgba(244, 246, 251, 0.58);
+  --up: #3ddc97;
+  --warn: #ffb547;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(42, 120, 214, 0.18), transparent 60%),
+    radial-gradient(90% 80% at 100% 100%, rgba(0, 175, 245, 0.1), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--pos-font, 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: min(2.15vw, 4.4vh);
+  line-height: 1.25;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 1.2s ease;
+}
+
+/* Night (23–06): dimmed, so it does not light the whole office */
+.mw--night {
+  filter: brightness(0.55) saturate(0.85);
+}
+
+.mw-muted {
+  color: var(--muted);
+}
+
+/* ---- The board */
+.mw-board {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.55fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.9em 1.1em;
+  height: 100%;
+  padding: max(0.9em, env(safe-area-inset-top)) max(1.2em, env(safe-area-inset-right)) max(0.9em, env(safe-area-inset-bottom))
+    max(1.2em, env(safe-area-inset-left));
+  box-sizing: border-box;
+}
+
+.mw-top {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+}
+
+.mw-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7em;
+  min-width: 0;
+}
+
+.mw-brand-name {
+  margin: 0;
+  font-weight: 800;
+  font-size: 1.15em;
+  letter-spacing: 0.18em;
+}
+
+.mw-brand-sub {
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mw-status {
+  display: flex;
+  gap: 0.4em;
+  margin-left: auto;
+}
+
+.mw-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.6em;
+  padding: 0 0.6em;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.75em;
+}
+
+.mw-chip--warn {
+  color: #1a1206;
+  background: var(--warn);
+  font-weight: 700;
+}
+
+.mw-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.05;
+}
+
+.mw-clock-time {
+  font-size: 1.65em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.mw-clock-date {
+  color: var(--muted);
+  font-size: 0.75em;
+}
+
+.mw-clock-date::first-letter {
+  text-transform: uppercase;
+}
+
+/* ---- Left: today */
+.mw-today {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1em 1.1em 0.9em;
+  border: 1px solid var(--line);
+  border-radius: 1.1em;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.mw-stripe {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  height: 0.32em;
+}
+
+.mw-stripe > span {
+  flex: 1;
+}
+
+.mw-today-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.mw-today-total {
+  margin: 0.05em 0 0;
+  font-size: 5.4em;
+  font-weight: 800;
+  line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  background: linear-gradient(100deg, #ffffff 30%, var(--accent, #6fb6ff));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mw-today-unit {
+  margin: 0.15em 0 0;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.mw-today-delta {
+  margin: 0.45em 0 0;
+  color: var(--muted);
+  font-size: 0.8em;
+}
+
+.mw-today-delta--up {
+  color: var(--up);
+}
+
+.mw-today-delta .mw-muted {
+  color: var(--muted);
+}
+
+.mw-today-tables {
+  margin: 0.3em 0 0;
+  color: var(--muted);
+  font-size: 0.8em;
+}
+
+.mw-today-tables b {
+  color: var(--text);
+}
+
+.mw-hours {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.14em;
+  flex: 1;
+  min-height: 2.2em;
+  margin-top: 0.8em;
+}
+
+.mw-hour {
+  display: block;
+  border-radius: 0.2em 0.2em 0 0;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.mw-hour--future {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mw-hour--now {
+  background: var(--accent, #6fb6ff);
+  box-shadow: 0 0 0.6em var(--accent, #6fb6ff);
+}
+
+.mw-hours-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.2em;
+  color: var(--muted);
+  font-size: 0.6em;
+  font-variant-numeric: tabular-nums;
+}
+
+.mw-last {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+  margin: 0.55em 0 0;
+  font-size: 0.8em;
+}
+
+.mw-last b {
+  font-weight: 700;
+  font-size: 1.1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Right: the tabs — «Заклади» and a plan per place */
+.mw-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mw-tabs {
+  position: relative;
+  display: flex;
+  gap: 0.4em;
+  margin-bottom: 0.55em;
+  overflow: hidden;
+}
+
+.mw-tab {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 2em;
+  padding: 0 1em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.mw-tab--place {
+  border-color: color-mix(in srgb, var(--c) 55%, transparent);
+}
+
+.mw-tab[aria-selected='true'] {
+  border-color: transparent;
+  background: var(--text);
+  color: var(--bg);
+}
+
+.mw-tab--place[aria-selected='true'] {
+  background: var(--c);
+  color: var(--fg, #fff);
+}
+
+/* The bar under the tabs — how long until the next one */
+.mw-tabs-timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 0.12em;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--accent, #6fb6ff);
+  opacity: 0.5;
+  transform-origin: left;
+  animation: mw-timer linear forwards;
+}
+
+@keyframes mw-timer {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.mw-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42em;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  animation: mw-fade-in 0.5s ease;
+}
+
+@keyframes mw-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4em);
+  }
+}
+
+.mw-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.6em 2.2em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7em;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 3.4em;
+  padding: 0.2em 0.9em 0.2em 0.6em;
+  border: 1px solid var(--line);
+  border-left: 0.28em solid var(--c);
+  border-radius: 0.8em;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.mw-row--idle {
+  opacity: 0.5;
+}
+
+.mw-row > :not(.mw-row-bar) {
+  position: relative;
+}
+
+.mw-row-rank {
+  color: var(--muted);
+  font-size: 1.05em;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mw-ava {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2em;
+  height: 2.2em;
+  border-radius: 50%;
+  background: var(--c);
+  color: var(--fg, #fff);
+  font-weight: 800;
+  font-size: 1em;
+  overflow: hidden;
+}
+
+.mw-ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.mw-row-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.05em;
+  min-width: 0;
+}
+
+.mw-row-name {
+  min-width: 0;
+  font-size: 1.05em;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mw-row-sub {
+  color: var(--muted);
+  font-size: 0.7em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The share of the leader — the row's background filled in the place's colour */
+.mw-row-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 30%, transparent), color-mix(in srgb, var(--c) 12%, transparent));
+  transition: width 0.8s ease;
+}
+
+.mw-row-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.05;
+}
+
+.mw-row-value b {
+  font-size: 1.55em;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.mw-row-value small {
+  color: var(--up);
+  font-size: 0.65em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mw-rows-more {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75em;
+  text-align: center;
+}
+
+.mw-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9em;
+  padding: 1em;
+  border: 1px dashed var(--line);
+  border-radius: 1em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.mw-empty p {
+  margin: 0;
+  max-width: 22em;
+}
+
+/* A «QR» that breathes while the first open of the day is awaited */
+.mw-empty-qr {
+  width: 3em;
+  height: 3em;
+  border-radius: 0.5em;
+  background:
+    linear-gradient(90deg, var(--text) 0.55em, transparent 0) 0 0 / 1em 1em,
+    linear-gradient(var(--text) 0.55em, transparent 0) 0 0 / 1em 1em;
+  opacity: 0.35;
+  animation: mw-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes mw-breathe {
+  50% {
+    opacity: 0.75;
+    transform: scale(1.06);
+  }
+}
+
+/* ---- The floor plan of one place */
+.mw-place {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  animation: mw-fade-in 0.5s ease;
+}
+
+.mw-place-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  margin-bottom: 0.5em;
+}
+
+.mw-place-head .mw-ava {
+  width: 1.9em;
+  height: 1.9em;
+  font-size: 0.95em;
+}
+
+.mw-place-name {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.15em;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mw-place-stats {
+  display: flex;
+  gap: 0.9em;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75em;
+  white-space: nowrap;
+}
+
+.mw-place-stats b {
+  color: var(--text);
+  font-size: 1.25em;
+  font-variant-numeric: tabular-nums;
+}
+
+.mw-plan {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 1em;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.mw-hall {
+  position: absolute;
+  border: 1px dashed color-mix(in srgb, var(--c) 45%, transparent);
+  border-radius: 0.5em;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / var(--cell) var(--cell),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / var(--cell) var(--cell);
+}
+
+.mw-hall-name {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin: 0 0 0.45em;
+  color: var(--muted);
+  font-size: 0.7em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mw-table {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.35em;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  line-height: 1;
+  transition: background-color 0.8s ease, color 0.8s ease;
+}
+
+.mw-table--round {
+  border-radius: 50%;
+}
+
+.mw-table--warm {
+  border-color: transparent;
+  box-shadow: 0 0 0.9em color-mix(in srgb, var(--c) 35%, transparent);
+}
+
+.mw-table--idle {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.mw-table-name {
+  font-size: 0.62em;
+  font-weight: 600;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.mw-table-count {
+  font-size: 1.05em;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.mw-table--idle .mw-table-count {
+  font-size: 0.7em;
+  font-weight: 500;
+  opacity: 0.6;
+}
+
+.mw-table-top {
+  position: absolute;
+  top: -0.55em;
+  right: -0.35em;
+  font-size: 0.8em;
+  filter: drop-shadow(0 0 0.2em rgba(0, 0, 0, 0.6));
+}
+
+/* An open in the last two minutes: rings leaving the table */
+.mw-table--recent::after {
+  content: '';
+  position: absolute;
+  inset: -0.15em;
+  border: 0.14em solid var(--c);
+  border-radius: inherit;
+  animation: mw-table-ring 1.8s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes mw-table-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+.mw-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin-top: 0.45em;
+  color: var(--muted);
+  font-size: 0.7em;
+}
+
+.mw-legend-scale {
+  width: 6em;
+  height: 0.55em;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), color-mix(in srgb, var(--c) 30%, transparent), var(--c));
+}
+
+.mw-legend-dot {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin-left: 0.8em;
+  border-radius: 50%;
+  border: 0.12em solid var(--c);
+  animation: mw-breathe 1.8s ease-in-out infinite;
+}
+
+/* ---- The celebration of a new open */
+.mw-cele {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--fg, #fff);
+  animation: mw-cele-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, mw-cele-out 0.6s ease 6.4s forwards;
+}
+
+@keyframes mw-cele-in {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes mw-cele-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+.mw-cele-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--c) 92%, #fff) 0%, var(--c) 45%, color-mix(in srgb, var(--c) 55%, #000) 100%);
+}
+
+.mw-cele-rings {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.mw-cele-rings > span {
+  position: absolute;
+  width: 40vmin;
+  height: 40vmin;
+  border: 0.5vmin solid color-mix(in srgb, var(--fg) 55%, transparent);
+  border-radius: 50%;
+  animation: mw-ring 2.4s ease-out infinite;
+  opacity: 0;
+}
+
+.mw-cele-rings > span:nth-child(2) {
+  animation-delay: 0.8s;
+}
+
+.mw-cele-rings > span:nth-child(3) {
+  animation-delay: 1.6s;
+}
+
+@keyframes mw-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+.mw-cele-confetti > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--size);
+  height: var(--size);
+  box-shadow: 0 0 0 0.06em rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  animation: mw-confetti 2.6s cubic-bezier(0.15, 0.7, 0.3, 1) var(--delay) forwards;
+}
+
+@keyframes mw-confetti {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.4) rotate(0);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 12vh)) scale(1) rotate(var(--rot));
+  }
+}
+
+.mw-cele-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35em;
+  max-width: 88vw;
+  text-align: center;
+}
+
+.mw-cele-headline {
+  margin: 0;
+  padding: 0.25em 0.9em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 16%, transparent);
+  font-size: 1em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  animation: mw-pop 0.5s 0.15s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+
+.mw-cele-headline--special {
+  font-size: 1.25em;
+  background: var(--fg);
+  color: var(--c);
+}
+
+.mw-cele-name {
+  margin: 0.1em 0 0;
+  font-size: 3.1em;
+  font-weight: 800;
+  line-height: 1.02;
+  text-wrap: balance;
+  text-shadow: 0 0.06em 0.3em rgba(0, 0, 0, 0.18);
+  animation: mw-rise 0.6s 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+.mw-cele-where {
+  margin: 0;
+  padding: 0.2em 0.9em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 22%, transparent);
+  font-size: 1.1em;
+  font-weight: 700;
+  animation: mw-rise 0.6s 0.4s ease both;
+}
+
+.mw-cele-plus {
+  font-size: 2.6em;
+  font-weight: 800;
+  line-height: 1;
+  animation: mw-plus 0.9s 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.6) both;
+}
+
+.mw-cele-meta {
+  margin: 0;
+  font-size: 1.05em;
+  opacity: 0.92;
+  animation: mw-rise 0.6s 0.7s ease both;
+}
+
+.mw-cele-meta b {
+  font-size: 1.3em;
+}
+
+@keyframes mw-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes mw-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.6em);
+  }
+}
+
+@keyframes mw-plus {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+/* ---- Start, messages, controls */
+.mw-start,
+.mw--message {
+  display: grid;
+  place-items: center;
+}
+
+.mw-start {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(10, 13, 20, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.mw-card {
+  max-width: 30em;
+  padding: 1.4em 1.8em;
+  border: 1px solid var(--line);
+  border-radius: 1.2em;
+  background: #161c2b;
+  text-align: center;
+}
+
+.mw-card h1 {
+  margin: 0.3em 0 0.4em;
+  font-size: 1.6em;
+}
+
+.mw-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.mw-start-btn {
+  margin-top: 1em;
+  min-height: 2.6em;
+  padding: 0 2.4em;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(100deg, #00aff5, #2a78d6);
+  color: #fff;
+  font: inherit;
+  font-size: 1.1em;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mw-controls {
+  position: absolute;
+  left: 50%;
+  bottom: max(0.8em, env(safe-area-inset-bottom));
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.55em;
+  border: 1px solid var(--line);
+  border-radius: 1.2em;
+  background: rgba(22, 28, 43, 0.94);
+  transform: translateX(-50%);
+  animation: mw-rise 0.25s ease both;
+}
+
+.mw-controls button {
+  min-height: 2.3em;
+  padding: 0 1em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.mw-controls button[aria-pressed='false'] {
+  color: var(--muted);
+}
+
+.mw-problem {
+  position: absolute;
+  left: 50%;
+  bottom: 1em;
+  z-index: 9;
+  max-width: 80vw;
+  margin: 0;
+  padding: 0.5em 1em;
+  border-radius: 0.8em;
+  background: var(--warn);
+  color: #1a1206;
+  font-weight: 600;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+/* A screen turned upright: the columns one under the other */
+@media (orientation: portrait) {
+  .mw {
+    font-size: min(3.6vw, 2.3vh);
+  }
+
+  .mw-board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .mw-today-total {
+    font-size: 4.4em;
+  }
+
+  .mw-row {
+    max-height: 4em;
+    padding: 0.45em 0.9em 0.45em 0.6em;
+  }
+
+  .mw-cele-name {
+    font-size: 2.4em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mw-cele-rings,
+  .mw-cele-confetti,
+  .mw-table--recent::after {
+    display: none;
+  }
+
+  .mw-cele,
+  .mw-cele *,
+  .mw-rows,
+  .mw-place,
+  .mw-empty-qr,
+  .mw-legend-dot {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
+
+  .mw-cele {
+    animation: none;
+  }
+}

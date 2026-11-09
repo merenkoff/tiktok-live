@@ -15,13 +15,16 @@ import type { FastifyInstance } from 'fastify';
 import { logger } from '../../logger.js';
 import {
   ensureSuper,
+  isMenuWallKey,
   isSuperConfigured,
   issueSuperToken,
   loginAttemptAllowed,
+  menuWallKey,
   recordLoginFailure,
   recordLoginSuccess,
   verifySuperPassword,
 } from '../core/superAuth.js';
+import { menuScansSummary, menuWallSnapshot } from '../menu-opens.service.js';
 import * as superService from '../super.service.js';
 import * as menuImport from '../import/menu-import.service.js';
 import { MenuImportError } from '../import/choiceqr.js';
@@ -154,6 +157,32 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
       }
       throw error;
     }
+  });
+
+  // The QR menu's opens (track W, TechDocs/POS_MENU_WALL.md): the tab's
+  // summary under the super token, and the office television's snapshot
+  // under a read-only key — the screen runs for days and never logs in.
+  fastify.get('/super/menu-scans', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    return menuScansSummary();
+  });
+
+  fastify.get('/super/menu-wall-key', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const key = menuWallKey();
+    if (!key) return reply.code(503).send({ error: 'super_not_configured' });
+    // The key alone: the television's page lives on the POS web's origin,
+    // which is not PUBLIC_BASE_URL (the API's), so the client builds the address.
+    return { key };
+  });
+
+  fastify.get('/super/menu-wall', async (request, reply) => {
+    if (!isSuperConfigured()) return reply.code(503).send({ error: 'super_not_configured' });
+    const q = (request.query ?? {}) as { key?: unknown; after?: unknown };
+    if (!isMenuWallKey(q.key)) return reply.code(403).send({ error: 'Invalid wall key' });
+    const after = typeof q.after === 'string' && /^\d{1,18}$/.test(q.after) ? Number(q.after) : 0;
+    reply.header('Cache-Control', 'no-store');
+    return menuWallSnapshot({ after });
   });
 
   fastify.get('/super/leads', async (request, reply) => {

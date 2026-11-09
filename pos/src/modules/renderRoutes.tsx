@@ -21,6 +21,12 @@ import { LoginPage } from '../pages/LoginPage';
 const SuperAdminApp = lazy(() =>
   import('../super/SuperAdminApp').then((m) => ({ default: m.SuperAdminApp }))
 );
+// The office television (TechDocs/POS_MENU_WALL.md): its own route, more
+// specific than `/super/*`, so it draws without the super shell's tabs and
+// without the password form — a read-only key in the address lets it in.
+const MenuWallPage = lazy(() =>
+  import('../super/wall/MenuWallPage').then((m) => ({ default: m.MenuWallPage }))
+);
 import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
 import { allModules, type AnyModuleDescriptor } from './registry';
@@ -185,6 +191,16 @@ export function renderModuleRoutes(ctx: RouteContext) {
           )}
           {adminRoutes}
         </Route>
+      )}
+      {ctx.shell === 'web' && (
+        <Route
+          path="/super/wall"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <MenuWallPage />
+            </Suspense>
+          }
+        />
       )}
       {ctx.shell === 'web' && (
         <Route

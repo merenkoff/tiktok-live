@@ -179,6 +179,9 @@ export const POS_MIGRATIONS = [
   // A third staff role, «Маркетолог» — the menu, the halls and the QR menu only
   // (TechDocs/POS_MARKETER_ROLE.md, МР1).
   '098_pos_staff_marketer.sql',
+  // One row per opening of a guest's QR-menu page — what the office television
+  // counts (TechDocs/POS_MENU_WALL.md, W1).
+  '099_pos_menu_opens.sql',
 ] as const;
 
 export function readMigration(file: string): string {
