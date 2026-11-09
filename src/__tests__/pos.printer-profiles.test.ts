@@ -161,6 +161,24 @@ describe.skipIf(!hasDb)('printer profiles — report, approve, share', () => {
     expect((await superGet()).json().reports.filter((r: { driver: string }) => r.driver === DRIVER)).toHaveLength(2);
   });
 
+  it('caps how many different profiles one store may report', async () => {
+    const flood = await createTestStore('prof3');
+    try {
+      for (let n = 0; n < 50; n++) {
+        await pool.query(
+          `INSERT INTO pos_printer_profile_reports (store_id, driver, enc_table, esc_t) VALUES ($1, $2, 'cp866', 17)`,
+          [flood.storeId, `flood-${n}`]
+        );
+      }
+      const more = await report(flood, { driver: 'flood-new', table: 'cp866' });
+      expect(more.statusCode).toBe(429);
+      // A profile it already reported still counts up.
+      expect((await report(flood, { driver: 'flood-3', table: 'cp866', prints: 9 })).statusCode).toBe(200);
+    } finally {
+      await dropTestStore(flood.storeId);
+    }
+  });
+
   it('the super routes need the super token', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/pos/super/printer-profiles', headers: auth(shop.ownerToken) });
     expect(res.statusCode).toBe(401);

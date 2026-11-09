@@ -22,6 +22,12 @@ export const STANDARD_ESC_T: Record<EncodingTable, number> = { windows1251: 46, 
 /** A till reports after this many documents printed with one profile. */
 export const REPORT_AFTER_PRINTS = 3;
 
+/**
+ * Different profiles one store may have reported. A shop has a few printers;
+ * the cap keeps a staff token from filling the table with invented drivers.
+ */
+export const MAX_REPORTS_PER_STORE = 50;
+
 export class PrinterProfileError extends Error {
   constructor(
     readonly status: number,
@@ -81,6 +87,15 @@ export async function reportProfile(storeId: number, body: unknown): Promise<voi
   const prints =
     typeof b.prints === 'number' && Number.isInteger(b.prints) && b.prints >= 0 ? Math.min(b.prints, 1_000_000) : 0;
   const width = b.paper_width_mm === 58 || b.paper_width_mm === 80 ? b.paper_width_mm : null;
+  const { rows } = await pool.query<{ n: string; mine: boolean }>(
+    `SELECT COUNT(*) AS n,
+            BOOL_OR(driver = $2 AND enc_table = $3 AND esc_t = $4) AS mine
+       FROM pos_printer_profile_reports WHERE store_id = $1`,
+    [storeId, profile.driver, profile.table, profile.esc_t]
+  );
+  if (Number(rows[0]?.n ?? 0) >= MAX_REPORTS_PER_STORE && !rows[0]?.mine) {
+    throw new PrinterProfileError(429, 'Забагато різних принтерів від одного магазину.');
+  }
   await pool.query(
     `INSERT INTO pos_printer_profile_reports (store_id, driver, enc_table, esc_t, paper_width_mm, prints)
      VALUES ($1, $2, $3, $4, $5, $6)
