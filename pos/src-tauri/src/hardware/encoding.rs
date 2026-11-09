@@ -20,6 +20,15 @@
 //!
 //! The default profile is the one every release before this printed with —
 //! Windows-1251 at its standard number — so a printer that worked still does.
+//!
+//! One more mode overrides `ESC t` altogether: a printer sold for the Chinese
+//! market (Xprinter XP-58IIH, among others) starts in its Chinese character
+//! mode, where every PAIR of bytes from 0x80 up is one GB2312/GBK character and
+//! no table is consulted — every Cyrillic word comes out as hieroglyphs, the same
+//! on every row of a table sweep, while ASCII still prints. `ESC @` does not
+//! leave that mode (it is the firmware's stored default), so `FS .` — «cancel
+//! Kanji character mode» — follows it in every document we print. A printer
+//! without such a mode ignores it.
 
 use std::borrow::Cow;
 use std::fs::OpenOptions;
@@ -217,8 +226,9 @@ pub struct PrinterEncoding {
 /// three that decide which BYTES go out are its own, and an inherent method
 /// wins over a deref'd one:
 ///
-///   * `init` — `ESC @`, the table's standard `ESC t`, then the profile's own
-///     number when it differs;
+///   * `init` — `ESC @`, the table's standard `ESC t`, `FS .` (out of a Chinese
+///     printer's double-byte mode), then the profile's own number when it
+///     differs;
 ///   * `writeln` — the text folded for the table and encoded by `put_line`.
 pub(crate) struct TextPrinter {
     inner: Printer<FileDriver>,
@@ -236,6 +246,7 @@ impl TextPrinter {
 
     pub(crate) fn init(&mut self) -> EscResult<&mut Printer<FileDriver>> {
         self.inner.init()?;
+        self.inner.custom(&CANCEL_KANJI)?;
         if let Some(n) = self.encoding.esc_t {
             self.inner.custom(&select_table(n))?;
         }
@@ -284,6 +295,11 @@ impl DerefMut for TextPrinter {
         &mut self.inner
     }
 }
+
+/// `FS .` — cancel Kanji (Chinese double-byte) character mode, so bytes from
+/// 0x80 up are read one at a time through the `ESC t` table. See the module
+/// header.
+const CANCEL_KANJI: [u8; 2] = [0x1c, 0x2e];
 
 /// `ESC t n` — select character code table.
 fn select_table(n: u8) -> [u8; 3] {
@@ -346,6 +362,9 @@ fn build_test_sheet(candidates: &[EncodingCandidate], width: usize) -> Result<Ve
     let e = |err: escpos::errors::PrinterError| err.to_string();
 
     printer.init().map_err(e)?;
+    // Before anything else: on a printer in Chinese mode no row of the sheet
+    // would differ from the next.
+    printer.custom(&CANCEL_KANJI).map_err(e)?;
     printer.justify(JustifyMode::LEFT).map_err(e)?;
     // ASCII on purpose: the sheet is read on a printer that may be on the wrong
     // table, and these two lines must survive that.
@@ -602,20 +621,20 @@ mod tests {
             bytes
         };
 
-        // ESC @ ESC t 46, then the text in Windows-1251.
+        // ESC @ ESC t 46 FS ., then the text in Windows-1251.
         let default = make(PrinterEncoding::default(), "d");
-        assert!(default.starts_with(&[0x1b, 0x40, 0x1b, 0x74, 46]));
+        assert!(default.starts_with(&[0x1b, 0x40, 0x1b, 0x74, 46, 0x1c, 0x2e]));
         assert!(!contains(&default[5..], &[0x1b, 0x74]));
         assert!(contains(&default, &[0xCF, 0xF0, 0xE8, 0xE2, 0xB3, 0xF2]));
 
         // The profile's number comes right after the standard one and wins.
         let own = make(PrinterEncoding { table: EncodingTable::Windows1251, esc_t: Some(73) }, "n");
-        assert!(own.starts_with(&[0x1b, 0x40, 0x1b, 0x74, 46, 0x1b, 0x74, 73]));
+        assert!(own.starts_with(&[0x1b, 0x40, 0x1b, 0x74, 46, 0x1c, 0x2e, 0x1b, 0x74, 73]));
         assert!(contains(&own, &[0xCF, 0xF0, 0xE8, 0xE2, 0xB3, 0xF2]));
 
         // CP866: its standard number, the text through the 866 table with «і» folded.
         let cp866 = make(PrinterEncoding { table: EncodingTable::Cp866, esc_t: None }, "c");
-        assert!(cp866.starts_with(&[0x1b, 0x40, 0x1b, 0x74, 17]));
+        assert!(cp866.starts_with(&[0x1b, 0x40, 0x1b, 0x74, 17, 0x1c, 0x2e]));
         // П р и в i т in CP866 (Cyrillic at 0x80..) with a Latin «i».
         assert!(contains(&cp866, &[0x8F, 0xE0, 0xA8, 0xA2, b'i', 0xE2]));
     }
@@ -631,6 +650,10 @@ mod tests {
         )
         .unwrap();
         assert!(contains(&sheet, b"ENCODING TEST"));
+        // Out of a Chinese printer's double-byte mode before the first line.
+        let cancel = sheet.windows(2).position(|w| w == CANCEL_KANJI).expect("FS .");
+        let title = sheet.windows(13).position(|w| w == b"ENCODING TEST").unwrap();
+        assert!(cancel < title);
         assert!(contains(&sheet, b"[A] WIN-1251 ESC t 46"));
         // The label keeps only ASCII letters and digits: «B ж» -> «B».
         assert!(contains(&sheet, b"[B] CP866 ESC t 7"));
