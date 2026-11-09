@@ -9,6 +9,7 @@ import { StoresPage } from './StoresPage';
 import { LeadsPage } from './LeadsPage';
 import { LicensesPage } from './LicensesPage';
 import { MenuScansPage } from './MenuScansPage';
+import { PrintersPage } from './PrintersPage';
 
 /**
  * `/super` — the cross-store admin (TechDocs/POS_SUPER_ADMIN.md). Web shell
@@ -33,6 +34,7 @@ export function SuperAdminApp() {
         <Route path="leads" element={<LeadsPage />} />
         <Route path="licenses" element={<LicensesPage />} />
         <Route path="menu-scans" element={<MenuScansPage />} />
+        <Route path="printers" element={<PrintersPage />} />
         <Route path="*" element={<Navigate to="/super" replace />} />
       </Routes>
     </SuperShell>
@@ -43,13 +45,16 @@ export function SuperAdminApp() {
  * Tabs, each its own address so a link or a reload lands on the same one:
  * «Магазини» (`/super`), «Ліди» (`/super/leads`, TechDocs/CRM_LEADS.md),
  * «Ліцензії» and «QR-меню» (`/super/menu-scans`, TechDocs/POS_MENU_WALL.md —
- * the opens of the guest menu and the button that opens the office television).
+ * the opens of the guest menu and the button that opens the office television)
+ * and «Принтери» (`/super/printers`, TechDocs/POS_PRINTER_PROFILES.md — the
+ * printer profiles the tills reported and the ones approved for every till).
  */
 const TABS = [
   { to: '/super', label: 'Магазини' },
   { to: '/super/leads', label: 'Ліди' },
   { to: '/super/licenses', label: 'Ліцензії' },
   { to: '/super/menu-scans', label: 'QR-меню' },
+  { to: '/super/printers', label: 'Принтери' },
 ] as const;
 
 function SuperShell({ onLogout, children }: { onLogout: () => void; children: ReactNode }) {

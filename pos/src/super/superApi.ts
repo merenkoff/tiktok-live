@@ -384,6 +384,31 @@ export class SuperApi {
     return data;
   }
 
+  /** «Принтери»: profiles the tills reported and the ones approved for every till (TechDocs/POS_PRINTER_PROFILES.md). */
+  async printerProfiles(): Promise<SuperPrinterProfiles> {
+    const { data } = await this.client.get<SuperPrinterProfiles>('/printer-profiles');
+    return data;
+  }
+
+  /** Approves a reported profile for its driver under a readable name; replaces the driver's previous one. */
+  async approvePrinterReport(reportId: number, title: string): Promise<SuperPrinterProfile> {
+    const { data } = await this.client.post<SuperPrinterProfile>(`/printer-profiles/reports/${reportId}/approve`, { title });
+    return data;
+  }
+
+  async renamePrinterProfile(id: number, title: string): Promise<SuperPrinterProfile> {
+    const { data } = await this.client.patch<SuperPrinterProfile>(`/printer-profiles/${id}`, { title });
+    return data;
+  }
+
+  async removePrinterProfile(id: number): Promise<void> {
+    await this.client.delete(`/printer-profiles/${id}`);
+  }
+
+  async removePrinterReport(id: number): Promise<void> {
+    await this.client.delete(`/printer-profiles/reports/${id}`);
+  }
+
   async listLicenses(): Promise<SuperLicenseSummary[]> {
     const { data } = await this.client.get<SuperLicenseSummary[]>('/licenses');
     return data;
@@ -437,4 +462,39 @@ export function superErrorText(error: unknown): string {
     if (!error.response) return 'Немає зв’язку з сервером.';
   }
   return error instanceof Error ? error.message : 'Помилка';
+}
+
+/** Shared printer profiles — `src/pos/printer-profiles.service.ts` is the source of these shapes. */
+export type PrinterEncodingTableId = 'windows1251' | 'cp866' | 'cp1125';
+
+export interface SuperPrinterReport {
+  id: number;
+  driver: string;
+  table: PrinterEncodingTableId;
+  esc_t: number;
+  paper_width_mm: number | null;
+  prints: number;
+  store_id: number;
+  store_code: string;
+  store_name: string;
+  first_reported_at: string;
+  last_reported_at: string;
+  approved: boolean;
+}
+
+export interface SuperPrinterProfile {
+  id: number;
+  driver: string;
+  title: string;
+  table: PrinterEncodingTableId;
+  esc_t: number;
+  source_store_id: number | null;
+  source_store_code: string | null;
+  approved_at: string;
+  updated_at: string;
+}
+
+export interface SuperPrinterProfiles {
+  reports: SuperPrinterReport[];
+  profiles: SuperPrinterProfile[];
 }

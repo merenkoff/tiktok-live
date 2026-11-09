@@ -2,13 +2,16 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { printEncodingTest, savePrinterEncoding, type ReceiptPaperWidth } from '../lib/printer';
+import { api } from '@pos/platform';
 import {
-  loadPrinterEncoding,
-  printEncodingTest,
-  savePrinterEncoding,
-  type ReceiptPaperWidth,
-} from '../lib/printer';
+  forgetOwnEncoding,
+  resolvePrinterEncoding,
+  saveSharedProfiles,
+  type PrinterEncodingSource,
+  type SharedPrinterProfile,
+} from '../lib/printerProfiles';
 import {
   DEFAULT_PRINTER_ENCODING,
   ENCODING_PRESETS,
@@ -39,7 +42,9 @@ function whyNot(e: unknown): string {
  * that printer (`lib/printer.ts`), whichever document it prints.
  *
  * Folded away by default: a printer that works needs none of it, and the line
- * that is always visible says which profile is in force.
+ * that is always visible says which profile is in force — the owner's own, the
+ * one LiveShop approved for this printer's driver (TechDocs/POS_PRINTER_PROFILES.md),
+ * or the default.
  */
 export function PrinterEncodingPicker({
   printerName,
@@ -56,25 +61,60 @@ export function PrinterEncodingPicker({
   const [to, setTo] = useState('80');
   const [printing, setPrinting] = useState<'presets' | 'sweep' | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [source, setSource] = useState<PrinterEncodingSource>('default');
+  const [shared, setShared] = useState<SharedPrinterProfile | null>(null);
+  const [driver, setDriver] = useState('');
+  // Set once the person changes the profile here: a fresh approved list that
+  // lands afterwards must not overwrite what they just picked or typed.
+  const touched = useRef(false);
 
   useEffect(() => {
     let alive = true;
+    touched.current = false;
     setStatus(null);
-    void loadPrinterEncoding(printerName).then((saved) => {
+    const show = async () => {
+      const resolved = await resolvePrinterEncoding(printerName);
       if (!alive) return;
-      setEncoding(saved);
-      setEscText(saved.esc_t === null ? '' : String(saved.esc_t));
+      setShared(resolved.shared);
+      setDriver(resolved.driver);
+      if (touched.current) return;
+      setEncoding(resolved.encoding);
+      setSource(resolved.source);
+      setEscText(resolved.encoding.esc_t === null ? '' : String(resolved.encoding.esc_t));
       setEscError(false);
-    });
+    };
+    // What is kept first, then again once the approved list is fresh. The api
+    // comes through `@pos/platform`: a host component reaching the singleton
+    // relatively would get a second copy (`check:platform-boundary`).
+    void show()
+      .then(() => api.posRequest<{ profiles?: unknown }>('get', '/printer-profiles'))
+      .then((data) => saveSharedProfiles(data?.profiles))
+      .catch(() => undefined)
+      .then(() => show());
     return () => {
       alive = false;
     };
   }, [printerName]);
 
   function apply(next: PrinterEncoding) {
+    touched.current = true;
     setEncoding(next);
+    setSource('own');
     setStatus(null);
     void savePrinterEncoding(printerName, next);
+  }
+
+  /** Back to LiveShop's profile for this driver: the owner's own pick is taken away. */
+  function useShared() {
+    if (!shared) return;
+    touched.current = true;
+    const next: PrinterEncoding = { table: shared.table, esc_t: shared.esc_t };
+    setEncoding(next);
+    setSource('shared');
+    setEscText(String(shared.esc_t));
+    setEscError(false);
+    setStatus(null);
+    void forgetOwnEncoding(printerName);
   }
 
   function pickTable(table: PrinterEncodingTable) {
@@ -82,6 +122,7 @@ export function PrinterEncodingPicker({
   }
 
   function typeEscT(text: string) {
+    touched.current = true;
     setEscText(text);
     const parsed = parseEscT(text);
     if (parsed === 'invalid') {
@@ -121,7 +162,9 @@ export function PrinterEncodingPicker({
     }
   }
 
-  const isDefault = sameEncoding(encoding, DEFAULT_PRINTER_ENCODING);
+  const isDefault = source !== 'shared' && sameEncoding(encoding, DEFAULT_PRINTER_ENCODING);
+  const suffix =
+    source === 'shared' && shared ? ` — налаштування LiveShop для «${shared.title}»` : isDefault ? ' (за замовчуванням)' : '';
   const radioName = `printer-encoding-${printerName}`;
 
   return (
@@ -135,7 +178,7 @@ export function PrinterEncodingPicker({
         <span className="block text-[15px] font-semibold text-sq-heading">Кодування кирилиці</span>
         <span className="block text-[15px] text-sq-secondary" data-testid="printer-encoding-summary">
           {encodingTitle(encoding)}
-          {isDefault ? ' (за замовчуванням)' : ''} · {open ? 'сховати' : 'змінити'}
+          {suffix} · {open ? 'сховати' : 'змінити'}
         </span>
       </button>
 
@@ -145,6 +188,17 @@ export function PrinterEncodingPicker({
             Якщо на чеку замість літер знаки на кшталт «Σ π ╖», принтер читає текст в іншому кодуванні. Надрукуйте пробний
             аркуш і виберіть варіант, де текст читається.
           </p>
+
+          {shared && source === 'own' && !sameEncoding(encoding, { table: shared.table, esc_t: shared.esc_t }) && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-[15px] text-sq-secondary">
+                Для цього принтера є перевірене налаштування LiveShop: «{shared.title}», {encodingTitle({ table: shared.table, esc_t: shared.esc_t })}.
+              </p>
+              <button type="button" onClick={useShared} className="sq-btn-quiet">
+                Використати налаштування LiveShop
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center gap-3 flex-wrap">
             <button
@@ -252,6 +306,8 @@ export function PrinterEncodingPicker({
               </button>
             </div>
           </div>
+
+          {driver && <p className="text-[13px] text-sq-muted">Драйвер принтера: {driver}</p>}
 
           {status && (
             <p className="text-[15px] text-sq-secondary" role="status">

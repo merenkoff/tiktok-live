@@ -11,7 +11,7 @@
 // (`/super/leads`, TechDocs/CRM_LEADS.md): the one place they can be listed —
 // the old `GET /api/admin/leads`, which any LIVE token could read, is gone.
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { logger } from '../../logger.js';
 import {
   ensureSuper,
@@ -25,6 +25,7 @@ import {
   verifySuperPassword,
 } from '../core/superAuth.js';
 import { menuScansSummary, menuWallSnapshot } from '../menu-opens.service.js';
+import * as printerProfiles from '../printer-profiles.service.js';
 import * as superService from '../super.service.js';
 import * as menuImport from '../import/menu-import.service.js';
 import { MenuImportError } from '../import/choiceqr.js';
@@ -247,5 +248,66 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
       }
       throw error;
     }
+  });
+
+  // Shared printer profiles (TechDocs/POS_PRINTER_PROFILES.md): what the tills
+  // reported and what is approved for every till on that driver.
+  async function profileCall<T>(reply: FastifyReply, run: () => Promise<T>): Promise<T | undefined> {
+    try {
+      return await run();
+    } catch (error) {
+      if (error instanceof printerProfiles.PrinterProfileError) {
+        await reply.code(error.status).send({ error: error.message });
+        return undefined;
+      }
+      throw error;
+    }
+  }
+  const idOf = (request: FastifyRequest) => Number((request.params as { id: string }).id);
+
+  fastify.get('/super/printer-profiles', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    return printerProfiles.superPrinterProfiles();
+  });
+
+  fastify.post('/super/printer-profiles/reports/:id/approve', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const id = idOf(request);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(404).send({ error: 'Звіт не знайдено.' });
+    const title = (request.body as { title?: unknown } | undefined)?.title;
+    const profile = await profileCall(reply, () => printerProfiles.approveReport(id, title));
+    if (profile) logger.info('pos super: printer profile approved', { ip: request.ip, reportId: id, driver: profile.driver });
+    return profile;
+  });
+
+  fastify.delete('/super/printer-profiles/reports/:id', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const id = idOf(request);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(404).send({ error: 'Звіт не знайдено.' });
+    const done = await profileCall(reply, async () => {
+      await printerProfiles.removeReport(id);
+      return { ok: true };
+    });
+    return done;
+  });
+
+  fastify.patch('/super/printer-profiles/:id', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const id = idOf(request);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(404).send({ error: 'Профіль не знайдено.' });
+    const title = (request.body as { title?: unknown } | undefined)?.title;
+    return profileCall(reply, () => printerProfiles.renameProfile(id, title));
+  });
+
+  fastify.delete('/super/printer-profiles/:id', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const id = idOf(request);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(404).send({ error: 'Профіль не знайдено.' });
+    const done = await profileCall(reply, async () => {
+      await printerProfiles.removeProfile(id);
+      return { ok: true };
+    });
+    if (done) logger.info('pos super: printer profile removed', { ip: request.ip, profileId: id });
+    return done;
   });
 }

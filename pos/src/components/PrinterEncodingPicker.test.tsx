@@ -12,6 +12,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
 import { db } from '../offline/db';
 import { PrinterEncodingPicker } from './PrinterEncodingPicker';
+import { api } from '../services/api';
+import { resetPrinterProfilesForTests } from '../lib/printerProfiles';
+
+vi.mock('../services/api', () => ({ api: { posRequest: vi.fn() } }));
 
 async function stored(printer: string) {
   return (await db.meta.get(`printerEncoding:${printer}`))?.value;
@@ -27,6 +31,9 @@ async function openPicker(printer = 'Xprinter', paper: 58 | 80 = 58) {
 beforeEach(async () => {
   vi.mocked(invoke).mockClear();
   vi.mocked(invoke).mockResolvedValue(undefined);
+  vi.mocked(api.posRequest).mockReset();
+  vi.mocked(api.posRequest).mockRejectedValue(new Error('offline'));
+  resetPrinterProfilesForTests();
   await db.meta.clear();
 });
 
@@ -132,5 +139,26 @@ describe('PrinterEncodingPicker', () => {
     fireEvent.click(print);
     expect(await screen.findByRole('status')).toHaveTextContent('Помилка друку: Принтер недоступний');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Надрукувати пробний аркуш' })).toBeEnabled());
+  });
+
+  it('a printer nobody set up follows LiveShop’s profile for its driver, and the owner can return to it', async () => {
+    vi.mocked(api.posRequest).mockResolvedValue({
+      profiles: [{ driver: 'XP-58', title: 'Xprinter XP-58IIH', table: 'cp866', esc_t: 17 }],
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd: string) =>
+      cmd === 'list_printers' ? [{ name: 'Xprinter', is_default: true, driver: 'XP-58' }] : undefined
+    );
+    render(<PrinterEncodingPicker printerName="Xprinter" paperWidth={58} />);
+    expect(
+      await screen.findByText(/CP866 · таблиця 17 — налаштування LiveShop для «Xprinter XP-58IIH»/)
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Кодування кирилиці/ }));
+    expect(screen.getByText('Драйвер принтера: XP-58')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /A · Windows-1251/ }));
+    await waitFor(async () => expect(await stored('Xprinter')).toEqual({ table: 'windows1251', esc_t: null }));
+    fireEvent.click(screen.getByRole('button', { name: 'Використати налаштування LiveShop' }));
+    await waitFor(async () => expect(await stored('Xprinter')).toBeNull());
+    expect(screen.getByTestId('printer-encoding-summary')).toHaveTextContent('налаштування LiveShop');
   });
 });

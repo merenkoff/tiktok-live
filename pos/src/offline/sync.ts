@@ -32,6 +32,7 @@ import {
   replaceLocalCustomer,
 } from './repository';
 import { refreshLease } from './lease';
+import { syncPrinterProfiles } from './printerProfilesSync';
 import { useOfflineStatus } from './status';
 import { syncOfflineModules } from './moduleHooks';
 
@@ -176,6 +177,11 @@ export async function runSync(): Promise<void> {
       .filter((row) => row.status !== 'dead')
       .count();
     await refreshLease(unsent);
+
+    // Shared printer profiles (TechDocs/POS_PRINTER_PROFILES.md): a counted
+    // profile goes up, the approved list comes down when it is old. Swallows
+    // its own failures.
+    await syncPrinterProfiles();
 
     // Feature modules with their own queues (roadmap #12 track 3) go after the
     // shell's rows — a count sheet may reference a customer or sale that had

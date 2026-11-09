@@ -8,6 +8,12 @@ use serde::Serialize;
 pub struct PrinterInfo {
     pub name: String,
     pub is_default: bool,
+    /// The operating system's driver for the printer (Windows «XP-58», macOS
+    /// «Generic / Text Only»), trimmed; empty when the system names none. The
+    /// key a shared printer profile is approved under
+    /// (TechDocs/POS_PRINTER_PROFILES.md) — the printer's own name is whatever
+    /// the shop called it.
+    pub driver: String,
 }
 
 #[tauri::command]
@@ -17,6 +23,7 @@ pub fn list_printers() -> Vec<PrinterInfo> {
         .into_iter()
         .map(|p| PrinterInfo {
             is_default: Some(&p.name) == default_name.as_ref(),
+            driver: p.driver_name.trim().to_string(),
             name: p.name,
         })
         .collect()

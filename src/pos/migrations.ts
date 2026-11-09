@@ -182,6 +182,9 @@ export const POS_MIGRATIONS = [
   // One row per opening of a guest's QR-menu page — what the office television
   // counts (TechDocs/POS_MENU_WALL.md, W1).
   '099_pos_menu_opens.sql',
+  // Printer profiles one shop reports and the super admin shares with every
+  // till on the same driver (TechDocs/POS_PRINTER_PROFILES.md).
+  '100_pos_printer_profiles.sql',
 ] as const;
 
 export function readMigration(file: string): string {
