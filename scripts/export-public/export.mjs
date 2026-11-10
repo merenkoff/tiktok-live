@@ -407,10 +407,9 @@ function syncTags(repo, rules, { target, tip, head, dryRun, log, exported }) {
 
   let map = null;
   const mirrorCommitOf = (sourceCommit) => {
-    // Before the split the two histories are one, so the commit is its own
-    // mirror. After it: the mirror commit exported from it, or from its
-    // nearest ancestor that changed anything public.
-    if (isAncestor(repo, sourceCommit, tip)) return sourceCommit;
+    // The mirror commit exported from it, or from its nearest ancestor that
+    // changed anything public (the split point itself for a commit that
+    // follows it with nothing public in between: the bootstrap commit).
     if (!map) {
       map = new Map(exported);
       for (const chunk of git(repo, ['log', '--format=%x01%H%x00%B', tip]).split('\x01')) {
@@ -430,6 +429,12 @@ function syncTags(repo, rules, { target, tip, head, dryRun, log, exported }) {
   const pushes = [];
   const done = [];
   for (const tag of local) {
+    // A tag of the shared history is not the export's to touch. Before the
+    // split the mirror is where it was made, so the mirror either has it or
+    // lost it on purpose — and a checkout can carry stale ones: creating such
+    // a tag there would start a release build, moving one would move a
+    // published release.
+    if (isAncestor(repo, tag.commit, tip)) continue;
     const commit = mirrorCommitOf(tag.commit);
     if (!commit) throw new ExportError(`tag ${tag.name}: no mirror commit for ${tag.commit}`);
     if (remote.get(tag.name) === commit) continue;

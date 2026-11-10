@@ -339,6 +339,28 @@ describe('sync', () => {
 
     assert.deepEqual(run(f).tags, []); // nothing to move the second time
   });
+
+  it('leaves the tags of the shared history alone, whatever the checkout says', () => {
+    const f = fixture();
+    const second = commit(f.source, 'Still shared', { 'src/api.ts': 'export const api = 2;\n' });
+    sh(f.source, ['push', '-q', f.mirror, 'main']); // the split point is now `second`
+    // a checkout older than the mirror's tags: one the mirror dropped, one it moved
+    sh(f.source, ['tag', 'pos-v0.9.0', f.split]);
+    sh(f.source, ['tag', 'pos-v0.9.1', f.split]);
+    sh(f.mirror, ['tag', 'pos-v0.9.1', second]);
+
+    const first = run(f);
+    assert.equal(first.bootstrap !== null && first.bootstrap !== undefined, true);
+    assert.deepEqual(first.tags, []);
+    assert.equal(sh(f.mirror, ['tag', '--list', 'pos-v0.9.0']), '');
+    assert.equal(sh(f.mirror, ['rev-parse', 'pos-v0.9.1']), second);
+
+    // and still not after real commits have been exported
+    commit(f.source, 'Public work', { 'src/api.ts': 'export const api = 3;\n' });
+    assert.deepEqual(run(f).tags, []);
+    assert.equal(sh(f.mirror, ['tag', '--list', 'pos-v0.9.0']), '');
+    assert.equal(sh(f.mirror, ['rev-parse', 'pos-v0.9.1']), second);
+  });
 });
 
 describe('check', () => {
