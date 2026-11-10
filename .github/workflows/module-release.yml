@@ -42,6 +42,18 @@ name: Module Release
 # off). Needs the `MODULE_UPLOAD_SECRET` Actions secret (the same value as the
 # API's env); `MODULE_STORE_URL` (an Actions variable) overrides the API origin.
 #
+# Open-core (TechDocs/POS_OPENCORE.md §11): once the sources live in a private
+# monorepo and the public repository is its exported mirror, a module is
+# released from the repository that has BOTH its source and its destination —
+# the Actions variable RELEASE_ROLE says which this one is:
+#   * unset    — any module, as described above (a fork, or before the split);
+#   * `source` — the private monorepo: private modules only. An open module is
+#                refused: jsdelivr serves the PUBLIC repository's module-builds
+#                branch and tags, so it is released there;
+#   * `mirror` — the public repository: open modules only (`stocktake`,
+#                `products`, `stock`, `returns`). A private module has no source
+#                there.
+#
 # That URL is NOT wired into any store automatically — registering it in a
 # store's `module_remotes` (Settings → "Онлайн-модулі", or `PATCH /api/pos/store`)
 # is a separate, deliberate step. See the job summary for the exact URLs once
@@ -118,6 +130,19 @@ jobs:
           fi
           if [ "$version" != "$pkg_version" ]; then
             echo "::error::Tag version '$version' != pos/package.json version '$pkg_version'. Modules share the app's version (roadmap #1) — bump pos/package.json, or fix the tag." >&2
+            exit 1
+          fi
+          role="${{ vars.RELEASE_ROLE }}"
+          private=false
+          if [ -f pos/private-modules.json ] && MODULE="$module" node -e "process.exit(require('./pos/private-modules.json').remotes.includes(process.env.MODULE) ? 0 : 1)"; then
+            private=true
+          fi
+          if [ "$role" = "source" ] && [ "$private" != "true" ]; then
+            echo "::error::'${module}' is an open module: release it from the public mirror (Actions → Module Release there). jsdelivr serves that repository's module-builds branch and tags, not this one's." >&2
+            exit 1
+          fi
+          if [ "$role" = "mirror" ] && [ "$private" = "true" ]; then
+            echo "::error::'${module}' is a private module: it is released from the source repository into the closed bundle store. This mirror does not have its source." >&2
             exit 1
           fi
           if [ ! -f "pos/src/modules/${module}/remote-entry.ts" ]; then
