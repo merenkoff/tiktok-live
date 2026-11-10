@@ -467,10 +467,52 @@ function privateImports(repo, rules, file) {
   return found;
 }
 
+/**
+ * Private paths a file written FOR the mirror names. A `rename` source (the
+ * public CLAUDE.md) is not an old document that happens to be published: it
+ * tells a reader of the mirror where things are, so a path that is not there
+ * is a mistake. Looked for: every private rule of rules.json as written
+ * (`TechDocs/prro/`, `pos/src/modules/tables/`), and the bare file name of a
+ * private Markdown document (`POS_TABLES.md`) when no public file shares it.
+ * The names the mirror gives the renamed files themselves are exempt.
+ */
+function privateMentions(repo, rules, file, files) {
+  let text;
+  try {
+    text = readFileSync(path.join(repo, file), 'utf-8');
+  } catch {
+    return [];
+  }
+  const exempt = new Set(Object.values(rules.rename));
+  const base = (p) => p.slice(p.lastIndexOf('/') + 1);
+  const names = new Set(rules.privatePatterns.map((x) => x.raw).filter((raw) => !raw.includes('*')));
+  const publicBases = new Set(files.filter((f) => classify(rules, f) !== 'private').map(base));
+  for (const f of files) {
+    if (f.endsWith('.md') && classify(rules, f) === 'private' && !publicBases.has(base(f))) names.add(base(f));
+  }
+  const found = [];
+  for (const name of names) {
+    if (exempt.has(name)) continue;
+    // not as the tail of a longer name: `NOTES.md` is not inside `POS_NOTES.md`
+    if (new RegExp(`(?<![\\w.-])${escapeRe(name)}`).test(text)) found.push(name);
+  }
+  // said once: `TechDocs/prro/` covers `TechDocs/prro/README.md`, and
+  // `TechDocs/POS_TABLES.md` covers its own bare `POS_TABLES.md`
+  const covered = (name) => found.some((other) => other !== name
+    && ((other.endsWith('/') && name.startsWith(other)) || other.endsWith(`/${name}`)));
+  return found.filter((name) => !covered(name)).sort();
+}
+
 export function check(repo, rules, commitish = 'HEAD') {
   const files = git(repo, ['ls-tree', '-r', '--name-only', '-z', commitish]).split('\0').filter(Boolean);
   const problems = [];
   const count = { public: 0, private: 0, unknown: 0 };
+  for (const [from, to] of Object.entries(rules.rename)) {
+    if (!files.includes(from)) continue;
+    for (const name of privateMentions(repo, rules, from, files)) {
+      problems.push(`${from}: names the private '${name}' — it is published as ${to}, where that path does not exist`);
+    }
+  }
   for (const file of files) {
     const kind = classify(rules, file);
     count[kind] += 1;
