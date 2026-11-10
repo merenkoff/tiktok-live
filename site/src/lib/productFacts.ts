@@ -1100,6 +1100,12 @@ export const FEATURES = {
   tablesPrecheck: { status: 'available', label: 'Передчек на принтері (десктоп-каса)' },
   tablesSplitBill: { status: 'available', label: 'Розділити рахунок: за стравами або порівну' },
   waiterTablet: { status: 'available', label: 'Планшет офіціанта як застосунок: відкривається без мережі й показує зал, рахунки й меню' },
+  // Track МР (TechDocs/POS_MARKETER_ROLE.md): live at «Шабля» since 2026-11-07.
+  marketerRole: {
+    status: 'available',
+    label:
+      'Роль «Маркетолог» для кав\'ярні й ресторану: вхід за PIN з браузера одразу в кабінет — меню, ціни, фото, алергени, модифікатори, QR-меню з наклейками для столів і відгуки гостей, без виторгу, складу, закупівельних цін і ПРРО',
+  },
   ownPrro: { status: 'coming', label: 'Власний ПРРО без стороннього провайдера' },
   // The grocery vertical (TechDocs/grocery/README.md); each line here turns
   // `available` with its own phase. «Під запис» shipped first, on 2026-10-24
@@ -1176,6 +1182,7 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'tablesPrecheck',
   'tablesSplitBill',
   'waiterTablet',
+  'marketerRole',
   'ownPrro',
   'groceryCredit',
   'groceryWeighed',
@@ -1319,7 +1326,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для кав\'ярні за стійкою',
     tagline: 'Тап — і «як завжди»; модифікатори, дошка кухні, стоп-лист, техкарти з фудкостом і матриця меню.',
     bullets: ['Модифікатори з ціною на кнопці', 'Дошка кухні й бару, стоп-лист', 'Техкарти й фудкост'],
-    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'guestFeedback'],
+    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'guestFeedback', 'marketerRole'],
     illustrations: ['/demo-cafe/latte.svg', '/demo-cafe/croissant.svg', '/demo-cafe/espresso.svg'],
     tint: 'bg-tint-cafe',
   },
@@ -1332,7 +1339,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для ресторану зі столами',
     tagline: 'План залу, відкриті рахунки, раунди на кухню, передчек і розділення рахунку — з планшета офіціанта.',
     bullets: ['План залу з рахунками столів', 'Раунди на кухню з планшета', 'Розділити рахунок, передчек'],
-    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet'],
+    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet', 'marketerRole'],
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },
