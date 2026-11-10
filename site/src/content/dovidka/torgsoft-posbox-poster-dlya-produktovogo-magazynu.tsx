@@ -80,7 +80,7 @@ export const torgsoftPosboxPosterDlyaProduktovogoMagazynu: Article = {
     description: `Що вміють Торгсофт, Posbox і Poster для продуктового магазину: продаж у борг і облік боргів покупців, ваги на касі й ваги з друком етикеток, робота без інтернету, ПРРО — і скільки коштує каса на одну точку за рік і за три роки. За сторінками виробників, прочитаними ${CHECKED}.`,
     publishedAt: T.publishedAt,
     // The competitors' facts were read on `checkedAt`; ours may have changed since.
-    updatedAt: latestDay(COMPETITOR_FACTS.cashalot.checkedAt, T.checkedAt, PRICING.pos.changedAt),
+    updatedAt: latestDay('2026-11-10', COMPETITOR_FACTS.cashalot.checkedAt, T.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 8,
     cta: {
@@ -497,7 +497,7 @@ function Body() {
       <p>
         Ціна самої каси: {PRICING.pos.label.toLowerCase()}; продаж під запис — модуль «Борги»,{' '}
         {addonPriceText(DEBTS_ADDON)}; підписку Checkbox магазин оплачує окремо — {CB.priceFrom} грн/міс за
-        касу (або Cashalot — {CA.priceMonthlyAnnual} грн/міс за касу за умови річної оплати). Для підакцизних товарів каса поки не підходить. Якщо ви торгуєте на
+        касу (або Cashalot — {CA.priceMonthlyAnnual} грн/міс за касу за умови річної оплати). Алкоголь і пиво каса продає з ПРРО Cashalot: акцизна марка кожної пляшки, код УКТ ЗЕД і акциз 5 % у чеку; підтвердження віку покупця — у планах. Якщо ви торгуєте на
         ринку, спершу перевірте, чи потрібен вам ПРРО взагалі, — у статті{' '}
         <a href="/dovidka/chy-potriben-prro-na-rynku">«Чи потрібен ПРРО для торгівлі на ринку»</a>. Усе
         про нашу касу для продуктів — на сторінці <a href={LANDING}>каси для продуктового магазину</a>.
