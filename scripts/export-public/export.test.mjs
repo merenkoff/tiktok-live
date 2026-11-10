@@ -361,6 +361,45 @@ describe('check', () => {
     assert.match(problems.join('\n'), /TechDocs\/NEW_DOC\.md: neither public nor private/);
     assert.match(problems.join('\n'), /src\/__tests__\/letters\.test\.ts: imports the private '..\/..\/pos\/src\/modules\/fiscal-core\/types\.js'/);
   });
+
+  it('refuses a file written for the mirror that names a private path', () => {
+    const f = fixture();
+    commit(f.source, 'The public instructions point at what is not there', {
+      'CLAUDE.public.md': [
+        '# CLAUDE.md', // the name the mirror gives this very file — allowed
+        'Read TechDocs/OPEN.md and TechDocs/guides/kasyr.md.', // public
+        'The hall map is pos/src/modules/tables/manifest.ts.', // a private module, by its directory
+        'Its design is in `SECRET.md`.', // a private document, by its bare name
+        'Private too: src/private.test.ts (see src/private.test.ts).', // by its path, said once
+        'Private modules: tables, fiscal-core.', // ids are not paths
+        'NOT_SECRET.md is another file.', // the tail of a longer name
+      ].join('\n'),
+    });
+    const { problems } = check(f.source, rules());
+    assert.deepEqual(problems, [
+      "CLAUDE.public.md: names the private 'SECRET.md' — it is published as CLAUDE.md, where that path does not exist",
+      "CLAUDE.public.md: names the private 'pos/src/modules/tables/' — it is published as CLAUDE.md, where that path does not exist",
+      "CLAUDE.public.md: names the private 'src/private.test.ts' — it is published as CLAUDE.md, where that path does not exist",
+    ]);
+  });
+
+  it('names a private document once, by its path rather than its bare name too', () => {
+    const f = fixture();
+    commit(f.source, 'A full path', { 'CLAUDE.public.md': 'See TechDocs/SECRET.md.\n' });
+    assert.deepEqual(check(f.source, rules()).problems, [
+      "CLAUDE.public.md: names the private 'TechDocs/SECRET.md' — it is published as CLAUDE.md, where that path does not exist",
+    ]);
+  });
+
+  it('lets a bare name through when a public file carries it too', () => {
+    const f = fixture();
+    commit(f.source, 'Two READMEs', {
+      'TechDocs/guides/README.md': 'open\n',
+      'pos/src/modules/tables/README.md': 'private\n',
+      'CLAUDE.public.md': 'Start with README.md.\n',
+    });
+    assert.deepEqual(check(f.source, rules()).problems, []);
+  });
 });
 
 describe('the rules of this repository', () => {
