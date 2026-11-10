@@ -543,7 +543,7 @@ function main(argv) {
     const verb = flags.dryRun ? 'would push' : 'pushed';
     console.log(
       result.tip === result.base && !result.tags.length
-        ? `export-public sync: the mirror is up to date (${result.skipped} commit(s) changed nothing public).`
+        ? `export-public sync: the mirror is up to date${result.skipped ? ` (${result.skipped} new commit(s) changed nothing public)` : ''}.`
         : `export-public sync: ${verb} ${result.exported.length + (result.bootstrap ? 1 : 0)} commit(s) and ${result.tags.length} tag(s); ${result.skipped} skipped; mirror ${result.base.slice(0, 10)} → ${result.tip.slice(0, 10)}.`,
     );
     return;
