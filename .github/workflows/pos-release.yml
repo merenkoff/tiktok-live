@@ -15,6 +15,21 @@ name: POS Release
 # ships them and `git show pos-v2.3.0` reads the same text people see. Without
 # the file the tag stays lightweight and the body is the placeholder below.
 # Either way the Release is created as a draft; publishing is a human's tap.
+#
+# Open-core (TechDocs/POS_OPENCORE.md §11): once the sources live in a private
+# monorepo and this repository is its exported mirror, the two halves of this
+# workflow run in different places. The Actions variable RELEASE_ROLE says
+# which half a repository does:
+#   * unset    — everything here, as described above (a fork, or this
+#                repository before the split);
+#   * `source` — the private monorepo: bump, commit, tag, then EXPORT the commit
+#                and the tag to the mirror. No installers are built there — the
+#                macOS and Windows runners are what a private repository pays
+#                most for, and the desktop app holds no private code;
+#   * `mirror` — the public repository: the exported `pos-v*` tag arrives as a
+#                push and starts this workflow, which builds the installers from
+#                that tag and drafts the Release. It never commits and never
+#                moves a tag: `main` and the tags there belong to the export.
 
 on:
   workflow_dispatch:
@@ -42,9 +57,17 @@ jobs:
       tag: ${{ steps.resolve.outputs.tag }}
       body: ${{ steps.notes.outputs.body }}
     steps:
+      - name: A release starts in the source repository
+        if: vars.RELEASE_ROLE == 'mirror' && github.event_name != 'push'
+        run: |
+          echo "::error::This repository is the exported mirror. Run «POS Release» in the source repository: it bumps the version, and the export brings the commit and the pos-v tag here, which starts this workflow to build the installers." >&2
+          exit 1
+
       - uses: actions/checkout@v4
         with:
-          ref: main
+          # The mirror builds the tag exactly as it was exported; everywhere
+          # else the bump is committed on top of main.
+          ref: ${{ vars.RELEASE_ROLE == 'mirror' && github.ref || 'main' }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -100,8 +123,20 @@ jobs:
         env:
           TAG: ${{ steps.resolve.outputs.tag }}
           NOTES: ${{ steps.notes.outputs.notes }}
+          ROLE: ${{ vars.RELEASE_ROLE }}
         run: |
           set -euo pipefail
+          if [ "${ROLE}" = "mirror" ]; then
+            # The exported tag already carries the bump. A difference here
+            # means the tag was not made by the source's POS Release.
+            if ! git diff --quiet; then
+              echo "::error::${TAG} does not carry its own version in the manifests — the mirror never commits; release from the source repository." >&2
+              git diff --stat >&2
+              exit 1
+            fi
+            echo "Mirror: building ${TAG} as exported — no commit, the tag stays where it is." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if ! git diff --quiet; then
@@ -122,8 +157,39 @@ jobs:
           fi
           git push -f origin "${TAG}"
 
+  # Source role only: the bump commit and its tag were pushed with GITHUB_TOKEN,
+  # which starts no other workflow — so the export that carries them to the
+  # mirror is a job of this one. Same steps and the same concurrency group as
+  # the export job of export-public.yml.
+  export:
+    name: Export the release to the mirror
+    needs: version
+    if: vars.RELEASE_ROLE == 'source'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: export-public
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Replay main and the release tag onto the mirror
+        env:
+          PUBLIC_EXPORT_KEY: ${{ secrets.PUBLIC_EXPORT_KEY }}
+        run: bash scripts/export-public/ci-sync.sh
+
   release:
     needs: version
+    # Installers are built where the runners are free: in a fork or before the
+    # split (role unset), and in the mirror — never in the private source.
+    if: vars.RELEASE_ROLE != 'source'
     strategy:
       fail-fast: false
       matrix:

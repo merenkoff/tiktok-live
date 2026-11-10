@@ -1,0 +1,67 @@
+name: Export public mirror
+
+# Open-core (TechDocs/POS_OPENCORE.md §11, step O-6). The private monorepo is
+# the source of truth; the public repository receives its open part, commit by
+# commit, from `scripts/export-public/export.mjs`.
+#
+# Two jobs:
+#   * check  — on every PR and push: the export's own tests, then
+#     `export.mjs check` — every tracked path is public or private by
+#     `rules.json` (a new module directory, TechDocs file or workflow is neither
+#     until someone says which), no public file imports a private one, and the
+#     public tree carries nothing private. This is where a mistake is cheap.
+#   * export — only in the repository whose Actions variable RELEASE_ROLE is
+#     `source`, only for `main`: replay what the mirror lacks and push it there
+#     with the mirror's deploy key (secret PUBLIC_EXPORT_KEY). Everywhere else
+#     the job is skipped, so this file is inert until the split.
+#
+# This workflow, the script and its rules are private paths themselves: the
+# mirror never receives them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Public / private line
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Export tests
+        run: node --test scripts/export-public/
+      - name: Every path is public or private, and the public tree is clean
+        run: node scripts/export-public/export.mjs check
+
+  export:
+    name: Export to the mirror
+    needs: check
+    if: vars.RELEASE_ROLE == 'source' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # One export at a time, shared with the export job of pos-release.yml. A
+    # run that waited exports whatever `main` holds by then, so a queued run
+    # replaced by a newer one loses nothing.
+    concurrency:
+      group: export-public
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Replay main onto the mirror
+        env:
+          PUBLIC_EXPORT_KEY: ${{ secrets.PUBLIC_EXPORT_KEY }}
+        run: bash scripts/export-public/ci-sync.sh
