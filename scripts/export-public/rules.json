@@ -117,6 +117,7 @@
     ".claude/",
     ".github/dependabot.yml",
     ".github/workflows/export-public.yml",
+    ".github/workflows/copy-module-key.yml",
     "scripts/export-public/",
 
     "pos/e2e/florist-bench.spec.ts",
