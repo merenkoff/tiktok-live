@@ -1,0 +1,99 @@
+# The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+# Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+# Commercial use requires a separate agreement: mer.sergei@gmail.com
+
+# ONE-OFF, to be deleted after its single run (TechDocs/POS_OPENCORE.md §11.9).
+#
+# The production module signing key exists in exactly one place: this
+# repository's Actions secret POS_REMOTE_SIGNING_KEY (it was printed once by
+# `sign-remote.mjs --gen-prod` on 2026-09-07 and kept nowhere else), and GitHub
+# never gives a secret back. After the open-core split the private modules are
+# released from merenkoff/liveshop, which therefore needs the same key — a new
+# one would have to be allowlisted in the web host, the desktop and the server
+# and wait for every till to update.
+#
+# So this job hands the secret from one repository's secrets to the other's
+# without anyone seeing it: it checks that the secret is the production key (by
+# its public keyId, which is not a secret) and writes it with `gh secret set`,
+# which encrypts it for the target repository before it leaves the runner.
+#
+#  - Manual only, from `main` only, by the repository's owner only, and only
+#    with the target repository typed in.
+#  - No checkout and no third-party action: no code of this repository, and
+#    nobody else's, runs next to the key.
+#  - GITHUB_TOKEN gets no permissions. The one credential used is
+#    LIVESHOP_SECRETS_TOKEN — a fine-grained token limited to merenkoff/liveshop
+#    with "Secrets: read and write", made for this run and revoked after it.
+#  - The value is never echoed, never put on a command line and never written
+#    to a file; GitHub masks it in the log besides.
+#
+# After the run: delete this file, the LIVESHOP_SECRETS_TOKEN secret and the token.
+
+name: Copy module signing key (one-off)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type the target repository to confirm: merenkoff/liveshop'
+        required: true
+        type: string
+
+permissions: {}
+
+env:
+  TARGET_REPO: merenkoff/liveshop
+  PROD_KEY_ID: 2a73632c13044371
+
+jobs:
+  copy:
+    name: POS_REMOTE_SIGNING_KEY → the private repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      github.repository == 'merenkoff/tiktok-live'
+      && github.ref == 'refs/heads/main'
+      && github.actor == github.repository_owner
+      && inputs.confirm == 'merenkoff/liveshop'
+    steps:
+      - name: The secret is the production module key
+        env:
+          KEY: ${{ secrets.POS_REMOTE_SIGNING_KEY }}
+        run: |
+          node <<'EOF'
+          const { createHash, createPrivateKey, createPublicKey } = require('node:crypto');
+          const fail = (message) => {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          };
+          const raw = (process.env.KEY || '').trim();
+          if (!raw) fail('POS_REMOTE_SIGNING_KEY is not set in this repository');
+          let keyId;
+          try {
+            const key = createPrivateKey({ key: Buffer.from(raw, 'base64'), format: 'der', type: 'pkcs8' });
+            const pub = createPublicKey(key).export({ type: 'spki', format: 'der' }).subarray(-32);
+            keyId = createHash('sha256').update(pub).digest('hex').slice(0, 16);
+          } catch {
+            fail('POS_REMOTE_SIGNING_KEY does not read as a base64 PKCS8 Ed25519 key');
+          }
+          console.log(`keyId ${keyId}`);
+          if (keyId !== process.env.PROD_KEY_ID) {
+            fail(`not the production module key: expected keyId ${process.env.PROD_KEY_ID}`);
+          }
+          console.log('This is the production module key.');
+          EOF
+
+      - name: Write it into the private repository's secrets
+        env:
+          GH_TOKEN: ${{ secrets.LIVESHOP_SECRETS_TOKEN }}
+          KEY: ${{ secrets.POS_REMOTE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::LIVESHOP_SECRETS_TOKEN is not set: a fine-grained token for ${TARGET_REPO} with 'Secrets: read and write'." >&2
+            exit 1
+          fi
+          # stdin, not --body: the value stays off the command line
+          printf '%s' "${KEY}" | gh secret set POS_REMOTE_SIGNING_KEY --repo "${TARGET_REPO}"
+          echo "Secrets of ${TARGET_REPO} now (names and dates only):"
+          gh secret list --repo "${TARGET_REPO}"
