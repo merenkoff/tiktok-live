@@ -134,6 +134,8 @@ export interface OutboxSalePayload {
    * opens them; without them its pours wait for the bar's scan.
    */
   open_bottles?: OpenBottleStamp[];
+  /** «Покупцю є 18» answered for this receipt (migration 102). */
+  age_confirmed?: boolean;
 }
 
 export interface OutboxRow {

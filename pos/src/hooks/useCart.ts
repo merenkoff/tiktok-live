@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import type { CatalogItem, ExchangeDraft, PosCustomer } from '../types';
 import { discountAfterCustomerChange } from '../lib/customerDiscount';
 import { lineAmountCents } from '../lib/lineMoney';
+import { ageRestricted } from '../lib/ageCheck';
 import { isWeighed, MAX_WEIGHED_QUANTITY, weightProblem, type WeightSource } from '../lib/weighed';
 import {
   cartLineUid,
@@ -90,6 +91,12 @@ export interface CartLine {
   excise_per_unit?: boolean;
   /** The stamps scanned for this line's units, normalised (`lib/excise.ts`). */
   excise_labels?: string[];
+  /**
+   * Sold to an adult only (migration 102): excise goods, a recipe pouring from
+   * them, or an answer that does. Where the store asks, the till asks the
+   * buyer's age once per receipt (`lib/ageCheck.ts`). From the catalog.
+   */
+  age_restricted?: boolean;
 }
 
 /** One stem in a bouquet being rung, per one unit of it. */
@@ -350,6 +357,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       ...(note ? { note } : {}),
       ...((item.fiscal_register ?? 1) > 1 ? { fiscal_register: item.fiscal_register } : {}),
       ...(item.excise_per_unit ? { excise_per_unit: true } : {}),
+      ...(ageRestricted(item, ids) ? { age_restricted: true } : {}),
     });
     set({ lines, banner: null });
   },

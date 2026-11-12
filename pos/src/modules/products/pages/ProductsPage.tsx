@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DEFAULT_TAG_COLOR, api, type TagColorKey, useAuthStore, useVertical } from '@pos/platform';
 import type { PosTag, TagStation, Product } from '@pos/platform';
-import { Boxes, Camera, Inbox, LayoutGrid, Package, PageHeader, Percent, Plus, Printer, Sparkles, Star } from '@pos/platform/ui';
+import { Boxes, Camera, ClipboardList, Inbox, LayoutGrid, Package, PageHeader, Percent, Plus, Printer, Sparkles, Star } from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { MarkdownDialog } from '../components/MarkdownDialog';
 import { countPhrase } from '../data/markdownsApi';
@@ -256,6 +256,12 @@ export function ProductsPage() {
               <Link to="/admin/products/markdowns" className="sq-btn-quiet">
                 <Percent size={20} />
                 Уцінки
+              </Link>
+            )}
+            {!menuOnly && (
+              <Link to="/admin/products/history" className="sq-btn-quiet">
+                <ClipboardList size={20} />
+                Історія змін
               </Link>
             )}
             <Link

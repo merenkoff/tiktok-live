@@ -1110,8 +1110,9 @@ export const FEATURES = {
   // `tables` module 2.7.0 on 2026-11-05/06 and selling at «Шабля» since. The
   // excise row of the receipt and the second register are Cashalot's only
   // (decision Д5: Checkbox gets the stamps, never the excise tax code), so the
-  // labels say so. The buyer's age check is not built: what is left of the
-  // grocery promise is the ROADMAP item `grocery-excise`.
+  // labels say so. The buyer's age check followed on 2026-11-12 (`ageCheck`,
+  // TechDocs/POS_AGE_CHECK.md), and with it the grocery promise
+  // `grocery-excise` left ROADMAP whole.
   exciseStamps: {
     status: 'available',
     label:
@@ -1121,6 +1122,16 @@ export const FEATURES = {
     status: 'available',
     label:
       'Розлив з відкритої пляшки: марка пляшки — у чек першої порції з неї, лічильник мілілітрів кожної пляшки, екран «Пляшки» для бару; той самий напій продається й цілою пляшкою з одного складу',
+  },
+  ageCheck: {
+    status: 'available',
+    label:
+      'Підакцизні товари: каса один раз на чек питає «Покупцю є 18 років?», коли в чеку алкоголь, пиво чи тютюн — сам по собі, у порції, коктейлі чи в модифікаторі «+ коньяк»; «Ні» прибирає їх з чека, «Так» записується в продаж (вмикає власник)',
+  },
+  menuChangeLog: {
+    status: 'available',
+    label:
+      'Історія змін меню: хто — власник, маркетолог чи продавець — і коли змінив товар, ціну, опис, алергени, мітки чи модифікатори, що було → стало; для всього меню й для кожної картки',
   },
   dualRegister: {
     status: 'available',
@@ -1206,7 +1217,9 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'marketerRole',
   'exciseStamps',
   'openBottles',
+  'ageCheck',
   'dualRegister',
+  'menuChangeLog',
   'ownPrro',
   'groceryCredit',
   'groceryWeighed',
@@ -1350,7 +1363,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для кав\'ярні за стійкою',
     tagline: 'Тап — і «як завжди»; модифікатори, дошка кухні, стоп-лист, техкарти з фудкостом і матриця меню.',
     bullets: ['Модифікатори з ціною на кнопці', 'Дошка кухні й бару, стоп-лист', 'Техкарти й фудкост'],
-    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'guestFeedback', 'marketerRole', 'exciseStamps', 'openBottles', 'dualRegister'],
+    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'guestFeedback', 'marketerRole', 'menuChangeLog', 'exciseStamps', 'openBottles', 'ageCheck', 'dualRegister'],
     illustrations: ['/demo-cafe/latte.svg', '/demo-cafe/croissant.svg', '/demo-cafe/espresso.svg'],
     tint: 'bg-tint-cafe',
   },
@@ -1363,7 +1376,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для ресторану зі столами',
     tagline: 'План залу, відкриті рахунки, раунди на кухню, передчек і розділення рахунку — з планшета офіціанта.',
     bullets: ['План залу з рахунками столів', 'Раунди на кухню з планшета', 'Розділити рахунок, передчек'],
-    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet', 'marketerRole', 'exciseStamps', 'openBottles', 'dualRegister'],
+    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet', 'marketerRole', 'menuChangeLog', 'exciseStamps', 'openBottles', 'ageCheck', 'dualRegister'],
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },
@@ -1391,6 +1404,7 @@ export const VERTICALS: readonly VerticalFact[] = [
       'fiscalOnlineCheckbox',
       'fiscalOnlineCashalot',
       'exciseStamps',
+      'ageCheck',
       'fiscalOffline',
       'cashRounding',
       'offlineDesktop',
@@ -1602,13 +1616,6 @@ export const ROADMAP: readonly RoadmapItem[] = [
     title: 'Каса на телефоні для ринку',
     body: 'Продати, записати борг і подивитися залишки з телефона — для торгівлі на ринку, з лотка й з виїзду, без окремого комп\'ютера.',
     progress: 10,
-  },
-  {
-    id: 'grocery-excise',
-    vertical: 'grocery',
-    title: 'Підакцизні товари',
-    body: 'Сканування акцизної марки на кожну пляшку, код УКТ ЗЕД у рядку чека й акциз 5 % у чеку вже працюють — з ПРРО Cashalot. Залишилось підтвердження віку покупця один раз на чек.',
-    progress: 95,
   },
 ];
 

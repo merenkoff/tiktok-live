@@ -43,6 +43,50 @@ async function findVariant(storeId: number, variantId: number): Promise<Record<s
   return variants.find((v) => Number(v.id) === variantId) ?? null;
 }
 import * as techCardsImport from '../techcards-import.service.js';
+import { listMenuChanges, recordProductChanges, type MenuEntity } from '../menu-changes.js';
+
+/**
+ * Run a write and record what it changed on these cards (migration 101,
+ * TechDocs/POS_MENU_CHANGES.md). The cards are read before and after; a read
+ * that fails only costs the journal its row, never the write.
+ */
+export async function withMenuJournal<T>(
+  auth: PosAuthContext,
+  ids: readonly number[],
+  write: () => Promise<T>,
+  idsAfter?: (result: T) => readonly number[]
+): Promise<T> {
+  let before: productsService.ProductView[] | null = [];
+  try {
+    if (ids.length > 0) before = await productsService.listProducts(auth.storeId, ids);
+  } catch (error) {
+    before = null;
+    logger.warn('Menu journal: card not read before the write', { error: errorMessage(error) });
+  }
+  const result = await write();
+  if (before) {
+    try {
+      const after = idsAfter ? idsAfter(result) : ids;
+      if (after.length > 0) {
+        await recordProductChanges(auth, before, await productsService.listProducts(auth.storeId, after));
+      }
+    } catch (error) {
+      logger.warn('Menu journal: card not read after the write', { error: errorMessage(error) });
+    }
+  }
+  return result;
+}
+
+/** The card a variant belongs to, for the journal. */
+async function productOfVariant(storeId: number, variantId: number): Promise<number[]> {
+  const row = await pool.query(`SELECT product_id FROM pos_variants WHERE id = $1 AND store_id = $2`, [variantId, storeId]);
+  return row.rows.length === 0 ? [] : [Number(row.rows[0].product_id)];
+}
+
+function productIdOf(result: unknown): readonly number[] {
+  const id = (result as { id?: unknown } | null)?.id;
+  return typeof id === 'number' ? [id] : [];
+}
 
 export function registerProductsRoutes(fastify: FastifyInstance): void {
   fastify.get('/products', async (request, reply) => {
@@ -95,9 +139,11 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     try {
       if (auth.role === 'marketer') assertMarketerProductWrite(request.body, null);
-      const product = await productsService.createProduct(
-        auth.storeId,
-        request.body as productsService.CreateProductInput
+      const product = await withMenuJournal(
+        auth,
+        [],
+        () => productsService.createProduct(auth.storeId, request.body as productsService.CreateProductInput),
+        productIdOf
       );
       // A dish's description, composition and allergens are on the guest's page:
       // what an owner just wrote must not wait out the menu's 15 s cache.
@@ -121,10 +167,12 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
         if (!current) return reply.code(404).send({ error: 'Product not found' });
         assertMarketerProductWrite(request.body, current as unknown as Record<string, unknown>);
       }
-      const product = await productsService.updateProduct(
-        auth.storeId,
-        Number(id),
-        request.body as Parameters<typeof productsService.updateProduct>[2]
+      const product = await withMenuJournal(auth, [Number(id)], () =>
+        productsService.updateProduct(
+          auth.storeId,
+          Number(id),
+          request.body as Parameters<typeof productsService.updateProduct>[2]
+        )
       );
       // Allergens are the one thing on that page a stale copy can hurt someone
       // over, so the change is visible at once (see `invalidatePublicMenu`).
@@ -155,10 +203,8 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     const { id } = request.params as { id: string };
     try {
       if (auth.role === 'marketer') assertMarketerVariantWrite(request.body, null);
-      const product = await productsService.addVariant(
-        auth.storeId,
-        Number(id),
-        request.body as productsService.VariantInput
+      const product = await withMenuJournal(auth, [Number(id)], () =>
+        productsService.addVariant(auth.storeId, Number(id), request.body as productsService.VariantInput)
       );
       return reply.code(201).send(forRole(auth, product));
     } catch (error) {
@@ -177,7 +223,9 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     const body = (request.body ?? {}) as { variants?: productsService.VariantInput[] };
     try {
       if (auth.role === 'marketer') for (const variant of body.variants ?? []) assertMarketerVariantWrite(variant, null);
-      const product = await productsService.addVariants(auth.storeId, Number(id), body.variants ?? []);
+      const product = await withMenuJournal(auth, [Number(id)], () =>
+        productsService.addVariants(auth.storeId, Number(id), body.variants ?? [])
+      );
       return reply.code(201).send(forRole(auth, product));
     } catch (error) {
       if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
@@ -210,10 +258,12 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
       }
       return forRole(
         auth,
-        await productsService.updateVariant(
-          auth.storeId,
-          Number(id),
-          request.body as Parameters<typeof productsService.updateVariant>[2]
+        await withMenuJournal(auth, await productOfVariant(auth.storeId, Number(id)), () =>
+          productsService.updateVariant(
+            auth.storeId,
+            Number(id),
+            request.body as Parameters<typeof productsService.updateVariant>[2]
+          )
         )
       );
     } catch (error) {
@@ -228,7 +278,10 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
-      return forRole(auth, await productsService.archiveProduct(auth.storeId, Number(id)));
+      return forRole(
+        auth,
+        await withMenuJournal(auth, [Number(id)], () => productsService.archiveProduct(auth.storeId, Number(id)))
+      );
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
@@ -240,7 +293,9 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
-      const product = await productsService.restoreProduct(auth.storeId, Number(id));
+      const product = await withMenuJournal(auth, [Number(id)], () =>
+        productsService.restoreProduct(auth.storeId, Number(id))
+      );
       // A restored dish is on the guest menu again at once, like any edit.
       invalidatePublicMenu(auth.storeId);
       return forRole(auth, product);
@@ -254,7 +309,12 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
-      return forRole(auth, await productsService.archiveVariant(auth.storeId, Number(id)));
+      return forRole(
+        auth,
+        await withMenuJournal(auth, await productOfVariant(auth.storeId, Number(id)), () =>
+          productsService.archiveVariant(auth.storeId, Number(id))
+        )
+      );
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
@@ -266,10 +326,8 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     const { id } = request.params as { id: string };
     const body = request.body as { tag_ids?: number[] };
     try {
-      const tagIds = await tagsService.setProductTags(
-        auth.storeId,
-        Number(id),
-        body.tag_ids ?? []
+      const tagIds = await withMenuJournal(auth, [Number(id)], () =>
+        tagsService.setProductTags(auth.storeId, Number(id), body.tag_ids ?? [])
       );
       return { tag_ids: tagIds };
     } catch (error) {
@@ -352,14 +410,31 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     const { id } = request.params as { id: string };
     const body = request.body as { product_ids?: number[] };
     try {
-      return await tagsService.assignTagToProducts(
-        auth.storeId,
-        Number(id),
-        body.product_ids ?? []
+      const ids = (body.product_ids ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0);
+      return await withMenuJournal(auth, ids, () =>
+        tagsService.assignTagToProducts(auth.storeId, Number(id), body.product_ids ?? [])
       );
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
+  });
+
+  // ── Menu change journal (migration 101) ───────────────
+  // Owner only: the rows carry purchase prices and every staff member's name.
+  fastify.get('/menu-changes', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    const q = (request.query ?? {}) as Record<string, string | undefined>;
+    const entity: MenuEntity | undefined =
+      q.entity === 'product' || q.entity === 'modifier_group' ? q.entity : undefined;
+    const entityId = q.entity_id != null && /^\d+$/.test(q.entity_id) ? Number(q.entity_id) : undefined;
+    if (q.entity_id != null && entityId == null) return reply.code(400).send({ error: 'entity_id must be a number' });
+    return listMenuChanges(auth.storeId, {
+      entity,
+      entityId,
+      limit: q.limit != null && /^\d+$/.test(q.limit) ? Number(q.limit) : undefined,
+      offset: q.offset != null && /^\d+$/.test(q.offset) ? Number(q.offset) : undefined,
+    });
   });
 
   // ── Markdowns (одяг D2) ───────────────────────────────

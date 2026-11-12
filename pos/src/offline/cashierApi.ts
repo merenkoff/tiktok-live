@@ -154,6 +154,8 @@ export const cashierApi = {
     cash_rounding?: number;
     /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
     open_bottles?: OpenBottleStamp[];
+    /** «Покупцю є 18» answered for this receipt (migration 102). */
+    age_confirmed?: boolean;
   },
   /** `clientUuid` reuses an existing idempotency key — see FiscalSaleUnknownError. */
   opts: { clientUuid?: string } = {}
@@ -179,6 +181,8 @@ export const cashierApi = {
       cash_rounding?: number;
       /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
       open_bottles?: OpenBottleStamp[];
+      /** «Покупцю є 18» answered for the order (migration 102). */
+      age_confirmed?: boolean;
     },
     opts: { clientUuid?: string } = {}
   ): Promise<SplitSaleResult> {

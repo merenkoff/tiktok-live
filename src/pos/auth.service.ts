@@ -74,6 +74,8 @@ export interface AuthResponse {
      * offline till shows and prints the rounded sum the server will file.
      */
     cash_rounding: number;
+    /** Ask «Покупцю є 18 років?» once per receipt with excise goods (migration 102). */
+    age_check: boolean;
     /**
      * The guest menu's feedback sheet — what the till prints as the QR
      * «Оцініть нас» at the bottom of a receipt (phase F7). Null unless the
@@ -164,6 +166,7 @@ function toAuthResponse(
       auto_print_receipt: auth.autoPrintReceipt,
       florist_labour_bps: auth.floristLabourBps,
       cash_rounding: auth.cashRounding,
+      age_check: auth.ageCheck,
       feedback_url: auth.feedbackUrl,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: moduleRemotes,

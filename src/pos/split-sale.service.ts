@@ -66,6 +66,8 @@ export interface SplitSaleInput {
    * a line pouring from a bottle is on that bottle's register (Д20).
    */
   open_bottles?: unknown;
+  /** «Покупцю є 18» answered for the order (migration 102): every receipt of it records it. */
+  age_confirmed?: unknown;
 }
 
 /** One receipt of the cart, as planned. */
@@ -417,6 +419,7 @@ export async function completeSplitSale(input: SplitSaleInput): Promise<SplitSal
         cash_rounding: input.cash_rounding,
         fiscal_register: receipt.register_no,
         open_bottles: input.open_bottles,
+        age_confirmed: input.age_confirmed,
       });
     } catch (cause) {
       if (done.length === 0) throw cause;

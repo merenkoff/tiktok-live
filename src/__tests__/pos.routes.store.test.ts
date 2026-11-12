@@ -575,6 +575,7 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
         auto_print_receipt: [true, false],
         florist_labour_bps: [2500, 0],
         cash_rounding: [50, 10],
+        age_check: [true, false],
         enabled_modules: [['products', 'stock'], ['customers']],
         module_remotes: [{ stock: 'https://cdn.example.com/stock/remote-entry.js' }, {}],
         nav_overrides: [{ [NAV_KEY]: { label: 'Продаж' } }, {}],

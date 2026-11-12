@@ -28,6 +28,7 @@ import { AddVariantsDialog } from '../components/AddVariantsDialog';
 import { NewVariantFields } from '../components/NewVariantFields';
 import { ProductFields } from '../components/ProductFields';
 import { ProductSide } from '../components/ProductSide';
+import { ProductHistory } from '../components/ProductHistory';
 import { VariantMatrix, type MatrixResult } from '../components/VariantMatrix';
 import { VariantSheet } from '../components/VariantSheet';
 import { VariantsSection } from '../components/VariantsSection';
@@ -118,6 +119,8 @@ function ProductCard({ id }: { id: string | undefined }) {
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Bumped after every write, so the card's history under the form reads again.
+  const [historyVersion, setHistoryVersion] = useState(0);
   const [sheet, setSheet] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
@@ -378,6 +381,7 @@ function ProductCard({ id }: { id: string | undefined }) {
         setDraft(d);
       }
       setSaved(true);
+      setHistoryVersion((v) => v + 1);
     } catch (err) {
       if (err instanceof RowFailure) {
         const message = batchErrorMessage(err.cause, 'Не вдалося зберегти варіант');
@@ -559,6 +563,8 @@ function ProductCard({ id }: { id: string | undefined }) {
         </form>
       )}
 
+      {mode === 'edit' && draft && !menuOnly && <ProductHistory productId={productId} version={historyVersion} />}
+
       {sheetVariant && draft && (
         <VariantSheet
           key={sheetVariant.id}
@@ -597,6 +603,7 @@ function ProductCard({ id }: { id: string | undefined }) {
           onAdded={(updated) => {
             mergeAdded(updated);
             setAdding(false);
+            setHistoryVersion((v) => v + 1);
             void reload();
           }}
           onClose={() => setAdding(false)}

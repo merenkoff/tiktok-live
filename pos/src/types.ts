@@ -195,6 +195,11 @@ export interface StoreConfig {
    */
   cash_rounding?: number;
   /**
+   * Ask «Покупцю є 18 років?» once per receipt with excise goods (migration
+   * 102, TechDocs/POS_AGE_CHECK.md). Absent from an older backend → off.
+   */
+  age_check?: boolean;
+  /**
    * The guest menu's feedback sheet — printed as the QR «Оцініть нас» on a
    * sale receipt (phase F7). Null unless the menu is published, the owner
    * takes feedback and the store has a kitchen. Optional: a backend older
@@ -239,6 +244,7 @@ export type StorePatch = Partial<
     | 'auto_print_receipt'
     | 'florist_labour_bps'
     | 'cash_rounding'
+    | 'age_check'
     | 'enabled_modules'
     | 'module_remotes'
     | 'nav_overrides'
@@ -284,6 +290,11 @@ export interface AuthResponse {
      * file; absent on an older cached auth → not rounded, the old behaviour.
      */
     cash_rounding?: number;
+    /**
+     * Ask the buyer's age once per receipt with excise goods (migration 102).
+     * With the login so a till offline asks too; absent on an older auth → off.
+     */
+    age_check?: boolean;
     /**
      * The guest menu's feedback sheet, printed as the QR «Оцініть нас» on a
      * sale receipt (phase F7). Null unless the menu is published, the owner
@@ -358,6 +369,8 @@ export interface CatalogModifier {
   is_default: boolean;
   component_variant_id: number | null;
   component_quantity: number | null;
+  /** The answer pours from excise goods (cognac in a coffee): adults only (migration 102). */
+  age_restricted?: boolean;
 }
 
 /** One answer as the owner edits it — mirrors `Modifier` in `src/pos/modifiers.service.ts`. */
@@ -487,6 +500,12 @@ export interface CatalogItem {
   fiscal_excise?: boolean;
   /** Each unit sold needs its own stamp scanned (a bottle sold whole). */
   excise_per_unit?: boolean;
+  /**
+   * Sold to an adult only (migration 102): excise goods, or a recipe that
+   * pours from them. Where the store asks, the till asks the buyer's age once
+   * per receipt. Absent = not restricted (and on an older cached catalog).
+   */
+  age_restricted?: boolean;
   /**
    * A card made at the bench for one physical bouquet. The window and a
    * catalogue bouquet are both `composite` + `own`; only this one may be
@@ -1456,6 +1475,8 @@ export interface ExchangeInput {
     client_uuid: string;
     /** Stamps of new bottles the new goods open (ДК5), after a `bottle_needed` refusal. */
     open_bottles?: OpenBottleStamp[];
+    /** «Покупцю є 18» answered for the new receipt (migration 102). */
+    age_confirmed?: boolean;
   };
   /** The cash-rounding step for both halves — each is its own document and rounds its own cash. */
   cash_rounding?: number;

@@ -63,6 +63,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.auto_print_receipt,
        store.florist_labour_bps,
        store.cash_rounding,
+       store.age_check,
        store.public_menu_enabled,
        store.public_menu_token,
        store.public_menu_slug_enabled,
@@ -134,6 +135,8 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     // Same reason: a till that starts cold offline rounds the cash total by
     // what the cached login says, and must agree with the server at sync.
     cashRounding: Number(row.cash_rounding ?? 0),
+    // Same again: a till offline asks the buyer's age by the cached login.
+    ageCheck: row.age_check === true,
     // The QR «Оцініть нас» the till prints on a receipt (F7). With the login
     // for the same reason again: a counter café's desktop prints its receipts
     // without a network, and the cached login is where it reads the address.
