@@ -192,7 +192,7 @@ export function LoginPage() {
             {shell === 'cashier'
               ? 'Каса'
               : shell === 'tablet'
-                ? 'Планшет офіціанта'
+                ? 'Каса на телефоні й планшеті'
                 : 'Каса та кабінет власника'}
           </p>
         </div>
@@ -281,7 +281,7 @@ export function LoginPage() {
             className="w-full min-h-12 rounded-xl bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text"
             data-testid="install-app"
           >
-            Встановити на планшет
+            Встановити як застосунок
           </button>
         )}
         {installHint && !canInstall && isIos() && (

@@ -1,8 +1,8 @@
 {
   "id": "/tablet/",
-  "name": "The Live Shop — планшет офіціанта",
-  "short_name": "Планшет",
-  "description": "Зала, рахунки і каса на планшеті. Читає без мережі, пише з нею.",
+  "name": "LiveShop POS — каса на телефоні й планшеті",
+  "short_name": "LiveShop",
+  "description": "Каса, зала і рахунки на телефоні чи планшеті. Читає без мережі, продає з нею.",
   "lang": "uk",
   "start_url": "/tablet/",
   "scope": "/tablet/",

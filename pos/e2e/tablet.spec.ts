@@ -82,7 +82,7 @@ async function loginWithPin(page: Page) {
   });
   await page.goto('/tablet/');
   await expect(page).toHaveURL(/\/tablet\/login$/);
-  await expect(page.getByText('Планшет офіціанта')).toBeVisible();
+  await expect(page.getByText('Каса на телефоні й планшеті')).toBeVisible();
   await expect(page.getByLabel('Код магазину')).toHaveValue('demo');
   await page.getByLabel('PIN').fill('1234');
   await page.getByRole('button', { name: 'Увійти' }).click();

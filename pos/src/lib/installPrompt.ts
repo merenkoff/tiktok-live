@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 /**
  * Chromium's `beforeinstallprompt`: fired once, early, and only usable from a
  * user gesture later — so it is caught at boot and kept for the login page's
- * «Встановити на планшет» button (TechDocs/POS_PWA.md §6). iOS has no such
+ * «Встановити як застосунок» button (TechDocs/POS_PWA.md §6). iOS has no such
  * event; the page shows the «Поділитися → На Початковий екран» hint instead.
  */
 interface BeforeInstallPromptEvent extends Event {
