@@ -441,6 +441,8 @@ function mapStore(store: Record<string, unknown>) {
     florist_labour_bps: Number(store.florist_labour_bps ?? 0),
     // НБУ № 25: the step cash totals are rounded to, 0 = not rounded (migration 071).
     cash_rounding: Number(store.cash_rounding ?? 0),
+    // Ask the buyer's age once per receipt with excise goods (migration 102).
+    age_check: store.age_check === true,
     enabled_modules: (store.enabled_modules as string[] | null) ?? [],
     module_remotes:
       (store.module_remotes as Record<string, string | ModuleRemoteEntry> | null) ?? {},
@@ -464,6 +466,8 @@ export type StorePatch = {
   florist_labour_bps?: number;
   /** Cash totals rounded to 0 (off), 10 or 50 kopecks. See migration 071. */
   cash_rounding?: number;
+  /** Ask «Покупцю є 18 років?» once per receipt with excise goods. See migration 102. */
+  age_check?: boolean;
   enabled_modules?: string[];
   module_remotes?: Record<string, string | ModuleRemoteEntry>;
   /** Per-store menu appearance — see `core/nav.ts`. */
@@ -492,6 +496,7 @@ export const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'auto_print_receipt',
   'florist_labour_bps',
   'cash_rounding',
+  'age_check',
   'enabled_modules',
   'module_remotes',
   'nav_overrides',
@@ -528,6 +533,9 @@ export async function updateStore(storeId: number, patch: StorePatch) {
     if (col === 'cash_rounding') {
       // The CHECK would refuse 25 as a 500; this says what the three are.
       value = parseCashRoundingStep(value);
+    }
+    if (col === 'age_check') {
+      if (typeof value !== 'boolean') throw new Error('«Питати вік покупця» — так або ні');
     }
     if (typeof value === 'string') {
       const trimmed = value.trim();

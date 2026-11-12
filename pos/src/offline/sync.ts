@@ -109,6 +109,8 @@ async function syncSale(row: OutboxRow): Promise<void> {
     ...(payload.cash_rounding ? { cash_rounding: payload.cash_rounding } : {}),
     // A bottle's stamp scanned before the network went (ДК5): it opens now.
     ...(payload.open_bottles?.length ? { open_bottles: payload.open_bottles } : {}),
+    // The cashier's «так» to «Покупцю є 18 років?» (migration 102).
+    ...(payload.age_confirmed ? { age_confirmed: true } : {}),
   });
   // Record client_uuid -> server id so the receipts screen can address this
   // sale on the server once it exists there.

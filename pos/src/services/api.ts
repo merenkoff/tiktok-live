@@ -527,6 +527,8 @@ class PosApi {
     cash_rounding?: number;
     /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
     open_bottles?: OpenBottleStamp[];
+    /** «Покупцю є 18» answered for this receipt (migration 102); recorded, never required. */
+    age_confirmed?: boolean;
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
     return data;
@@ -549,6 +551,8 @@ class PosApi {
     cash_rounding?: number;
     /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
     open_bottles?: OpenBottleStamp[];
+    /** «Покупцю є 18» answered for the order (migration 102). */
+    age_confirmed?: boolean;
   }): Promise<SplitSaleResult> {
     const { data } = await this.client.post<SplitSaleResult>('/sales/complete', {
       ...payload,

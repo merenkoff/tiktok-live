@@ -11,6 +11,8 @@ import { storeCashRounding, type CashRoundingStep } from '../../lib/cashRounding
 import { cartNeedsSplit, registerCaption } from '../../lib/cartRegisters';
 import { linesNeedingStamps } from '../../lib/excise';
 import { ExciseStampSheet } from '../../components/cashier/ExciseStampSheet';
+import { AgeCheckSheet } from '../../components/cashier/AgeCheckSheet';
+import { adultOnlyLines, needsAgeCheck } from '../../lib/ageCheck';
 import {
   bottleNeededText,
   bottleOfUid,
@@ -218,8 +220,25 @@ export function RegisterPage() {
     if (bottle == null) setExciseLabels(uid, labels);
     else setBottleStamps((prev) => withBottleStamps(prev, bottle, labels));
   };
-  /** «Оплатити»: the stamps first, where a bottle needs one, then the payment screen. */
-  const openCheckout = () => {
+  /**
+   * «Покупцю є 18 років?» (migration 102, TechDocs/POS_AGE_CHECK.md): asked
+   * once per receipt that holds goods sold to an adult only, where the owner
+   * switched it on. The answer lasts until the cart is rung or emptied.
+   */
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [ageSheet, setAgeSheet] = useState(false);
+  useEffect(() => {
+    if (lines.length === 0) setAgeConfirmed(false);
+  }, [lines.length]);
+  /** What a sale records: the «так», only where this receipt was asked. */
+  const ageField = (): { age_confirmed?: boolean } =>
+    ageConfirmed && adultOnlyLines(lines).length > 0 ? { age_confirmed: true } : {};
+  /** «Оплатити»: the buyer's age, then the stamps where a bottle needs one, then the payment screen. */
+  const openCheckout = (ageOk = ageConfirmed) => {
+    if (needsAgeCheck(lines, auth?.store.age_check, ageOk)) {
+      setAgeSheet(true);
+      return;
+    }
     if (linesNeedingStamps(lines).length > 0 || bottlesMissingStamps(bottleNeed, bottleStamps) > 0) {
       setStampSheet({ error: null });
     } else void toPayment();
@@ -614,6 +633,7 @@ export function RegisterPage() {
           // computes the sum itself and files what the customer was shown.
           ...(cashRounding ? { cash_rounding: cashRounding } : {}),
           ...openBottlesField(bottleStamps),
+          ...ageField(),
         },
         { clientUuid: opts.clientUuid }
       );
@@ -648,6 +668,7 @@ export function RegisterPage() {
         parked_cart_id: fromParkedId,
         ...(cashRounding ? { cash_rounding: cashRounding } : {}),
         ...openBottlesField(bottleStamps),
+        ...ageField(),
       },
       { clientUuid }
     );
@@ -687,6 +708,7 @@ export function RegisterPage() {
           ...(customer ? { customer_id: customer.id } : {}),
           client_uuid: saleUuid,
           ...openBottlesField(bottleStamps),
+          ...ageField(),
         },
         // Both halves round their own cash by this step (НБУ № 25).
         ...(cashRounding ? { cash_rounding: cashRounding } : {}),
@@ -1499,7 +1521,7 @@ export function RegisterPage() {
               onClear={() => {
                 if (lines.length) setClearAsk(true);
               }}
-              onCharge={openCheckout}
+              onCharge={() => openCheckout()}
               // An exchange is paid or abandoned — never parked, never turned
               // into an order, never picked up by another till.
               onSaveBasket={exchange ? undefined : openPark}
@@ -1526,7 +1548,7 @@ export function RegisterPage() {
           <button
             type="button"
             disabled={lines.length === 0}
-            onClick={openCheckout}
+            onClick={() => openCheckout()}
             className="pos-btn-primary px-4 py-2.5"
           >
             Сплатити
@@ -1574,6 +1596,23 @@ export function RegisterPage() {
           }}
           onConfirm={(payments, opts) => void pay(payments, { cashRounding: opts.cashRounding })}
           split={checkoutSplit}
+        />
+      )}
+
+      {ageSheet && (
+        <AgeCheckSheet
+          items={adultOnlyLines(lines).map((l) => (l.variant_label ? `${l.product_name} · ${l.variant_label}` : l.product_name))}
+          onConfirm={() => {
+            setAgeSheet(false);
+            setAgeConfirmed(true);
+            openCheckout(true);
+          }}
+          onRemove={() => {
+            setAgeSheet(false);
+            for (const line of adultOnlyLines(lines)) remove(line.uid);
+            setBanner('Алкоголь і тютюн прибрано з чека: покупцю немає 18');
+          }}
+          onCancel={() => setAgeSheet(false)}
         />
       )}
 

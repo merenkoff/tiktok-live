@@ -20,6 +20,9 @@ const TechCardsPage = lazyWithRetry(() =>
 const MarkdownsPage = lazyWithRetry(() =>
   import('./pages/MarkdownsPage').then((m) => ({ default: m.MarkdownsPage }))
 );
+const MenuChangesPage = lazyWithRetry(() =>
+  import('./pages/MenuChangesPage').then((m) => ({ default: m.MenuChangesPage }))
+);
 
 /**
  * The pages a café's marketer keeps too (track МР): the list, the card and the
@@ -48,6 +51,9 @@ export const productsModule: ModuleDescriptor = {
     // Mass markdowns (clothing D2): what is on sale, until when, and the
     // button that puts the prices back. Static, so it ranks above `:id`.
     { path: 'products/markdowns', mount: 'admin', element: MarkdownsPage, desktop: true },
+    // Who changed what in the menu (migration 101). The owner's only: the rows
+    // carry purchase prices and every staff member's name. Static, above `:id`.
+    { path: 'products/history', mount: 'admin', element: MenuChangesPage, desktop: true },
     { path: 'products/:id', mount: 'admin', element: ProductPage, desktop: true, roles: MENU },
     // The questions a product may ask («Молоко?») and their answers. Host code,
     // not café code: the next vertical that asks a question reuses it.

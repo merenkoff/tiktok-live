@@ -151,6 +151,8 @@ export interface PosAuthContext {
   floristLabourBps: number;
   /** Cash totals rounded to 0 (off), 10 or 50 kopecks — НБУ № 25, migration 071. */
   cashRounding: number;
+  /** Ask the buyer's age once per receipt with excise goods (migration 102). */
+  ageCheck: boolean;
   /**
    * The guest menu's feedback sheet, as the till prints it — the QR «Оцініть
    * нас» on a receipt (phase F7, `public-menu/urls.ts`). Null unless the menu
@@ -227,6 +229,8 @@ export interface CatalogModifier {
   is_default: boolean;
   component_variant_id: number | null;
   component_quantity: number | null;
+  /** The answer pours from excise goods (cognac in a coffee): the line is sold to an adult only (102). */
+  age_restricted?: boolean;
 }
 
 /**
@@ -287,6 +291,12 @@ export interface CatalogItem {
   fiscal_excise?: boolean;
   /** Each unit sold needs its own stamp scanned (a bottle sold whole); absent = no. */
   excise_per_unit?: boolean;
+  /**
+   * Sold to an adult only (migration 102): excise goods or a recipe that pours
+   * from them. Where the store asks, the till asks the buyer's age once per
+   * receipt. Absent = not restricted.
+   */
+  age_restricted?: boolean;
   /**
    * The purchase pack (migration 054): `pack_qty` base units per pack,
    * `pack_label` what it is called. Here because the till's stock count is the

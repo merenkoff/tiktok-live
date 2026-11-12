@@ -193,6 +193,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        * registers is rung as one receipt per register instead of refused.
        */
       split_registers?: unknown;
+      /** «Покупцю є 18» answered for this receipt (migration 102); recorded, never required. */
+      age_confirmed?: unknown;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -308,6 +310,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         cash_rounding: body.cash_rounding,
         open_bottles: body.open_bottles,
         fiscal_register: registerNo,
+        age_confirmed: body.age_confirmed,
       });
     } catch (error) {
       logger.error('Complete sale failed', { error: errorMessage(error) });
@@ -422,6 +425,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         client_uuid?: string | null;
         /** Stamps of bottles the new goods open (ДК5), after `bottle_needed`. */
         open_bottles?: unknown;
+        /** «Покупцю є 18» answered for the new receipt (migration 102). */
+        age_confirmed?: unknown;
       };
       /** One step for both halves — each rounds its own cash part (Д9). */
       cash_rounding?: unknown;
@@ -498,6 +503,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
           note: body.sale?.note,
           client_uuid: saleUuid,
           open_bottles: body.sale?.open_bottles,
+          age_confirmed: body.sale?.age_confirmed,
         },
         fiscal_status: gate.on ? 'pending' : 'none',
         cash_rounding: body.cash_rounding,
@@ -919,6 +925,8 @@ async function completeDeviceStampedSale(
     cash_rounding?: unknown;
     /** The bottles this sale opens, by their stamps (ДК5, Д4). */
     open_bottles?: unknown;
+    /** «Покупцю є 18» answered for this receipt (migration 102). */
+    age_confirmed?: unknown;
   },
   clientUuid: string | null
 ) {
@@ -961,6 +969,7 @@ async function completeDeviceStampedSale(
       // store's setting has become since.
       cash_rounding: body.cash_rounding,
       open_bottles: body.open_bottles,
+      age_confirmed: body.age_confirmed,
     });
   } catch (error) {
     logger.error('Complete offline-stamped sale failed', { error: errorMessage(error) });
@@ -1129,6 +1138,8 @@ async function completeSplit(
     cash_rounding?: unknown;
     /** The bottles this sale opens, by their stamps (ДК5, Д4). */
     open_bottles?: unknown;
+    /** «Покупцю є 18» answered for this receipt (migration 102). */
+    age_confirmed?: unknown;
   },
   clientUuid: string | null
 ) {
@@ -1164,6 +1175,7 @@ async function completeSplit(
       client_uuid: clientUuid,
       cash_rounding: body.cash_rounding,
       open_bottles: body.open_bottles,
+      age_confirmed: body.age_confirmed,
     });
   } catch (error) {
     if (error instanceof splitSale.SplitSaleError) {

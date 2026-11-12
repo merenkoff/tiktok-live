@@ -41,6 +41,8 @@ export function SettingsPage() {
   // GTIN column default is TRUE — init checked so it doesn't flash "off" before getStore().
   const [gtinLookupEnabled, setGtinLookupEnabled] = useState(true);
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
+  // «Покупцю є 18 років?» once per receipt with excise goods (migration 102).
+  const [ageCheck, setAgeCheck] = useState(false);
   // НБУ № 25: the step a cash total is rounded to (TechDocs/POS_CASH_ROUNDING.md).
   // A string for the segmented control; a number on the wire.
   const [cashRounding, setCashRounding] = useState<CashRoundingChoice>('0');
@@ -103,6 +105,7 @@ export function SettingsPage() {
     setQrPurposeTemplate(store.qr_purpose_template ?? '');
     setGtinLookupEnabled(store.gtin_lookup_enabled);
     setAutoPrintReceipt(store.auto_print_receipt);
+    setAgeCheck(store.age_check === true);
     // A backend older than migration 071 sends nothing: off, as it always was.
     setCashRounding(String(store.cash_rounding ?? 0) as CashRoundingChoice);
     setEnabledModules(new Set(store.enabled_modules));
@@ -259,6 +262,7 @@ export function SettingsPage() {
         gtin_lookup_enabled: gtinLookupEnabled,
         auto_print_receipt: autoPrintReceipt,
         cash_rounding: Number(cashRounding),
+        age_check: ageCheck,
         enabled_modules: [...enabledModules],
         module_remotes: { ...remoteObjects, ...moduleRemotes },
         live_tiktok_username: liveTiktokUsername.trim() || null,
@@ -416,6 +420,22 @@ export function SettingsPage() {
             <Toggle checked={autoPrintReceipt} onChange={setAutoPrintReceipt}>
               Автоматично друкувати чек після продажу
             </Toggle>
+          </div>
+        </section>
+
+        <section>
+          <SectionHead title="Вік покупця" />
+          <div className="pt-3 space-y-3">
+            <SectionLead>
+              Алкоголь, пиво й тютюн не продають особам до 18 років. Коли увімкнено, каса один раз на чек
+              питає «Покупцю є 18 років?», якщо в чеку є підакцизний товар — сам по собі, у техкарті
+              (порція з пляшки, коктейль, сет) чи в модифікаторі («+ коньяк»). «Ні» прибирає ці товари з
+              чека, а «Так» записується в продаж.
+            </SectionLead>
+            <Toggle checked={ageCheck} onChange={setAgeCheck}>
+              Питати вік покупця для алкоголю й тютюну
+            </Toggle>
+            <p className="text-[13px] text-sq-muted">На касі зміниться після наступного входу.</p>
           </div>
         </section>
 

@@ -314,12 +314,18 @@ function normalizeCompareAt(
   return compareAt;
 }
 
-export async function listProducts(storeId: number) {
+/**
+ * Every product of the store with its variants — or, with `onlyIds`, just
+ * those (the menu-change journal reads one card before and after a write and
+ * must not read the whole catalogue twice for it).
+ */
+export async function listProducts(storeId: number, onlyIds?: readonly number[]) {
+  const ids = onlyIds ? [...onlyIds] : null;
   const products = await pool.query(
     `SELECT * FROM pos_products
-     WHERE store_id = $1
+     WHERE store_id = $1 AND ($2::bigint[] IS NULL OR id = ANY($2::bigint[]))
      ORDER BY name ASC`,
-    [storeId]
+    [storeId, ids]
   );
 
   const variants = await pool.query(
@@ -340,9 +346,9 @@ export async function listProducts(storeId: number) {
      FROM pos_variants v
      JOIN pos_products p ON p.id = v.product_id
      LEFT JOIN pos_stock s ON s.variant_id = v.id
-     WHERE v.store_id = $1
+     WHERE v.store_id = $1 AND ($2::bigint[] IS NULL OR v.product_id = ANY($2::bigint[]))
      ORDER BY v.product_id, v.label, v.id`,
-    [storeId]
+    [storeId, ids]
   );
 
   const components = await listComponentsForStore(storeId);
@@ -419,9 +425,12 @@ export async function listProducts(storeId: number) {
 }
 
 export async function getProduct(storeId: number, productId: number) {
-  const products = await listProducts(storeId);
+  const products = await listProducts(storeId, [productId]);
   return products.find((p) => p.id === productId) ?? null;
 }
+
+/** One card as `listProducts` reads it. */
+export type ProductView = Awaited<ReturnType<typeof listProducts>>[number];
 
 /**
  * One variant of an existing product: the row, its stock row, the seed movement
@@ -1346,6 +1355,17 @@ export async function getCatalog(
     activeExtra.size > 0
       ? await bottleSourcesOf(pool, storeId, result.rows.map((row) => Number(row.variant_id)))
       : new Map<number, BottleSource[]>();
+  // Sold only to an adult (migration 102, TechDocs/POS_AGE_CHECK.md): excise
+  // goods themselves, anything whose recipe pours from them, and an answer that
+  // does. One query over the variants and the answers' components together.
+  const answerVariants = [...groupsByProduct.values()]
+    .flat()
+    .flatMap((g) => g.modifiers.map((m) => m.component_variant_id))
+    .filter((id): id is number => id != null);
+  const adultOnly = await ageRestrictedVariants(storeId, [
+    ...result.rows.map((row) => Number(row.variant_id)),
+    ...answerVariants,
+  ]);
   const registerOf = (row: Record<string, unknown>): number => {
     const bottles = pours.get(Number(row.variant_id)) ?? [];
     const found = [...new Set(bottles.map((b) => effectiveRegister(b.fiscal_register, activeExtra)))];
@@ -1379,6 +1399,8 @@ export async function getCatalog(
     // Excise goods (ДК4-Б): a till asks for a stamp per unit before payment.
     ...(row.fiscal_excise ? { fiscal_excise: true } : {}),
     ...(row.excise_per_unit ? { excise_per_unit: true } : {}),
+    // Asks «Покупцю є 18 років?» once per receipt where the owner switched it on (102).
+    ...(adultOnly.has(Number(row.variant_id)) ? { age_restricted: true } : {}),
     pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
     pack_label: String(row.pack_label ?? ''),
     // Poured from a bottle opened by its stamp (ДК5); absent otherwise.
@@ -1411,11 +1433,45 @@ export async function getCatalog(
           modifier_groups: groupsForVariant(
             groupsByProduct.get(Number(row.product_id))!,
             String(row.label ?? '')
-          ).map(toCatalogGroup),
+          )
+            .map(toCatalogGroup)
+            .map((group) => ({
+              ...group,
+              modifiers: group.modifiers.map((m) =>
+                m.component_variant_id != null && adultOnly.has(m.component_variant_id)
+                  ? { ...m, age_restricted: true }
+                  : m
+              ),
+            })),
         }
       : {}),
     tag_ids: Array.isArray(row.tag_ids) ? row.tag_ids.map((id: string | number) => Number(id)) : [],
   }));
+}
+
+/**
+ * The variants sold only to an adult (migration 102): excise goods, and
+ * anything whose recipe — expanded to its leaves — holds excise goods (a pour,
+ * a cocktail, a set with a beer in it). Absent variants are simply not in the set.
+ */
+export async function ageRestrictedVariants(storeId: number, variantIds: readonly number[]): Promise<Set<number>> {
+  const ids = [...new Set(variantIds)];
+  if (ids.length === 0) return new Set();
+  const result = await pool.query(
+    `SELECT v.id
+     FROM pos_variants v
+     JOIN pos_products p ON p.id = v.product_id
+     WHERE v.store_id = $1 AND v.id = ANY($2::bigint[])
+       AND (p.fiscal_excise OR EXISTS (
+         SELECT 1
+         FROM pos_product_components_flat f
+         JOIN pos_variants lv ON lv.id = f.leaf_variant_id
+         JOIN pos_products lp ON lp.id = lv.product_id
+         WHERE f.store_id = v.store_id AND f.variant_id = v.id AND lp.fiscal_excise
+       ))`,
+    [storeId, ids]
+  );
+  return new Set(result.rows.map((row) => Number(row.id)));
 }
 
 /** `fiscal_register` as the owner sent it: null (register 1), 1 or 2 — nothing else is stored. */

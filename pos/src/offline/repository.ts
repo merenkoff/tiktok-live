@@ -497,6 +497,8 @@ export async function completeSale(payload: {
   cash_rounding?: number;
   /** Stamps of new bottles a pour opens (ДК5); queued with the sale, so a replay opens them too. */
   open_bottles?: OpenBottleStamp[];
+  /** «Покупцю є 18» answered for this receipt (migration 102); queued with it. */
+  age_confirmed?: boolean;
 }, opts: { clientUuid?: string } = {}): Promise<SaleDetail> {
   // Reusing a uuid is how the "server did not answer" probe stays idempotent:
   // the server's own pre-check resolves it to the existing sale, a 409, or a
@@ -521,6 +523,7 @@ export async function completeSale(payload: {
     customer_client_uuid: customer?.client_uuid ?? null,
     ...(payload.cash_rounding ? { cash_rounding: payload.cash_rounding } : {}),
     ...(payload.open_bottles?.length ? { open_bottles: payload.open_bottles } : {}),
+    ...(payload.age_confirmed ? { age_confirmed: true } : {}),
   };
 
   if (navigator.onLine && api.hasLiveJwt()) {
@@ -596,6 +599,7 @@ export async function completeSplitSale(
     parked_cart_id?: number | null;
     cash_rounding?: number;
     open_bottles?: OpenBottleStamp[];
+    age_confirmed?: boolean;
   },
   opts: { clientUuid?: string } = {}
 ): Promise<SplitSaleResult> {

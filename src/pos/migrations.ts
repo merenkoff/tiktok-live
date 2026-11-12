@@ -185,6 +185,12 @@ export const POS_MIGRATIONS = [
   // Printer profiles one shop reports and the super admin shares with every
   // till on the same driver (TechDocs/POS_PRINTER_PROFILES.md).
   '100_pos_printer_profiles.sql',
+  // Who changed what in the menu: products, variants, tags, modifier groups
+  // (TechDocs/POS_MENU_CHANGES.md).
+  '101_pos_menu_changes.sql',
+  // The buyer's age asked once per receipt with excise goods: the owner's
+  // switch and the till's answer (TechDocs/POS_AGE_CHECK.md).
+  '102_pos_age_check.sql',
 ] as const;
 
 export function readMigration(file: string): string {

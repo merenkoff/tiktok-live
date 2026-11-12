@@ -379,6 +379,12 @@ export interface CompleteSaleParams {
    * A stamp the sale turns out not to need opens nothing.
    */
   open_bottles?: unknown;
+  /**
+   * The cashier answered «так» to «Покупцю є 18 років?» for this receipt
+   * (migration 102, TechDocs/POS_AGE_CHECK.md). Recorded only, never required:
+   * an older till sends nothing and still sells.
+   */
+  age_confirmed?: unknown;
 }
 
 type DbClient = { query: typeof pool.query };
@@ -1052,10 +1058,10 @@ export async function completeSaleTx(
        (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
         customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid,
         fiscal_status, order_no, prep_status, served_at, exchange_refund_id,
-        cash_rounding, rounding_cents, fiscal_chain_id, fiscal_register)
+        cash_rounding, rounding_cents, fiscal_chain_id, fiscal_register, age_confirmed)
      VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
              $14::text, CASE WHEN $14::text = 'new' THEN NULL ELSE NOW() END, $15,
-             $16, $17, $18, $19)
+             $16, $17, $18, $19, $20)
      RETURNING *`,
     [
       params.storeId,
@@ -1087,6 +1093,7 @@ export async function completeSaleTx(
       // The «чек післяплати» of a «під запис» line's ПРРО chain (079).
       params.debt_part?.chain_id ?? null,
       fiscalRegister,
+      params.age_confirmed === true,
     ]
   );
   const sale = saleResult.rows[0];
@@ -1508,6 +1515,8 @@ export async function getSale(storeId: number, saleId: number) {
     // that register's ФОП. Listed by hand like every field here; without it
     // a register-2 receipt printed register 1's requisites.
     fiscal_register: Number(sale.fiscal_register ?? 1),
+    // The cashier confirmed the buyer is 18 or older (migration 102).
+    age_confirmed: sale.age_confirmed === true,
     // Set on the sale half of an exchange (migration 064).
     exchange_of: exchangeOf.rows[0]
       ? {
@@ -2546,6 +2555,8 @@ export interface ExchangeSaleParams {
     note?: string;
     /** Stamps of bottles the new goods open (ДК5, Д4), after a `bottle_needed` refusal. */
     open_bottles?: unknown;
+    /** «Покупцю є 18» answered for the new receipt (migration 102). */
+    age_confirmed?: unknown;
     client_uuid: string;
   };
   /** `'pending'` when the caller is about to fiscalise both halves. */
@@ -2622,6 +2633,7 @@ export async function exchangeSale(
       note: params.sale.note,
       client_uuid: saleUuid,
       open_bottles: params.sale.open_bottles,
+      age_confirmed: params.sale.age_confirmed,
       fiscal_status: params.fiscal_status,
       exchange_refund_id: refund.refundId,
       cash_rounding: params.cash_rounding,
