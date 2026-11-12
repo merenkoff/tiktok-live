@@ -403,3 +403,86 @@ test('a pour that opens a new bottle asks for its stamp before the payment scree
   expect(sales[0].open_bottles).toEqual([{ variant_id: 77, excise_label: 'ANFC015604' }]);
   expect(checks[1].open_bottles).toEqual([{ variant_id: 77, excise_label: 'ANFC015604' }]);
 });
+
+test('on a phone the receipt is a QR to scan and a share sheet, not paper', async ({ page }) => {
+  // TechDocs/POS_PHONE_TILL.md, Т1: a phone has no thermal printer, so the
+  // success screen shows the tax office's QR large enough to scan off the
+  // seller's screen and hands the receipt over through the share sheet.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    const shared: unknown[] = [];
+    (window as unknown as { __shared: unknown[] }).__shared = shared;
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async (data: unknown) => {
+        shared.push(data);
+      },
+    });
+  });
+  await mockPosApi(page);
+  const taxUrl = 'https://cabinet.tax.gov.ua/cashregs/check?id=TEST-77&fn=4000123456';
+  await page.route('**/api/pos/sales/complete', async (route) => {
+    await route.fulfill({
+      status: 201,
+      json: {
+        id: 7,
+        receipt_number: 'R-00007',
+        status: 'completed',
+        subtotal_cents: catalog[0].price_cents,
+        total_cents: catalog[0].price_cents,
+        cart_discount_cents: 0,
+        refunded_cents: 0,
+        staff_name: 'Олена',
+        created_at: new Date().toISOString(),
+        items: [
+          {
+            id: 1,
+            variant_id: catalog[0].variant_id,
+            product_name: catalog[0].product_name,
+            variant_label: catalog[0].label,
+            unit: 'шт',
+            quantity: 1,
+            unit_price_cents: catalog[0].price_cents,
+            line_total_cents: catalog[0].price_cents,
+            refunded_quantity: 0,
+          },
+        ],
+        payments: [{ id: 1, method: 'cash', amount_cents: catalog[0].price_cents }],
+        refunds: [],
+        fiscal_status: 'done',
+        fiscal: {
+          status: 'done',
+          mode: 'online',
+          fiscal_code: 'TEST-77',
+          fiscal_date: '2026-11-12T09:05:00.000Z',
+          control_number: null,
+          tax_url: taxUrl,
+          qr_payload: null,
+          receipt_text: null,
+          error_code: null,
+          error_message: null,
+        },
+      },
+    });
+  });
+  await loginAsOwner(page);
+  await page.goto('/register');
+
+  await page.getByText(catalog[0].product_name).first().click();
+  // A phone shows the cart as a bar whose «Сплатити» opens the payment straight away.
+  await page.getByRole('button', { name: 'Сплатити' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Оплата' });
+  await dialog.getByRole('button', { name: 'Готівка' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
+
+  const panel = page.getByTestId('receipt-share');
+  const qr = panel.getByRole('img', { name: 'QR-код фіскального чека' });
+  await expect(qr).toBeVisible();
+  // Large enough to scan off the screen: most of a phone's width.
+  expect((await qr.boundingBox())!.width).toBeGreaterThanOrEqual(280);
+
+  await panel.getByRole('button', { name: /Лише посилання/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared))
+    .toEqual([{ title: 'Чек R-00007', text: expect.stringContaining(`Перевірити в Податковій: ${taxUrl}`) }]);
+});

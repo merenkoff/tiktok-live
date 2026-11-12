@@ -37,6 +37,7 @@ import { getMeta } from '../../offline/db';
 import { printKitchenTickets } from '../../offline/kitchenTickets';
 import type { ExchangeResult, PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal, type CheckoutSplit } from '../../components/CheckoutModal';
+import { ReceiptSharePanel } from './ReceiptSharePanel';
 import { ExchangeCheckout } from '../../components/cashier/ExchangeCheckout';
 import { ConfirmSheet } from '../../components/cashier/ConfirmSheet';
 import { positionsText } from '../../lib/plural';
@@ -994,6 +995,22 @@ export function RegisterPage() {
     feedback_url: auth?.store.feedback_url ?? null,
   });
 
+  // The receipt a phone or a browser hands over without paper (TechDocs/POS_PHONE_TILL.md,
+  // Т1): the desktop has its thermal printer, every other shell gets the QR and
+  // the share sheet. Built once per sale, so the picture is drawn once.
+  const shareableReceipt = useMemo(
+    () =>
+      success && shell !== 'cashier'
+        ? buildReceiptPayload(success, {
+            name: auth?.store.name ?? '',
+            fiscal: auth?.store.fiscal ?? null,
+            vertical: auth?.store.vertical?.id ?? null,
+            feedback_url: auth?.store.feedback_url ?? null,
+          })
+        : null,
+    [success, shell, auth]
+  );
+
   /** The receipt on screen — or, of a cart rung as two receipts, the one the cashier pressed. */
   async function printSuccessReceipt(sale: SaleDetail | null = success) {
     if (!sale || !receiptPrinterName) return;
@@ -1259,6 +1276,13 @@ export function RegisterPage() {
                 <p className="mt-1 text-xs">Код: {fiscalNotice.supportCode}</p>
               )}
             </div>
+          )}
+          {shareableReceipt && !shownParts && !cancelRung.result && (
+            <ReceiptSharePanel
+              receipt={shareableReceipt}
+              taxUrl={fiscalDoc?.tax_url ?? null}
+              registered={!fiscalDoc || (fiscalDoc.status === 'done' && Boolean(fiscalDoc.tax_url))}
+            />
           )}
           {cancelRung.result && (
             <p className="mt-5 w-full rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">
