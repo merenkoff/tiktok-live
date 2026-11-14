@@ -64,7 +64,9 @@ describe('useNotifyChime', () => {
 
     rerender({ k: keys('call:1', 'sent:4'), ready: true });
     expect(vibrate).toHaveBeenCalledTimes(1);
-    expect(oscillators).toEqual([880, 1320]);
+    // Two strikes of the same bell: body, the bell colour, then the clang above speech.
+    const strike = [523, 1047, 1245, 2093, 3136, 4186];
+    expect(oscillators).toEqual([...strike, ...strike]);
 
     // Something went away: nothing new, nothing rings.
     rerender({ k: keys('sent:4'), ready: true });

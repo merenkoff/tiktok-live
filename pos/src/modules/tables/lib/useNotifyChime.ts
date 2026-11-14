@@ -13,10 +13,13 @@
 // later is silent. The first read after the screen opens only remembers —
 // opening the map is not news.
 //
-// No sound file: two sine tones from Web Audio, so the bundle carries nothing
-// and nothing is fetched. Browsers start an AudioContext suspended until the
-// page has been touched; the first tap anywhere resumes it, and before that
-// the vibration still works where the device has one.
+// No sound file: a counter bell synthesised in Web Audio, so the bundle
+// carries nothing and nothing is fetched. Two strikes, full scale, with the
+// bright partials up around 3–4 kHz — that is what carries across a bar or a
+// full dining room, where a quiet beep sits under the conversation. Browsers
+// start an AudioContext suspended until the page has been touched; the first
+// tap anywhere resumes it, and before that the vibration still works where
+// the device has one.
 //
 // The switch is the waiter's, per device (`localStorage`, behind try/catch:
 // private mode or a blocked storage simply means «on»).
@@ -52,32 +55,71 @@ function unlockOnFirstTouch(): () => void {
   return () => document.removeEventListener('pointerdown', unlock, { capture: true });
 }
 
-/** Two short tones, rising — heard over a dining room without being an alarm. */
+// One strike of a small brass counter bell. Hz, peak level, ring in seconds.
+// Levels of one strike sum to 1, so the attack is full scale. The minor-third
+// partial is what makes a bar of metal sound like a bell rather than a beep;
+// the partials near 3–4 kHz die first and are the ones that cut through talk.
+const BELL_PARTIALS: ReadonlyArray<readonly [number, number, number]> = [
+  [523, 0.16, 1.15],
+  [1047, 0.3, 1.4],
+  [1245, 0.12, 0.95],
+  [2093, 0.18, 0.65],
+  [3136, 0.14, 0.38],
+  [4186, 0.1, 0.22],
+];
+
+/** Second slap, far enough apart that a noisy room hears two dings. */
+const SECOND_STRIKE_AT = 0.34;
+
+function strikeBell(ctx: AudioContext, at: number): void {
+  for (const [frequency, level, decay] of BELL_PARTIALS) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(level, at + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + decay);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + decay + 0.02);
+  }
+  clapper(ctx, at);
+}
+
+/** The tick of the clapper. Optional: a context without buffers still rings. */
+function clapper(ctx: AudioContext, at: number): void {
+  if (typeof ctx.createBuffer !== 'function' || !ctx.sampleRate) return;
+  const seconds = 0.012;
+  const length = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+  const src = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  src.buffer = buffer;
+  gain.gain.setValueAtTime(0.55, at);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + seconds);
+  src.connect(gain).connect(ctx.destination);
+  src.start(at);
+  src.stop(at + seconds);
+}
+
+/** Two full-volume strikes of a counter bell — meant to be heard across the room. */
 export function playChime(): void {
   const ctx = audioContext();
   if (ctx) {
     try {
       if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
       const start = ctx.currentTime;
-      [880, 1320].forEach((frequency, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        const at = start + i * 0.16;
-        osc.type = 'sine';
-        osc.frequency.value = frequency;
-        gain.gain.setValueAtTime(0.0001, at);
-        gain.gain.exponentialRampToValueAtTime(0.25, at + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.14);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(at);
-        osc.stop(at + 0.15);
-      });
+      strikeBell(ctx, start);
+      strikeBell(ctx, start + SECOND_STRIKE_AT);
     } catch {
       // A device with no audio output: the buzz below is all there is.
     }
   }
   try {
-    navigator.vibrate?.([120, 60, 120]);
+    navigator.vibrate?.([160, 120, 200]);
   } catch {
     // Not every webview lets a page vibrate.
   }
