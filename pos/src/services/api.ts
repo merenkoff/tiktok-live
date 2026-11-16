@@ -23,6 +23,7 @@ import type {
   RefundLineInput,
   RefundOptions,
   SaleDetail,
+  SkuSeries,
   SplitQuote,
   SplitSaleResult,
   SaleItemInput,
@@ -1289,6 +1290,20 @@ class PosApi {
   async generateInternalBarcode(): Promise<string> {
     const { data } = await this.client.post<{ barcode: string }>('/variants/internal-barcode');
     return data.barcode;
+  }
+
+  /**
+   * The shop's own article-numbering series, with the next number in each.
+   *
+   * `tagIds` are the card's own tags: a series used by the goods already filed
+   * under them sorts first, which is how the owner is reminded WHICH series
+   * this kind of goods belongs to rather than only that one exists.
+   */
+  async skuSeries(tagIds: number[] = []): Promise<SkuSeries[]> {
+    const { data } = await this.client.get<{ series: SkuSeries[] }>('/variants/sku-series', {
+      params: tagIds.length > 0 ? { tag: tagIds.join(',') } : undefined,
+    });
+    return data.series;
   }
 
   async stockOnHand(): Promise<OnHandRow[]> {

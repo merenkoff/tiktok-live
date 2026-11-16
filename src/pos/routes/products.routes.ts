@@ -246,6 +246,25 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // The shop's own article numbering, read back out of the articles already
+  // given out, so the owner's head is not the only place it is recorded.
+  fastify.get('/variants/sku-series', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
+    if (!auth) return;
+    // The card's own tags, comma-separated: the hint about which series this
+    // kind of goods uses. Absent is fine — then it ranks by sheer usage.
+    const raw = (request.query as { tag?: string }).tag ?? '';
+    const tagIds = raw
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part !== '')
+      .map(Number);
+    if (tagIds.some((id) => !Number.isInteger(id))) {
+      return reply.code(400).send({ error: 'Некоректна мітка' });
+    }
+    return { series: await productsService.listSkuSeries(auth.storeId, tagIds) };
+  });
+
   fastify.patch('/variants/:id', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;

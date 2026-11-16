@@ -1,5 +1,5 @@
 {
-  "platformVersion": 23,
+  "platformVersion": 24,
   "exports": {
     "platform": [
       "CASH_ROUNDING_STEPS",

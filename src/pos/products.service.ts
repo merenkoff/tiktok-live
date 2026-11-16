@@ -6,6 +6,7 @@
 
 import { pool } from '../db.js';
 import { buildInternalBarcode } from './gtin/internal-code.js';
+import { skuSeries, type SkuSeries } from './sku-series.js';
 import type { CatalogItem, ProductKind, ProductStockMode } from './types.js';
 
 export type { ProductKind, ProductStockMode };
@@ -1136,6 +1137,46 @@ export async function generateInternalBarcode(
     if (taken.rows.length === 0) return barcode;
   }
   throw new Error('Не вдалося згенерувати вільний штрихкод');
+}
+
+/**
+ * What the shop's article numbering looks like, and what the next number in
+ * each series would be (`sku-series.ts` for why this is a suggestion rather
+ * than a mint).
+ *
+ * `tagIds` are the card's own categories, when it has any: the strongest answer
+ * to "which series was this kind of goods in?" is what every other product in
+ * the same category uses, and it costs one EXISTS to find out. Sharing ANY tag
+ * counts — a card usually carries several (a type and an age), and only one of
+ * them is the one the numbering follows.
+ *
+ * Archived variants are deliberately counted. Their articles are still taken —
+ * `idx_pos_variants_store_sku` does not look at `is_active` — so continuing
+ * past the highest ACTIVE one would suggest a number that cannot be saved.
+ */
+export async function listSkuSeries(
+  storeId: number,
+  tagIds: number[] = [],
+  db: DbClient = pool
+): Promise<SkuSeries[]> {
+  const inTag =
+    tagIds.length === 0
+      ? 'FALSE'
+      : 'EXISTS (SELECT 1 FROM pos_product_tags pt ' +
+        'WHERE pt.product_id = p.id AND pt.tag_id = ANY($2))';
+  const result = await db.query<{ sku: string; name: string; in_tag: boolean }>(
+    `SELECT v.sku, p.name, ${inTag} AS in_tag
+       FROM pos_variants v
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE v.store_id = $1
+        -- Non-digits then digits, the same shape \`skuSeries\` groups on, so an
+        -- article like «068-130» never reaches it and never becomes a series.
+        AND v.sku ~ '^[^0-9]*[0-9]+$'`,
+    tagIds.length === 0 ? [storeId] : [storeId, tagIds]
+  );
+  return skuSeries(
+    result.rows.map((row) => ({ sku: row.sku, productName: row.name, inTag: row.in_tag }))
+  );
 }
 
 /**

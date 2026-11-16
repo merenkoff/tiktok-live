@@ -31,6 +31,7 @@ export function AddVariantsDialog({
   existing,
   shape,
   partOptions,
+  tagIds,
   onAdded,
   onClose,
 }: {
@@ -41,6 +42,8 @@ export function AddVariantsDialog({
   existing: ReadonlyArray<VariantDraft>;
   shape: ProductShape;
   partOptions: ComponentOption[];
+  /** The card's tags, so «Наступний» can lead with this category's series. */
+  tagIds: number[];
   onAdded: (updated: Product) => void;
   onClose: () => void;
 }) {
@@ -127,6 +130,7 @@ export function AddVariantsDialog({
             onChange={setSingle}
             shape={shape}
             partOptions={partOptions}
+            tagIds={tagIds}
             compact
           />
         )}

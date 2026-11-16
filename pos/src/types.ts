@@ -789,6 +789,28 @@ export interface ProductComponentInput {
   quantity: number;
 }
 
+/**
+ * One of the shop's article-numbering series, read back out of the articles it
+ * has already given out (`src/pos/sku-series.ts` on the server).
+ *
+ * A suggestion, never a mint: the barcode is ours to invent, the article is the
+ * shop's own convention, and writing a guessed series in silently is worse than
+ * leaving the field empty.
+ */
+export interface SkuSeries {
+  /** Everything before the digits — `''` for «0001», `'т'` for «т001». */
+  prefix: string;
+  width: number;
+  last: string;
+  next: string;
+  /** Articles in this series across the store, archived ones included. */
+  count: number;
+  /** How many of them share a tag with the card being edited. */
+  inTag: number;
+  /** A few product names, so the owner recognises which series this is. */
+  samples: string[];
+}
+
 export interface ProductVariant {
   id: number;
   product_id: number;
