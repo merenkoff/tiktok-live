@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { uahInputToCents } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { AttributeFields } from '@pos/platform/ui';
+import { SkuField } from './SkuField';
 import { CompositionEditor } from './CompositionEditor';
 import { Dialog } from './Dialog';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
@@ -37,6 +38,7 @@ export function VariantSheet({
   partOptions,
   techCard,
   bottle,
+  tagIds,
   onApply,
   onArchive,
   onClose,
@@ -48,6 +50,8 @@ export function VariantSheet({
   colours: ColourUse[];
   partOptions: ComponentOption[];
   techCard?: TechCardRow;
+  /** The card's tags, so «Наступний» can lead with this category's series. */
+  tagIds: number[];
   /**
    * Ask «Пляшка за маркою, мл» (ДК5) — in a store that fiscalises (Д17), with
    * the product's excise fields as the card's draft holds them.
@@ -223,10 +227,13 @@ export function VariantSheet({
         />
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5">
-            <span className={captionClass}>Артикул (SKU)</span>
-            <input className="sq-input" value={local.sku} onChange={(e) => set({ sku: e.target.value })} />
-          </label>
+          <SkuField
+            value={local.sku}
+            onChange={(sku) => set({ sku })}
+            tagIds={tagIds}
+            caption="Артикул (SKU)"
+            captionClass={captionClass}
+          />
           <label className="flex flex-col gap-1.5">
             <span className={captionClass}>Штрихкод</span>
             <div className="flex gap-2">

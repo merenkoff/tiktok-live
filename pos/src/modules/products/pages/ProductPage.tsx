@@ -510,6 +510,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                         onChange={setSingle}
                         shape={draft.shape}
                         partOptions={partOptions}
+                        tagIds={draft.tagIds}
                       />
                     )}
                   </section>
@@ -574,6 +575,7 @@ function ProductCard({ id }: { id: string | undefined }) {
           colours={colours}
           partOptions={partOptions}
           techCard={techCards.get(sheetVariant.id)}
+          tagIds={draft.tagIds}
           bottle={
             !menuOnly && fiscal?.enabled === true
               ? { excise: { on: draft.fiscalExcise, perUnit: draft.excisePerUnit, uktzed: draft.uktzed } }
@@ -600,6 +602,7 @@ function ProductCard({ id }: { id: string | undefined }) {
           existing={draft.variants}
           shape={draft.shape}
           partOptions={partOptions}
+          tagIds={draft.tagIds}
           onAdded={(updated) => {
             mergeAdded(updated);
             setAdding(false);

@@ -169,7 +169,13 @@ export const POS_API_CLIENT_VERSION = 2;
 //     till's `ExciseStampSheet` (and its `ExciseStampLine`), with a
 //     `doneLabel` and `busy` of its own. Additive; 22 has not shipped, so both
 //     reach stores in the same POS Release.
-export const PLATFORM_VERSION = 23;
+// 24 (2026-11-16): `api.skuSeries` — the shop's own article-numbering series,
+//     read back out of the articles already given out, so the product card can
+//     offer the next number instead of the owner keeping the series in their
+//     head. A module built against 24 calling it on an older host would hit
+//     undefined, which is the case this guard exists for. `SkuSeries` joins the
+//     data barrel with it.
+export const PLATFORM_VERSION = 24;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

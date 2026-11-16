@@ -5,6 +5,7 @@
 import { displayUnit, WEIGHED_PRICE_PER } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { AttributeFields } from '@pos/platform/ui';
+import { SkuField } from './SkuField';
 import { CompositionEditor } from './CompositionEditor';
 import { useMenuOnly } from '../lib/menuOnly';
 import type { ComponentOption } from './componentOptions';
@@ -27,6 +28,7 @@ export function NewVariantFields({
   shape,
   partOptions,
   compact,
+  tagIds,
 }: {
   vertical: VerticalPublicConfig;
   value: NewVariantValues;
@@ -35,6 +37,8 @@ export function NewVariantFields({
   partOptions: ComponentOption[];
   /** Inside a dialog: one column, no two-column grid. */
   compact?: boolean;
+  /** The card's tags, so «Наступний» can lead with this category's series. */
+  tagIds?: number[];
 }) {
   const menuOnly = useMenuOnly();
   const grid = compact ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-2';
@@ -88,10 +92,13 @@ export function NewVariantFields({
           <p className="text-[13px] text-sq-muted mt-1.5">{compositionHint(shape)}</p>
         </div>
       )}
-      <label className="flex flex-col gap-1.5">
-        <span className={captionClass}>Артикул (SKU) — ваш внутрішній код</span>
-        <input className="sq-input" value={value.sku} onChange={(e) => set({ sku: e.target.value })} />
-      </label>
+      <SkuField
+        value={value.sku}
+        onChange={(sku) => set({ sku })}
+        tagIds={tagIds ?? []}
+        caption="Артикул (SKU) — ваш внутрішній код"
+        captionClass={captionClass}
+      />
       <label className="flex flex-col gap-1.5">
         <span className={captionClass}>Штрихкод — те, що читає сканер</span>
         <div className="flex gap-2">

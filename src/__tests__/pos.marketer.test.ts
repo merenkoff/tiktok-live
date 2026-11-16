@@ -43,6 +43,9 @@ const OPEN = new Set([
   'POST /products/:id/variants',
   'POST /products/:id/variants/batch',
   'POST /variants/internal-barcode',
+  // The shop's article numbering: the marketer gives new cards their article,
+  // so they need the same view of the series as the owner.
+  'GET /variants/sku-series',
   'PATCH /variants/:id',
   'POST /products/:id/archive',
   'POST /products/:id/restore',
