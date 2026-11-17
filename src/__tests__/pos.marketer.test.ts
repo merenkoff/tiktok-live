@@ -59,6 +59,8 @@ const OPEN = new Set([
   'GET /modifier-groups',
   'POST /modifier-groups',
   'PATCH /modifier-groups/:id',
+  'PUT /modifier-groups/:id',
+  'PUT /modifier-groups/:id/products',
   'DELETE /modifier-groups/:id',
   'POST /modifier-groups/:id/modifiers',
   'PATCH /modifiers/:id',

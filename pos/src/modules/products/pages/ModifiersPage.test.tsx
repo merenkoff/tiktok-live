@@ -2,27 +2,25 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// «Модифікатори» — the owner's questions and answers.
+// «Модифікатори» — the owner's questions, who asks them, and the editor.
 //
-// What is pinned here is the contract with the server: a group leaves with
-// its range, an answer leaves with a SIGNED delta in kopecks («-20» is a
-// discount, not 0) and, when it takes something off the shelf, with the
-// variant and the quantity; and a refusal comes back in the server's words.
+// What is pinned here is what only this page does and the contract with the
+// server: a question is saved WHOLE (one request with every answer in order,
+// a SIGNED delta in kopecks, what it takes off the shelf); a question is
+// given to many products at once; what is wrong is a filter; and a refusal
+// comes back in the server's words.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../test/utils';
-import type { ModifierGroup, Product } from '../../../types';
+import type { ModifierGroup, PosTag, Product } from '../../../types';
 
 const listModifierGroups = vi.fn<[], Promise<ModifierGroup[]>>();
 const getProducts = vi.fn<[], Promise<Product[]>>();
-const createModifierGroup = vi.fn();
-const updateModifierGroup = vi.fn();
+const getTags = vi.fn<[], Promise<PosTag[]>>();
 const deleteModifierGroup = vi.fn();
-const createModifier = vi.fn();
-const updateModifier = vi.fn();
-const deleteModifier = vi.fn();
+const posRequest = vi.fn();
 
 vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
@@ -31,12 +29,9 @@ vi.mock('@pos/platform', async () => {
     api: {
       listModifierGroups: () => listModifierGroups(),
       getProducts: () => getProducts(),
-      createModifierGroup: (...a: unknown[]) => createModifierGroup(...a),
-      updateModifierGroup: (...a: unknown[]) => updateModifierGroup(...a),
+      getTags: () => getTags(),
       deleteModifierGroup: (...a: unknown[]) => deleteModifierGroup(...a),
-      createModifier: (...a: unknown[]) => createModifier(...a),
-      updateModifier: (...a: unknown[]) => updateModifier(...a),
-      deleteModifier: (...a: unknown[]) => deleteModifier(...a),
+      posRequest: (...a: unknown[]) => posRequest(...a),
     },
   };
 });
@@ -51,6 +46,8 @@ const milk: ModifierGroup = {
   max_select: 1,
   sort_order: 0,
   is_active: true,
+  labels_in_use: ['M', 'L'],
+  product_ids: [5, 6],
   modifiers: [
     {
       id: 11,
@@ -86,6 +83,7 @@ const portion: ModifierGroup = {
   max_select: 1,
   sort_order: 1,
   is_active: true,
+  product_ids: [],
   modifiers: [
     {
       id: 21,
@@ -102,222 +100,309 @@ const portion: ModifierGroup = {
   ],
 };
 
-const oatMilk: Product = {
-  id: 3,
-  name: 'Молоко вівсяне',
-  description: null,
-  image_url: null,
-  is_active: true,
-  sellable: false,
-  tag_ids: [],
-  variants: [
-    {
-      id: 21,
-      product_id: 3,
-      attributes: {},
-      label: '',
-      unit: 'мл',
-      sku: null,
-      barcode: null,
-      price_cents: 0,
-      cost_cents: 0,
-      is_active: true,
-      quantity: 5000,
-    },
-  ],
-};
+function product(id: number, name: string, patch: Partial<Product> = {}): Product {
+  return {
+    id,
+    name,
+    description: null,
+    image_url: null,
+    is_active: true,
+    sellable: true,
+    tag_ids: [],
+    modifier_group_ids: [],
+    variants: [
+      {
+        id: id * 10,
+        product_id: id,
+        attributes: {},
+        label: '',
+        unit: 'шт',
+        sku: null,
+        barcode: null,
+        price_cents: 6500,
+        cost_cents: 0,
+        is_active: true,
+        quantity: 0,
+      },
+    ],
+    ...patch,
+  } as Product;
+}
+
+const COFFEE: PosTag = { id: 7, store_id: 1, name: 'Кава', parent_id: null, color: null, children: [] } as unknown as PosTag;
+
+const plainMilk = product(2, 'Молоко', { sellable: false });
+plainMilk.variants[0] = { ...plainMilk.variants[0], id: 20, unit: 'мл' };
+const oatMilk = product(3, 'Молоко вівсяне', { sellable: false });
+oatMilk.variants[0] = { ...oatMilk.variants[0], id: 21, unit: 'мл' };
+const latte = product(5, 'Латте', { tag_ids: [7], modifier_group_ids: [1] });
+const raf = product(6, 'Раф', { tag_ids: [7], modifier_group_ids: [1] });
+const flat = product(8, 'Флет уайт', { tag_ids: [7] });
+const tea = product(9, 'Чай');
 
 beforeEach(() => {
   listModifierGroups.mockResolvedValue([milk, portion]);
-  getProducts.mockResolvedValue([oatMilk]);
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  getProducts.mockResolvedValue([plainMilk, oatMilk, latte, raf, flat, tea]);
+  getTags.mockResolvedValue([COFFEE]);
 });
 
 afterEach(() => {
   vi.clearAllMocks();
-  vi.restoreAllMocks();
 });
 
+async function openPage() {
+  renderWithProviders(<ModifiersPage />, { route: '/admin/modifiers' });
+  await screen.findByTestId('group-card-1');
+}
+
 describe('ModifiersPage', () => {
-  it('lists every question with its range and its answers, deltas signed', async () => {
-    renderWithProviders(<ModifiersPage />);
-    const card = within(await screen.findByTestId('group-card-1'));
-    expect(card.getByText('Молоко')).toBeInTheDocument();
-    expect(card.getByText('обовʼязково · одна відповідь')).toBeInTheDocument();
-    const rows = card.getAllByTestId('modifier-row');
-    expect(rows[0]).toHaveTextContent('звичайне');
-    expect(rows[0]).toHaveTextContent('без доплати');
-    expect(rows[0]).toHaveTextContent('за умовчанням');
-    expect(rows[1]).toHaveTextContent('+15,00 ₴');
-    expect(rows[1]).toHaveTextContent('списує Молоко вівсяне × 200 мл');
+  it('reads each question on one row: rule, answers with signed prices, and who asks it', async () => {
+    await openPage();
+    const milkCard = within(screen.getByTestId('group-card-1'));
+    expect(milkCard.getByText('обовʼязково · одна відповідь')).toBeInTheDocument();
+    expect(milkCard.getByTestId('group-answers')).toHaveTextContent('звичайне · вівсяне +15 ₴');
+    expect(milkCard.getByTestId('group-usage-1')).toHaveTextContent('2 страви: Латте, Раф');
 
-    const half = within(screen.getByTestId('group-card-2')).getAllByTestId('modifier-row')[0];
-    expect(half).toHaveTextContent('−20,00 ₴');
-    expect(half).toHaveTextContent('без списання');
+    const portionCard = within(screen.getByTestId('group-card-2'));
+    expect(portionCard.getByTestId('group-answers')).toHaveTextContent('половина −20 ₴');
+    // Nobody asks it: said on the row, and one tap from fixing it.
+    expect(portionCard.getByTestId('group-problem-unused')).toHaveTextContent('ніде не питають');
+    expect(portionCard.getByTestId('group-usage-2')).toHaveTextContent('Додати до страв…');
   });
 
-  it('creates a question with its range', async () => {
+  it('finds a question by an answer, and what is wrong by a filter with a count', async () => {
     const user = userEvent.setup();
-    createModifierGroup.mockResolvedValue({ ...portion, id: 9, name: 'Сироп', min_select: 0, max_select: 3, modifiers: [] });
-    renderWithProviders(<ModifiersPage />);
-    await screen.findByTestId('group-card-1');
+    await openPage();
+    await user.type(screen.getByTestId('modifiers-search'), 'вівс');
+    expect(screen.getByTestId('group-card-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('group-card-2')).not.toBeInTheDocument();
 
-    await user.type(screen.getByTestId('group-form-name'), 'Сироп');
-    await user.clear(screen.getByTestId('group-form-min'));
-    await user.type(screen.getByTestId('group-form-min'), '0');
-    await user.clear(screen.getByTestId('group-form-max'));
-    await user.type(screen.getByTestId('group-form-max'), '3');
-    await user.click(screen.getByTestId('group-form-submit'));
-
-    expect(createModifierGroup).toHaveBeenCalledWith({ name: 'Сироп', min_select: 0, max_select: 3 });
-    expect(await screen.findByTestId('group-card-9')).toHaveTextContent('за бажанням · до 3');
+    await user.clear(screen.getByTestId('modifiers-search'));
+    expect(screen.getByTestId('modifiers-filter-unused')).toHaveTextContent('Ніде не питають1');
+    await user.click(screen.getByTestId('modifiers-filter-unused'));
+    expect(screen.queryByTestId('group-card-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('group-card-2')).toBeInTheDocument();
   });
 
-  it('adds an answer with a negative delta and what it takes off the shelf', async () => {
+  it('explains itself while there is nothing yet', async () => {
+    listModifierGroups.mockResolvedValue([]);
+    renderWithProviders(<ModifiersPage />, { route: '/admin/modifiers' });
+    const empty = await screen.findByTestId('modifiers-empty');
+    expect(empty).toHaveTextContent('Як це працює');
+    expect(within(empty).getByTestId('modifiers-first')).toBeInTheDocument();
+  });
+
+  it('creates a question whole from a template, then asks who should be asked it', async () => {
     const user = userEvent.setup();
-    createModifier.mockImplementation(async (_groupId: number, input: Record<string, unknown>) => ({
-      ...milk,
-      modifiers: [...milk.modifiers, { ...milk.modifiers[1], id: 13, ...input }],
-    }));
-    renderWithProviders(<ModifiersPage />);
-    const card = within(await screen.findByTestId('group-card-1'));
+    const created: ModifierGroup = { ...portion, id: 9, name: 'Сироп', max_select: 3, modifiers: [], product_ids: [] };
+    posRequest.mockResolvedValueOnce(created);
+    await openPage();
 
-    await user.type(card.getByTestId('modifier-form-name'), 'без молока');
-    await user.clear(card.getByTestId('modifier-form-delta'));
-    await user.type(card.getByTestId('modifier-form-delta'), '-20');
-    await user.selectOptions(card.getByTestId('modifier-form-component'), '21');
-    await user.clear(card.getByTestId('modifier-form-qty'));
-    await user.type(card.getByTestId('modifier-form-qty'), '150');
-    await user.click(card.getByTestId('modifier-form-submit'));
+    await user.click(screen.getByTestId('modifiers-new'));
+    const dialog = within(await screen.findByTestId('modifier-group-dialog'));
+    await user.click(dialog.getByTestId('modifier-template-syrup'));
+    expect(dialog.getByTestId('modifier-group-name')).toHaveValue('Сироп');
+    expect(dialog.getByTestId('modifier-rule-sentence')).toHaveTextContent('до 3 відповідей або жодної');
 
-    expect(createModifier).toHaveBeenCalledWith(1, {
+    // A price on the first answer, and one more answer typed into the last row.
+    const deltas = dialog.getAllByTestId('answer-delta');
+    await user.type(deltas[0], '10');
+    await user.type(within(dialog.getByTestId('answer-row-new')).getByTestId('answer-name'), 'мʼята');
+    // Typing into the last row made a new last row.
+    expect(dialog.getByTestId('answer-row-new')).toBeInTheDocument();
+    expect(dialog.getByTestId('modifier-preview')).toHaveTextContent('ваніль+10 ₴');
+
+    await user.click(dialog.getByTestId('modifier-group-save'));
+    await waitFor(() => expect(posRequest).toHaveBeenCalledTimes(1));
+    expect(posRequest).toHaveBeenCalledWith('post', '/modifier-groups', {
+      name: 'Сироп',
+      min_select: 0,
+      max_select: 3,
+      is_active: true,
+      modifiers: ['ваніль', 'карамель', 'лісовий горіх', 'мʼята'].map((name, index) => ({
+        name,
+        price_delta_cents: index === 0 ? 1000 : 0,
+        label_deltas: [],
+        is_default: false,
+        is_active: true,
+        component_variant_id: null,
+        component_quantity: null,
+      })),
+    });
+
+    // The next step is offered at once: a question nobody asks does nothing.
+    expect(await screen.findByTestId('group-products-dialog')).toHaveTextContent('Хто питає «Сироп»');
+    expect(screen.getByTestId('group-card-9')).toBeInTheDocument();
+  });
+
+  it('changes a shared question knowingly: a negative delta, a write-off found by typing, one request', async () => {
+    const user = userEvent.setup();
+    posRequest.mockImplementation((_m: string, _p: string, body: { name: string }) => Promise.resolve({ ...milk, name: body.name }));
+    await openPage();
+    await user.click(screen.getByTestId('group-edit-1'));
+    const dialog = within(await screen.findByTestId('modifier-group-dialog'));
+    expect(dialog.getByTestId('modifier-group-shared')).toHaveTextContent('у 2 стравах: Латте, Раф');
+    // Nothing changed yet: nothing to save.
+    expect(dialog.getByTestId('modifier-group-save')).toBeDisabled();
+
+    const newRow = within(dialog.getByTestId('answer-row-new'));
+    await user.type(newRow.getByTestId('answer-name'), 'без молока');
+    const rows = dialog.getAllByTestId('answer-row');
+    const added = within(rows[2]);
+    await user.type(added.getByTestId('answer-delta'), '-10');
+    await user.click(added.getByTestId('answer-more'));
+    const details = within(added.getByTestId('answer-details'));
+    // Ingredients first: «Молоко» and «Молоко вівсяне» lead the list, the dishes follow.
+    await user.type(details.getByRole('combobox'), 'вівс');
+    await user.click(details.getByRole('option', { name: /Молоко вівсяне/ }));
+    await user.clear(details.getByTestId('answer-component-qty'));
+    await user.type(details.getByTestId('answer-component-qty'), '150');
+
+    await user.click(dialog.getByTestId('modifier-group-save'));
+    await waitFor(() => expect(posRequest).toHaveBeenCalledTimes(1));
+    const [method, path, body] = posRequest.mock.calls[0] as [string, string, { modifiers: unknown[] }];
+    expect([method, path]).toEqual(['put', '/modifier-groups/1']);
+    expect(body.modifiers).toHaveLength(3);
+    // The answers the question had keep their ids; the new one has none.
+    expect(body.modifiers[0]).toMatchObject({ id: 11, name: 'звичайне', is_default: true, component_variant_id: 20, component_quantity: 200 });
+    expect(body.modifiers[2]).toEqual({
       name: 'без молока',
-      price_delta_cents: -2000,
+      price_delta_cents: -1000,
       label_deltas: [],
       is_default: false,
+      is_active: true,
       component_variant_id: 21,
       component_quantity: 150,
     });
-    await waitFor(() => expect(card.getAllByTestId('modifier-row')).toHaveLength(3));
+    await waitFor(() => expect(screen.queryByTestId('modifier-group-dialog')).not.toBeInTheDocument());
   });
 
-  it('sends no component when the answer takes nothing', async () => {
+  it('prices an answer per size as a column, offered from the sizes its products come in', async () => {
     const user = userEvent.setup();
-    createModifier.mockResolvedValue(milk);
-    renderWithProviders(<ModifiersPage />);
-    const card = within(await screen.findByTestId('group-card-1'));
+    posRequest.mockResolvedValue(milk);
+    await openPage();
+    await user.click(screen.getByTestId('group-edit-1'));
+    const dialog = within(await screen.findByTestId('modifier-group-dialog'));
+    await user.click(dialog.getByTestId('modifier-sizes-toggle'));
+    await user.click(dialog.getByTestId('modifier-size-chip-L'));
+    const oat = within(dialog.getAllByTestId('answer-row')[1]);
+    await user.type(oat.getByTestId('answer-size-L'), '20');
+    await user.click(dialog.getByTestId('modifier-group-save'));
+    await waitFor(() => expect(posRequest).toHaveBeenCalledTimes(1));
+    const body = posRequest.mock.calls[0][2] as { modifiers: Array<{ label_deltas: unknown[] }> };
+    expect(body.modifiers[0].label_deltas).toEqual([]);
+    expect(body.modifiers[1].label_deltas).toEqual([{ label: 'L', price_delta_cents: 2000 }]);
+  });
 
-    await user.type(card.getByTestId('modifier-form-name'), 'гарячіше');
-    await user.click(card.getByTestId('modifier-form-default'));
-    await user.click(card.getByTestId('modifier-form-submit'));
+  it('refuses before the request what cannot be saved, and shows the server’s refusal in its own words', async () => {
+    const user = userEvent.setup();
+    await openPage();
+    await user.click(screen.getByTestId('group-edit-2'));
+    const dialog = within(await screen.findByTestId('modifier-group-dialog'));
+    await user.clear(dialog.getByTestId('modifier-group-name'));
+    await user.click(dialog.getByTestId('modifier-group-save'));
+    expect(dialog.getByTestId('modifier-group-error')).toHaveTextContent('Назвіть питання');
+    expect(posRequest).not.toHaveBeenCalled();
 
-    expect(createModifier).toHaveBeenCalledWith(1, {
-      name: 'гарячіше',
-      price_delta_cents: 0,
-      label_deltas: [],
-      is_default: true,
-      component_variant_id: null,
-      component_quantity: null,
+    posRequest.mockRejectedValueOnce({ response: { data: { error: 'Відповідь «половина» названо двічі' } } });
+    await user.type(dialog.getByTestId('modifier-group-name'), 'Порція 2');
+    await user.click(dialog.getByTestId('modifier-group-save'));
+    expect(await dialog.findByTestId('modifier-group-error')).toHaveTextContent('Відповідь «половина» названо двічі');
+    // The sheet stays open with what was typed.
+    expect(dialog.getByTestId('modifier-group-name')).toHaveValue('Порція 2');
+  });
+
+  it('asks before closing a changed question', async () => {
+    const user = userEvent.setup();
+    await openPage();
+    await user.click(screen.getByTestId('group-edit-2'));
+    const dialog = within(await screen.findByTestId('modifier-group-dialog'));
+    await user.type(dialog.getByTestId('modifier-group-name'), '!');
+    await user.click(dialog.getByRole('button', { name: 'Скасувати' }));
+    expect(dialog.getByText('Закрити без збереження?')).toBeInTheDocument();
+    await user.click(dialog.getByTestId('modifier-group-discard'));
+    expect(screen.queryByTestId('modifier-group-dialog')).not.toBeInTheDocument();
+    expect(posRequest).not.toHaveBeenCalled();
+  });
+
+  it('gives a question to a whole tag at once', async () => {
+    const user = userEvent.setup();
+    posRequest.mockResolvedValueOnce({ group: { ...portion, product_ids: [5, 6, 8] }, added: 3, removed: 0 });
+    await openPage();
+    await user.click(screen.getByTestId('group-products-2'));
+    const dialog = within(await screen.findByTestId('group-products-dialog'));
+    // Only what is sold is offered: the two milks are ingredients.
+    expect(dialog.queryByTestId('group-products-row-2')).not.toBeInTheDocument();
+    expect(dialog.getByTestId('group-products-row-5')).toHaveTextContent('уже питає: Молоко');
+    expect(dialog.getByTestId('group-products-save')).toBeDisabled();
+
+    await user.click(dialog.getByTestId('group-products-scope-7'));
+    expect(dialog.queryByTestId('group-products-row-9')).not.toBeInTheDocument();
+    await user.click(dialog.getByTestId('group-products-toggle-shown'));
+    expect(dialog.getByTestId('group-products-summary')).toHaveTextContent('додати до 3');
+    await user.click(dialog.getByTestId('group-products-save'));
+
+    await waitFor(() => expect(posRequest).toHaveBeenCalledTimes(1));
+    const [method, path, body] = posRequest.mock.calls[0] as [string, string, { product_ids: number[] }];
+    expect([method, path]).toEqual(['put', '/modifier-groups/2/products']);
+    expect([...body.product_ids].sort((a, b) => a - b)).toEqual([5, 6, 8]);
+    expect(await screen.findByTestId('modifiers-flash')).toHaveTextContent('«Порція»: додано до 3 страви');
+    // The cards' own lists of questions moved: the page reads again.
+    await waitFor(() => expect(getProducts).toHaveBeenCalledTimes(2));
+  });
+
+  it('duplicates a question as a new one — no answer ids, a name of its own — and opens the copy', async () => {
+    const user = userEvent.setup();
+    posRequest.mockResolvedValueOnce({ ...milk, id: 30, name: 'Молоко (копія)', product_ids: [] });
+    await openPage();
+    await user.click(screen.getByTestId('group-more-1'));
+    await user.click(screen.getByTestId('group-duplicate-1'));
+    await waitFor(() => expect(posRequest).toHaveBeenCalledTimes(1));
+    const [method, path, body] = posRequest.mock.calls[0] as [string, string, { name: string; modifiers: Array<Record<string, unknown>> }];
+    expect([method, path, body.name]).toEqual(['post', '/modifier-groups', 'Молоко (копія)']);
+    expect(body.modifiers.map((m) => m.name)).toEqual(['звичайне', 'вівсяне']);
+    expect(body.modifiers.every((m) => !('id' in m))).toBe(true);
+    const dialog = within(await screen.findByTestId('modifier-group-dialog'));
+    expect(dialog.getByTestId('modifier-group-name')).toHaveValue('Молоко (копія)');
+  });
+
+  it('switches a question off without touching its answers', async () => {
+    const user = userEvent.setup();
+    posRequest.mockResolvedValueOnce({ ...milk, is_active: false });
+    await openPage();
+    await user.click(screen.getByTestId('group-more-1'));
+    await user.click(screen.getByTestId('group-active-1'));
+    await waitFor(() => expect(posRequest).toHaveBeenCalledWith('put', '/modifier-groups/1', { is_active: false }));
+    expect(await within(screen.getByTestId('group-card-1')).findByTestId('group-problem-off')).toBeInTheDocument();
+  });
+
+  it('deletes a question after asking in its own sheet (the desktop webview has no window.confirm)', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    // The page reads the list again afterwards: by then the server has one question fewer.
+    deleteModifierGroup.mockImplementation(async () => {
+      listModifierGroups.mockResolvedValue([portion]);
     });
-  });
-
-  it('prices an answer per size: offers the sizes in use, sends the list wholesale, flags a stale one', async () => {
-    const user = userEvent.setup();
-    const crust: ModifierGroup = {
-      ...portion,
-      id: 5,
-      name: 'Бортики',
-      labels_in_use: ['30 см', '50 см'],
-      modifiers: [
-        {
-          ...portion.modifiers[0],
-          id: 51,
-          group_id: 5,
-          name: 'Філадельфія',
-          price_delta_cents: 8000,
-          label_deltas: [
-            { label: '50 см', price_delta_cents: 15000 },
-            { label: '40 см', price_delta_cents: 12000 },
-          ],
-        },
-      ],
-    };
-    listModifierGroups.mockResolvedValue([crust]);
-    updateModifier.mockResolvedValue(crust);
-    renderWithProviders(<ModifiersPage />);
-    const card = within(await screen.findByTestId('group-card-5'));
-
-    // The list says what the bigger size costs, and that no pizza is 40 см.
-    const prices = card.getAllByTestId('modifier-size-price');
-    expect(prices[0]).toHaveTextContent('50 см: +150,00 ₴');
-    expect(prices[0]).not.toHaveTextContent('не знайдено');
-    expect(prices[1]).toHaveTextContent('40 см: +120,00 ₴ (не знайдено)');
-
-    await user.click(within(card.getAllByTestId('modifier-row')[0]).getByText('Змінити'));
-    expect(card.getByTestId('modifier-size-label-0')).toHaveValue('50 см');
-    expect(card.getByTestId('modifier-size-delta-0')).toHaveValue('150');
-    // Drop the stale 40 см row and save: the list leaves whole.
-    await user.click(within(card.getByTestId('modifier-form-sizes')).getAllByText('Прибрати')[1]);
-    await user.clear(card.getByTestId('modifier-size-delta-0'));
-    await user.type(card.getByTestId('modifier-size-delta-0'), '155');
-    await user.click(card.getByTestId('modifier-form-submit'));
-    expect(updateModifier).toHaveBeenCalledWith(
-      51,
-      expect.objectContaining({
-        price_delta_cents: 8000,
-        label_deltas: [{ label: '50 см', price_delta_cents: 15500 }],
-      })
-    );
-  });
-
-  it('offers the first size in use that has no price yet', async () => {
-    const user = userEvent.setup();
-    listModifierGroups.mockResolvedValue([{ ...portion, labels_in_use: ['30 см', '50 см'] }]);
-    renderWithProviders(<ModifiersPage />);
-    const card = within(await screen.findByTestId('group-card-2'));
-    await user.click(card.getByTestId('modifier-form-add-size'));
-    await user.click(card.getByTestId('modifier-form-add-size'));
-    expect(card.getByTestId('modifier-size-label-0')).toHaveValue('30 см');
-    expect(card.getByTestId('modifier-size-label-1')).toHaveValue('50 см');
-  });
-
-  it("surfaces the server's refusal in its own words", async () => {
-    const user = userEvent.setup();
-    createModifierGroup.mockRejectedValue({
-      response: { data: { error: 'max_select не може бути меншим за min_select' } },
-    });
-    renderWithProviders(<ModifiersPage />);
-    await screen.findByTestId('group-card-1');
-
-    await user.type(screen.getByTestId('group-form-name'), 'Сироп');
-    await user.click(screen.getByTestId('group-form-submit'));
-
-    expect(await screen.findByTestId('modifiers-error')).toHaveTextContent(
-      'max_select не може бути меншим за min_select'
-    );
-  });
-
-  it('deletes a question after asking, and drops its card', async () => {
-    const user = userEvent.setup();
-    deleteModifierGroup.mockResolvedValue(undefined);
-    renderWithProviders(<ModifiersPage />);
-    await screen.findByTestId('group-card-2');
-
-    await user.click(screen.getByTestId('group-delete-2'));
-
-    expect(window.confirm).toHaveBeenCalled();
-    expect(deleteModifierGroup).toHaveBeenCalledWith(2);
-    await waitFor(() => expect(screen.queryByTestId('group-card-2')).toBeNull());
+    await openPage();
+    await user.click(screen.getByTestId('group-more-1'));
+    await user.click(screen.getByTestId('group-delete-1'));
+    const sheet = within(screen.getByTestId('confirm-sheet'));
+    expect(sheet.getByText(/Його перестануть питати 2 страви/)).toBeInTheDocument();
+    expect(deleteModifierGroup).not.toHaveBeenCalled();
+    await user.click(sheet.getByRole('button', { name: 'Видалити' }));
+    await waitFor(() => expect(deleteModifierGroup).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(screen.queryByTestId('group-card-1')).not.toBeInTheDocument());
+    expect(confirmSpy).not.toHaveBeenCalled();
   });
 });
 
 describe('signedUahInputToCents', () => {
   it('reads a minus in any of its spellings, and a plain number as a surcharge', () => {
-    expect(signedUahInputToCents('15')).toBe(1500);
-    expect(signedUahInputToCents('+15')).toBe(1500);
     expect(signedUahInputToCents('-20')).toBe(-2000);
     expect(signedUahInputToCents('−20')).toBe(-2000);
-    expect(signedUahInputToCents('- 7,50')).toBe(-750);
+    expect(signedUahInputToCents('–20,5')).toBe(-2050);
+    expect(signedUahInputToCents('+15')).toBe(1500);
+    expect(signedUahInputToCents('15')).toBe(1500);
     expect(signedUahInputToCents('')).toBe(0);
   });
 });

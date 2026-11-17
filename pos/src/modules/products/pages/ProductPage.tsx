@@ -27,6 +27,7 @@ import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { AddVariantsDialog } from '../components/AddVariantsDialog';
 import { NewVariantFields } from '../components/NewVariantFields';
 import { ProductFields } from '../components/ProductFields';
+import { ProductModifiers } from '../components/ProductModifiers';
 import { ProductSide } from '../components/ProductSide';
 import { ProductHistory } from '../components/ProductHistory';
 import { VariantMatrix, type MatrixResult } from '../components/VariantMatrix';
@@ -38,6 +39,7 @@ import { flattenTags } from '../components/tagLabels';
 import { colourVocabulary, supportsMatrix } from '../lib/variantMatrix';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { emptyVariant, newVariantInput, singleTyped, type NewVariantValues } from '../lib/newVariant';
+import { ingredientOptions } from '../lib/ingredientOptions';
 import { isWeighedUnit } from '../lib/weighedUnit';
 import {
   createDirty,
@@ -139,6 +141,14 @@ function ProductCard({ id }: { id: string | undefined }) {
     () => componentOptions(products, { excludeProductId: productId, maxDepth }),
     [products, productId, maxDepth]
   );
+
+  // What a modifier's answer may take off the shelf: any variant, a recipe
+  // included — the server expands it at checkout, so no depth cap here.
+  const modifierOptions = useMemo(() => ingredientOptions(products), [products]);
+  /** A question created or changed from this card: the list of them follows the server. */
+  const onGroupSaved = useCallback((group: ModifierGroup) => {
+    setGroups((prev) => (prev.some((g) => g.id === group.id) ? prev.map((g) => (g.id === group.id ? group : g)) : [...prev, group]));
+  }, []);
 
   const diff = useMemo(() => (snapshot && draft ? diffProduct(snapshot, draft) : null), [snapshot, draft]);
   const useMatrix = draft ? supportsMatrix(vertical.attributes) && draft.shape === '' : false;
@@ -528,12 +538,38 @@ function ProductCard({ id }: { id: string | undefined }) {
                     addLabel={useMatrix ? 'Додати варіанти' : 'Додати варіант'}
                   />
                 )}
+                {/* A dish's questions are half of what it is, so they sit in
+                    the wide column under its sizes and prices; a shop that
+                    sells no dishes keeps them in the side column. */}
+                {scope.askDishFacts && (
+                  <section className="space-y-3">
+                    <SectionHead title="Модифікатори" count={draft.groupIds.length || undefined} />
+                    <ProductModifiers
+                      groups={groups}
+                      products={products}
+                      value={draft.groupIds}
+                      onChange={(groupIds) => patchDraft({ groupIds })}
+                      productId={mode === 'edit' ? productId : undefined}
+                      productName={draft.name.trim()}
+                      tagIds={draft.tagIds}
+                      options={modifierOptions}
+                      dish
+                      onGroupSaved={onGroupSaved}
+                    />
+                  </section>
+                )}
               </div>
               <ProductSide
                 value={draft}
                 onPatch={patchDraft}
                 flatTags={flatTags}
                 groups={groups}
+                products={products}
+                productId={mode === 'edit' ? productId : undefined}
+                modifierOptions={modifierOptions}
+                dish={scope.askDishFacts}
+                onGroupSaved={onGroupSaved}
+                showModifiers={!scope.askDishFacts}
                 techCards={techCards}
                 variants={draft.variants}
                 askMenuHidden={scope.askDishFacts}

@@ -2,9 +2,10 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import type { ModifierGroup, PosTag } from '@pos/platform';
+import type { ModifierGroup, PosTag, Product } from '@pos/platform';
 import { SectionHead } from '@pos/platform/ui';
-import { ModifierGroupChips } from './ModifierGroupChips';
+import { ProductModifiers } from './ProductModifiers';
+import type { ComponentOption } from './componentOptions';
 import { TagDot } from './TagDot';
 import { TechCardLine } from './TechCardLine';
 import { captionClass, checkboxClass } from './formStyles';
@@ -15,7 +16,15 @@ import type { RegisterChoice } from '../lib/registerChoices';
 
 type Fields = Pick<
   ProductDraft,
-  'sellable' | 'menuHidden' | 'fiscalRegister' | 'fiscalExcise' | 'excisePerUnit' | 'uktzed' | 'tagIds' | 'groupIds'
+  | 'name'
+  | 'sellable'
+  | 'menuHidden'
+  | 'fiscalRegister'
+  | 'fiscalExcise'
+  | 'excisePerUnit'
+  | 'uktzed'
+  | 'tagIds'
+  | 'groupIds'
 >;
 
 /** «Продається на касі» — the same switch on every card. */
@@ -174,6 +183,12 @@ export function ProductSide({
   onPatch,
   flatTags,
   groups,
+  products = [],
+  productId,
+  modifierOptions = [],
+  dish = true,
+  onGroupSaved,
+  showModifiers = true,
   techCards,
   variants,
   askMenuHidden = false,
@@ -190,6 +205,18 @@ export function ProductSide({
   askExcise?: boolean;
   flatTags: PosTag[];
   groups: ModifierGroup[];
+  /** The catalogue — where else a question is asked, and what its neighbours ask. */
+  products?: Product[];
+  /** Absent on a card that is still being created. */
+  productId?: number;
+  /** What a modifier's answer may take off the shelf. */
+  modifierOptions?: ComponentOption[];
+  /** A café says «страва», every other shop «товар». */
+  dish?: boolean;
+  /** A question was created or changed from this card. */
+  onGroupSaved?: (group: ModifierGroup) => void;
+  /** False where the page draws the modifiers itself, in the main column (a dish). */
+  showModifiers?: boolean;
   /** What each composite variant costs to assemble, by variant id. */
   techCards?: Map<number, TechCardRow>;
   variants?: ProductDraft['variants'];
@@ -244,15 +271,23 @@ export function ProductSide({
         </div>
       </section>
 
-      <section className="space-y-3">
-        <SectionHead title="Модифікатори" count={value.groupIds.length || undefined} />
-        <ModifierGroupChips
-          caption={null}
-          groups={groups}
-          value={value.groupIds}
-          onChange={(groupIds) => onPatch({ groupIds })}
-        />
-      </section>
+      {showModifiers && (
+        <section className="space-y-3">
+          <SectionHead title="Модифікатори" count={value.groupIds.length || undefined} />
+          <ProductModifiers
+            groups={groups}
+            products={products}
+            value={value.groupIds}
+            onChange={(groupIds) => onPatch({ groupIds })}
+            productId={productId}
+            productName={value.name.trim()}
+            tagIds={value.tagIds}
+            options={modifierOptions}
+            dish={dish}
+            onGroupSaved={(group) => onGroupSaved?.(group)}
+          />
+        </section>
+      )}
 
       {costLines.length > 0 && (
         <section className="space-y-2">

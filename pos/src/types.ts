@@ -406,6 +406,8 @@ export interface ModifierGroup {
   modifiers: Modifier[];
   /** The labels of the variants this group's products come in — what a size price can match. */
   labels_in_use?: string[];
+  /** The active products that ask it, by id — absent from a backend that predates it. */
+  product_ids?: number[];
 }
 
 export interface ModifierGroupInput {

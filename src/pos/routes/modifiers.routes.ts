@@ -70,10 +70,16 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
     const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     try {
+      // A body that names its answers is the question saved whole — the
+      // owner's editor creates it with them in one request.
+      const body = (request.body ?? {}) as modifiers.ModifierGroupWholeInput;
       const group = await withGroupJournal(
         auth,
         null,
-        () => modifiers.createGroup(auth.storeId, (request.body ?? {}) as modifiers.ModifierGroupInput),
+        () =>
+          body.modifiers === undefined
+            ? modifiers.createGroup(auth.storeId, body)
+            : modifiers.saveGroupWhole(auth.storeId, null, body),
         (created) => created.id
       );
       return reply.code(201).send(group);
@@ -90,6 +96,50 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
       return await withGroupJournal(auth, Number(id), () =>
         modifiers.updateGroup(auth.storeId, Number(id), (request.body ?? {}) as modifiers.ModifierGroupInput)
       );
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  /**
+   * The question saved whole: its name and range and, when the body names
+   * them, every answer in order — changed, added and removed in one
+   * transaction (the owner's editor has one «Зберегти»).
+   */
+  fastify.put('/modifier-groups/:id', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    try {
+      return await withGroupJournal(auth, Number(id), () =>
+        modifiers.saveGroupWhole(
+          auth.storeId,
+          Number(id),
+          (request.body ?? {}) as modifiers.ModifierGroupWholeInput
+        )
+      );
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  /**
+   * Which products ask this question, set from the question's side: the body
+   * is every active product that should ask it. A product that starts asking
+   * it asks it last; the journal gets a row per product whose questions moved.
+   */
+  fastify.put('/modifier-groups/:id/products', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { product_ids?: unknown };
+    try {
+      const plan = await modifiers.planGroupProducts(auth.storeId, Number(id), body.product_ids ?? []);
+      const touched = [...plan.add, ...plan.remove];
+      const group = await withMenuJournal(auth, touched, () =>
+        modifiers.applyGroupProducts(auth.storeId, Number(id), plan)
+      );
+      return { group, added: plan.add.length, removed: plan.remove.length };
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
