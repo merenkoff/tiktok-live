@@ -231,7 +231,10 @@ describe('the create page — what follows the one request', () => {
     await user.click(sizes(form).getByRole('button', { name: '86' }));
     await user.type(form.getByPlaceholderText('Ціна, грн'), '350');
     await user.click(form.getByRole('checkbox', { name: /Новинки/ }));
-    await user.click(form.getByTestId('modifier-group-chip-7'));
+    // The questions are chosen in a picker (a portal, so outside the form).
+    await user.click(form.getByTestId('product-modifier-add'));
+    await user.click(await screen.findByTestId('modifier-option-7'));
+    await user.click(screen.getByTestId('modifier-picker-add'));
     await user.click(form.getByRole('button', { name: 'Створити' }));
 
     await waitFor(() => expect(setProductTags).toHaveBeenCalledWith(99, [1]));
@@ -246,7 +249,10 @@ describe('the create page — what follows the one request', () => {
     await user.type(form.getByPlaceholderText('Назва'), 'Реглан');
     await user.click(sizes(form).getByRole('button', { name: '86' }));
     await user.type(form.getByPlaceholderText('Ціна, грн'), '350');
-    await user.click(form.getByTestId('modifier-group-chip-7'));
+    // The questions are chosen in a picker (a portal, so outside the form).
+    await user.click(form.getByTestId('product-modifier-add'));
+    await user.click(await screen.findByTestId('modifier-option-7'));
+    await user.click(screen.getByTestId('modifier-picker-add'));
     await user.click(form.getByRole('button', { name: 'Створити' }));
 
     expect(await screen.findByText('Картка')).toBeInTheDocument();

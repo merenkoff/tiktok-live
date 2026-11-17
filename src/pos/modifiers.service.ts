@@ -77,6 +77,11 @@ export interface ModifierGroup {
    * this group is attached to — what a `label_deltas` entry can match.
    */
   labels_in_use?: string[];
+  /**
+   * The owner's view only: the active products that ask this group, by id —
+   * «у 12 стравах» beside the question, and what the bulk picker opens with.
+   */
+  product_ids?: number[];
 }
 
 export interface ModifierGroupInput {
@@ -335,6 +340,29 @@ async function loadLabelsInUse(
   return byGroup;
 }
 
+/** The active products that ask each group — the owner's «у 12 стравах». */
+async function loadProductIds(
+  client: DbClient,
+  storeId: number,
+  groupIds: number[]
+): Promise<Map<number, number[]>> {
+  const byGroup = new Map<number, number[]>();
+  if (groupIds.length === 0) return byGroup;
+  const result = await client.query(
+    `SELECT l.group_id, l.product_id
+     FROM pos_product_modifier_groups l
+     JOIN pos_products p ON p.id = l.product_id AND p.is_active = TRUE
+     WHERE l.store_id = $1 AND l.group_id = ANY($2::bigint[])
+     ORDER BY l.group_id, l.product_id`,
+    [storeId, groupIds]
+  );
+  for (const row of result.rows) {
+    const groupId = Number(row.group_id);
+    byGroup.set(groupId, [...(byGroup.get(groupId) ?? []), Number(row.product_id)]);
+  }
+  return byGroup;
+}
+
 /** Every group of the store with its modifiers, active or not — the owner's list. */
 export async function listGroups(storeId: number, client: DbClient = pool): Promise<ModifierGroup[]> {
   const groups = await client.query(
@@ -346,9 +374,11 @@ export async function listGroups(storeId: number, client: DbClient = pool): Prom
   const groupIds = groups.rows.map((row) => Number(row.id));
   const modifiers = await loadModifiersByGroup(client, storeId, groupIds, false);
   const labels = await loadLabelsInUse(client, storeId, groupIds);
+  const products = await loadProductIds(client, storeId, groupIds);
   return groups.rows.map((row) => ({
     ...rowToGroup(row, modifiers.get(Number(row.id)) ?? []),
     labels_in_use: labels.get(Number(row.id)) ?? [],
+    product_ids: products.get(Number(row.id)) ?? [],
   }));
 }
 
@@ -365,7 +395,12 @@ export async function getGroup(
   if (groups.rows.length === 0) throw new ModifierError('Групу модифікаторів не знайдено');
   const modifiers = await loadModifiersByGroup(client, storeId, [groupId], false);
   const labels = await loadLabelsInUse(client, storeId, [groupId]);
-  return { ...rowToGroup(groups.rows[0], modifiers.get(groupId) ?? []), labels_in_use: labels.get(groupId) ?? [] };
+  const products = await loadProductIds(client, storeId, [groupId]);
+  return {
+    ...rowToGroup(groups.rows[0], modifiers.get(groupId) ?? []),
+    labels_in_use: labels.get(groupId) ?? [],
+    product_ids: products.get(groupId) ?? [],
+  };
 }
 
 /**
@@ -673,6 +708,299 @@ export async function setProductGroups(
   }
   const groups = await loadGroupsForProducts(pool, storeId, [productId], { activeOnly: false });
   return groups.get(productId) ?? [];
+}
+
+// ── the whole question in one write ─────────────────────────────────
+
+/** A question saved whole: its own fields and, when named, every answer in order. */
+export interface ModifierGroupWholeInput extends ModifierGroupInput {
+  /**
+   * The answers, in the order the till shows them. An entry with `id` is an
+   * answer the group already has (changed in place, so sale lines and parked
+   * carts keep pointing at it), one without is new, and an answer the group
+   * has that the list leaves out is deleted. Absent = the answers stay.
+   */
+  modifiers?: unknown;
+}
+
+/** More answers than this is a catalogue, not a question. */
+const MAX_ANSWERS = 100;
+/** How many products one bulk assignment may name. */
+const MAX_GROUP_PRODUCTS = 5000;
+
+/** Why this many pre-selected answers cannot stand, in the owner's words — or null. */
+function defaultsRefusal(max: number, defaults: number): string | null {
+  if (defaults <= max) return null;
+  return max === 1
+    ? 'Відповіддю «як завжди» може бути лише одна: дозволено обрати одну'
+    : `Відповідей «як завжди» (${defaults}) більше, ніж можна обрати (${max})`;
+}
+
+/**
+ * Create a question with its answers, or replace an existing one — one
+ * transaction, so the owner's editor has a single «Зберегти» and a refused
+ * answer leaves nothing half-written. The per-answer routes above stay for
+ * the clients that use them.
+ */
+export async function saveGroupWhole(
+  storeId: number,
+  groupId: number | null,
+  input: ModifierGroupWholeInput
+): Promise<ModifierGroup> {
+  const client = await pool.connect();
+  let savedId = 0;
+  try {
+    await client.query('BEGIN');
+
+    let current: ModifierGroup | null = null;
+    if (groupId != null) {
+      const locked = await client.query(
+        `SELECT id FROM pos_modifier_groups WHERE store_id = $1 AND id = $2 FOR UPDATE`,
+        [storeId, groupId]
+      );
+      if (locked.rows.length === 0) throw new ModifierError('Групу модифікаторів не знайдено');
+      current = await getGroup(storeId, groupId, client);
+    }
+
+    const name =
+      input.name === undefined && current ? current.name : cleanName(input.name, 'Питання');
+    const { min, max } = resolveRange(input.min_select, input.max_select, {
+      min: current?.min_select ?? 0,
+      max: current?.max_select ?? 1,
+    });
+    const sortOrder =
+      input.sort_order === undefined
+        ? (current?.sort_order ?? 0)
+        : intField(input.sort_order, 'sort_order', 0);
+    const isActive = boolField(input.is_active, current?.is_active ?? true);
+
+    if (current) {
+      await client.query(
+        `UPDATE pos_modifier_groups
+         SET name = $1, min_select = $2, max_select = $3, sort_order = $4, is_active = $5, updated_at = NOW()
+         WHERE store_id = $6 AND id = $7`,
+        [name, min, max, sortOrder, isActive, storeId, current.id]
+      );
+      savedId = current.id;
+    } else {
+      const created = await client.query(
+        `INSERT INTO pos_modifier_groups (store_id, name, min_select, max_select, sort_order, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [storeId, name, min, max, sortOrder, isActive]
+      );
+      savedId = Number(created.rows[0].id);
+    }
+
+    if (input.modifiers !== undefined) {
+      if (!Array.isArray(input.modifiers)) throw new ModifierError('modifiers має бути списком відповідей');
+      if (input.modifiers.length > MAX_ANSWERS) {
+        throw new ModifierError(`Відповідей не може бути більше ${MAX_ANSWERS}`);
+      }
+      const existing = new Map((current?.modifiers ?? []).map((m) => [m.id, m]));
+      const kept = new Set<number>();
+      const names = new Set<string>();
+      let defaults = 0;
+
+      for (const [index, entry] of input.modifiers.entries()) {
+        const row = (entry ?? {}) as Record<string, unknown>;
+        const was = row.id === undefined || row.id === null ? null : existing.get(Number(row.id));
+        if (row.id !== undefined && row.id !== null) {
+          if (!was) throw new ModifierError(`Відповідь ${String(row.id)} не належить цьому питанню`);
+          if (kept.has(was.id)) throw new ModifierError(`Відповідь ${was.id} названо двічі`);
+          kept.add(was.id);
+        }
+        const answerName = cleanName(row.name, 'Відповідь');
+        const key = labelKey(answerName);
+        if (names.has(key)) throw new ModifierError(`Відповідь «${answerName}» названо двічі`);
+        names.add(key);
+        const delta =
+          row.price_delta_cents === undefined
+            ? (was?.price_delta_cents ?? 0)
+            : intField(row.price_delta_cents, `Доплата «${answerName}»`, -MAX_DELTA_CENTS, MAX_DELTA_CENTS);
+        const labelDeltas =
+          row.label_deltas === undefined ? (was?.label_deltas ?? []) : cleanLabelDeltas(row.label_deltas);
+        const touchesComponent = row.component_variant_id !== undefined || row.component_quantity !== undefined;
+        let component = {
+          variantId: was?.component_variant_id ?? null,
+          quantity: was?.component_quantity ?? null,
+        };
+        if (touchesComponent) {
+          // An answer that keeps the ingredient it already had is not asked
+          // whether that ingredient is still active: an archived one must not
+          // make the whole question unsaveable.
+          const keptVariant =
+            was?.component_variant_id != null &&
+            row.component_variant_id != null &&
+            Number(row.component_variant_id) === was.component_variant_id
+              ? was.component_variant_id
+              : null;
+          component =
+            keptVariant != null
+              ? {
+                  variantId: keptVariant,
+                  quantity: intField(row.component_quantity, `Кількість списання «${answerName}»`, 1),
+                }
+              : await resolveComponent(client, storeId, row.component_variant_id, row.component_quantity);
+        }
+        const answerActive = boolField(row.is_active, was?.is_active ?? true);
+        const isDefault = boolField(row.is_default, was?.is_default ?? false);
+        if (isDefault && answerActive) defaults += 1;
+
+        if (was) {
+          await client.query(
+            `UPDATE pos_modifiers
+             SET name = $1, price_delta_cents = $2, component_variant_id = $3, component_quantity = $4,
+                 is_default = $5, sort_order = $6, is_active = $7, label_deltas = $8::jsonb, updated_at = NOW()
+             WHERE store_id = $9 AND id = $10`,
+            [
+              answerName,
+              delta,
+              component.variantId,
+              component.quantity,
+              isDefault,
+              index,
+              answerActive,
+              JSON.stringify(labelDeltas),
+              storeId,
+              was.id,
+            ]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO pos_modifiers
+               (store_id, group_id, name, price_delta_cents, label_deltas, component_variant_id,
+                component_quantity, is_default, sort_order, is_active)
+             VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10)`,
+            [
+              storeId,
+              savedId,
+              answerName,
+              delta,
+              JSON.stringify(labelDeltas),
+              component.variantId,
+              component.quantity,
+              isDefault,
+              index,
+              answerActive,
+            ]
+          );
+        }
+      }
+
+      const refusal = defaultsRefusal(max, defaults);
+      if (refusal) throw new ModifierError(refusal);
+
+      const gone = [...existing.keys()].filter((id) => !kept.has(id));
+      if (gone.length > 0) {
+        await client.query(`DELETE FROM pos_modifiers WHERE store_id = $1 AND id = ANY($2::bigint[])`, [
+          storeId,
+          gone,
+        ]);
+      }
+    } else if (current && max < current.max_select) {
+      await assertDefaultsFit(client, current.id, max, 0);
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return getGroup(storeId, savedId);
+}
+
+// ── which products ask a question, set from the question's side ─────
+
+/**
+ * What a bulk assignment would change: the products that start asking the
+ * group and the ones that stop. Archived products are left as they are — the
+ * owner's picker never shows them, so their absence from the list is not a
+ * request to detach.
+ */
+export async function planGroupProducts(
+  storeId: number,
+  groupId: number,
+  productIdsRaw: unknown
+): Promise<{ add: number[]; remove: number[] }> {
+  if (!Array.isArray(productIdsRaw)) throw new ModifierError('product_ids має бути списком');
+  if (productIdsRaw.length > MAX_GROUP_PRODUCTS) {
+    throw new ModifierError(`Товарів не може бути більше ${MAX_GROUP_PRODUCTS}`);
+  }
+  const wanted = new Set<number>();
+  for (const value of productIdsRaw) wanted.add(intField(value, 'product_id', 1));
+
+  const group = await pool.query(`SELECT 1 FROM pos_modifier_groups WHERE store_id = $1 AND id = $2`, [
+    storeId,
+    groupId,
+  ]);
+  if (group.rows.length === 0) throw new ModifierError('Групу модифікаторів не знайдено');
+
+  const ids = [...wanted];
+  if (ids.length > 0) {
+    const found = await pool.query(
+      `SELECT id FROM pos_products WHERE store_id = $1 AND id = ANY($2::bigint[])`,
+      [storeId, ids]
+    );
+    if (found.rows.length !== ids.length) throw new ModifierError('Деяких товарів не знайдено');
+  }
+
+  const linked = await pool.query(
+    `SELECT l.product_id, p.is_active
+     FROM pos_product_modifier_groups l
+     JOIN pos_products p ON p.id = l.product_id
+     WHERE l.store_id = $1 AND l.group_id = $2`,
+    [storeId, groupId]
+  );
+  const has = new Set(linked.rows.map((row) => Number(row.product_id)));
+  return {
+    add: ids.filter((id) => !has.has(id)),
+    remove: linked.rows
+      .filter((row) => Boolean(row.is_active) && !wanted.has(Number(row.product_id)))
+      .map((row) => Number(row.product_id)),
+  };
+}
+
+/**
+ * Apply a plan from `planGroupProducts`: a product that starts asking the
+ * group asks it LAST (after the questions it already has), one that stops
+ * loses only this link — the order of its other questions is untouched.
+ */
+export async function applyGroupProducts(
+  storeId: number,
+  groupId: number,
+  plan: { add: number[]; remove: number[] }
+): Promise<ModifierGroup> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (plan.remove.length > 0) {
+      await client.query(
+        `DELETE FROM pos_product_modifier_groups
+         WHERE store_id = $1 AND group_id = $2 AND product_id = ANY($3::bigint[])`,
+        [storeId, groupId, plan.remove]
+      );
+    }
+    if (plan.add.length > 0) {
+      await client.query(
+        `INSERT INTO pos_product_modifier_groups (store_id, product_id, group_id, sort_order)
+         SELECT $1, p.id, $2,
+                COALESCE((SELECT MAX(l.sort_order) + 1 FROM pos_product_modifier_groups l
+                          WHERE l.store_id = $1 AND l.product_id = p.id), 0)
+         FROM unnest($3::bigint[]) AS p(id)
+         ON CONFLICT (product_id, group_id) DO NOTHING`,
+        [storeId, groupId, plan.add]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return getGroup(storeId, groupId);
 }
 
 /** Group ids per product, for the owner's product list. */
