@@ -45,10 +45,16 @@ export function Dialog({
 }) {
   const titleId = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      // Only the sheet on top answers: a dialog opened from a dialog (a new
+      // ingredient from a recipe) must not take the one under it down too.
+      const open = document.querySelectorAll('[role="dialog"], [role="alertdialog"]');
+      if (open.length > 0 && open[open.length - 1] !== formRef.current) return;
+      onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -76,6 +82,7 @@ export function Dialog({
       }}
     >
       <form
+        ref={formRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

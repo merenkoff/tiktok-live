@@ -13,13 +13,18 @@ import { componentOptions, type ComponentOption } from '../components/componentO
  * cheese), and typing «сир» in a pizzeria must not put «4 сира · 30 см»
  * above the cheese.
  */
-export function ingredientOptions(products: Product[]): ComponentOption[] {
+export function ingredientOptions(
+  products: Product[],
+  opts: { excludeProductId?: number; maxDepth?: number } = {}
+): ComponentOption[] {
   const ingredient = new Set<number>();
   for (const product of products) {
     if (product.sellable !== false) continue;
     for (const variant of product.variants) ingredient.add(variant.id);
   }
-  const options = componentOptions(products, { maxDepth: 99 });
+  // A modifier's answer may take anything (no depth cap); a recipe passes its
+  // own limits — never itself, and a recipe inside only where the vertical allows.
+  const options = componentOptions(products, { maxDepth: 99, ...opts });
   return [
     ...options.filter((option) => ingredient.has(option.variant_id)),
     ...options.filter((option) => !ingredient.has(option.variant_id)),

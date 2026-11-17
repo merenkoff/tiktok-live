@@ -7,18 +7,14 @@ import { uahInputToCents } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { AttributeFields } from '@pos/platform/ui';
 import { SkuField } from './SkuField';
-import { CompositionEditor } from './CompositionEditor';
 import { Dialog } from './Dialog';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
 import { BottleField } from './BottleField';
 import { PackFields } from './PackFields';
-import { TechCardLine } from './TechCardLine';
 import { VariantDiscountEditor } from './VariantDiscountEditor';
 import { useMenuOnly } from '../lib/menuOnly';
-import type { ComponentOption } from './componentOptions';
 import { captionClass } from './formStyles';
 import { canonicalColour, type ColourUse } from '../lib/variantMatrix';
-import type { TechCardRow } from '../data/techCardsApi';
 import { centsToInput, rowName, type VariantDraft } from '../lib/productDraft';
 import type { ProductShape } from '../lib/productShape';
 import { costBaseText, costPerKgText, isWeighedUnit, priceCaption, stockText, unitLabels } from '../lib/weighedUnit';
@@ -26,7 +22,7 @@ import { costBaseText, costPerKgText, isWeighedUnit, priceCaption, stockText, un
 /**
  * One variant, every field, in a sheet: the table on the card keeps the daily
  * ones in place and this holds the rest — the markdown, the purchase price,
- * the pack, the attributes, and for a composite its recipe. It edits a LOCAL
+ * the pack and the attributes (a composite's recipe is on the card itself). It edits a LOCAL
  * copy: «Готово» hands it to the card's draft (saved with the card's own
  * «Зберегти»), the X throws it away. Nothing here touches the server.
  */
@@ -35,8 +31,6 @@ export function VariantSheet({
   shape,
   vertical,
   colours,
-  partOptions,
-  techCard,
   bottle,
   tagIds,
   onApply,
@@ -48,8 +42,6 @@ export function VariantSheet({
   vertical: VerticalPublicConfig;
   /** The store's colours, most used first — a typed colour folds into their spelling. */
   colours: ColourUse[];
-  partOptions: ComponentOption[];
-  techCard?: TechCardRow;
   /** The card's tags, so «Наступний» can lead with this category's series. */
   tagIds: number[];
   /**
@@ -120,15 +112,9 @@ export function VariantSheet({
     >
       <div className="space-y-5 py-1">
         {composite && !menuOnly && (
-          <section className="space-y-2 pb-4 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
-            <p className={captionClass}>Склад</p>
-            <CompositionEditor
-              value={local.components}
-              options={partOptions}
-              onChange={(components) => set({ components })}
-            />
-            <TechCardLine card={techCard} />
-          </section>
+          <p className="text-[13px] text-sq-muted" data-testid="variant-sheet-recipe-note">
+            Склад цього варіанта — у розділі «Рецепт» на картці, з цінами складників і собівартістю.
+          </p>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">

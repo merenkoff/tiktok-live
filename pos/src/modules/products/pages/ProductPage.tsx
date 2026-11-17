@@ -28,18 +28,19 @@ import { AddVariantsDialog } from '../components/AddVariantsDialog';
 import { NewVariantFields } from '../components/NewVariantFields';
 import { ProductFields } from '../components/ProductFields';
 import { ProductModifiers } from '../components/ProductModifiers';
+import { RecipeSection } from '../components/RecipeSection';
 import { ProductSide } from '../components/ProductSide';
 import { ProductHistory } from '../components/ProductHistory';
 import { VariantMatrix, type MatrixResult } from '../components/VariantMatrix';
 import { VariantSheet } from '../components/VariantSheet';
 import { VariantsSection } from '../components/VariantsSection';
-import { componentOptions } from '../components/componentOptions';
 import { productFormScope } from '../components/productFormScope';
 import { flattenTags } from '../components/tagLabels';
 import { colourVocabulary, supportsMatrix } from '../lib/variantMatrix';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { emptyVariant, newVariantInput, singleTyped, type NewVariantValues } from '../lib/newVariant';
 import { ingredientOptions } from '../lib/ingredientOptions';
+import { buildCostIndex } from '../lib/recipeCost';
 import { isWeighedUnit } from '../lib/weighedUnit';
 import {
   createDirty,
@@ -137,9 +138,22 @@ function ProductCard({ id }: { id: string | undefined }) {
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
   const colours = useMemo(() => colourVocabulary(products), [products]);
   const maxDepth = vertical.maxCompositionDepth ?? 1;
+  // What may go into this card's recipes: never itself, a recipe inside only
+  // where the vertical allows it — and the ingredients first.
   const partOptions = useMemo(
-    () => componentOptions(products, { excludeProductId: productId, maxDepth }),
+    () => ingredientOptions(products, { excludeProductId: productId, maxDepth }),
     [products, productId, maxDepth]
+  );
+  const costs = useMemo(() => buildCostIndex(products), [products]);
+  /** A product changed or made beside the card (an ingredient's price, a new ingredient). */
+  const putProduct = useCallback((next: Product) => {
+    setProducts((prev) => (prev.some((p) => p.id === next.id) ? prev.map((p) => (p.id === next.id ? next : p)) : [...prev, next]));
+  }, []);
+  const setIngredientCost = useCallback(
+    async (variantId: number, baseCents: number) => {
+      putProduct(await api.updateVariant(variantId, { cost_cents: baseCents }));
+    },
+    [putProduct]
   );
 
   // What a modifier's answer may take off the shelf: any variant, a recipe
@@ -538,6 +552,23 @@ function ProductCard({ id }: { id: string | undefined }) {
                     addLabel={useMatrix ? 'Додати варіанти' : 'Додати варіант'}
                   />
                 )}
+                {/* The recipe on the card itself, a tab per size — not behind
+                    a variant's «⋯». A sold dish with none is offered one. */}
+                {mode === 'edit' && !menuOnly && (draft.shape !== '' || (scope.canComposite && scope.askDishFacts && draft.sellable)) && (
+                  <RecipeSection
+                    draft={draft}
+                    productId={productId}
+                    products={products}
+                    options={partOptions}
+                    costs={costs}
+                    units={vertical.units}
+                    dish={scope.askDishFacts}
+                    onPatchDraft={patchDraft}
+                    onPatchVariant={patchVariant}
+                    onProductCreated={putProduct}
+                    onSetCost={setIngredientCost}
+                  />
+                )}
                 {/* A dish's questions are half of what it is, so they sit in
                     the wide column under its sizes and prices; a shop that
                     sells no dishes keeps them in the side column. */}
@@ -610,8 +641,6 @@ function ProductCard({ id }: { id: string | undefined }) {
           shape={draft.shape}
           vertical={vertical}
           colours={colours}
-          partOptions={partOptions}
-          techCard={techCards.get(sheetVariant.id)}
           tagIds={draft.tagIds}
           bottle={
             !menuOnly && fiscal?.enabled === true

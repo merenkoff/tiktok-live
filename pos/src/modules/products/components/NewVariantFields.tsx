@@ -6,7 +6,7 @@ import { displayUnit, WEIGHED_PRICE_PER } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { AttributeFields } from '@pos/platform/ui';
 import { SkuField } from './SkuField';
-import { CompositionEditor } from './CompositionEditor';
+import { RecipeEditor } from './RecipeEditor';
 import { useMenuOnly } from '../lib/menuOnly';
 import type { ComponentOption } from './componentOptions';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
@@ -83,8 +83,9 @@ export function NewVariantFields({
         </label>
       )}
       {shape && !menuOnly && (
-        <div className="sm:col-span-2">
-          <CompositionEditor
+        <div className="sm:col-span-2 space-y-1">
+          <p className={captionClass}>Склад</p>
+          <RecipeEditor
             value={value.components}
             options={partOptions}
             onChange={(components) => set({ components })}
