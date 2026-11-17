@@ -235,3 +235,80 @@ export function axesOfVariants(
   }
   return { colours, sizes };
 }
+
+/**
+ * The article after `start`, `step` numbers on: «0043» → «0044», «т015» →
+ * «т016», and «068-130» → «068-131». Only the digits the article ENDS with
+ * count, kept at their width and widened rather than wrapped («0999» →
+ * «1000»). `null` when it ends in no digits — there is no «next» of «літо».
+ *
+ * Wider than the server's series (`sku-series.ts` refuses «068-130», because
+ * guessing what follows an article nobody typed would collide with a scheme we
+ * do not know). Here the owner typed the first one, so counting on from it is
+ * what filling a column down means.
+ */
+export function articleAfter(start: string, step: number): string | null {
+  const match = /^(.*?)([0-9]+)$/.exec(start.trim());
+  if (!match) return null;
+  const [, prefix, digits] = match as unknown as [string, string, string];
+  // BigInt: an article is up to 64 characters, and a long one would lose its
+  // last digits to floating point — the number suggested would already be taken.
+  return prefix + String(BigInt(digits) + BigInt(step)).padStart(digits.length, '0');
+}
+
+export interface ArticlePlan {
+  /** One article per row, in the rows' order; `''` for a row that gets none. */
+  skus: string[];
+  /** Why these cannot be saved, in the owner's words; null when they can. */
+  problem: string | null;
+}
+
+/**
+ * Articles for the rows a matrix is about to create (the index is unique per
+ * store, so every variant needs its own — one article for the whole model is
+ * not expressible). A row's own article wins; every other row takes the next
+ * number counted on from `start`, in order, stepping over a number some row
+ * claimed by hand — so striking a row out or retyping one leaves no gap and no
+ * pair. An empty `start` numbers nothing: only the rows typed by hand get one.
+ */
+export function planArticles(start: string, own: ReadonlyArray<string | undefined>): ArticlePlan {
+  const typed = own.map((sku) => (sku ?? '').trim());
+  const first = start.trim();
+  const repeats = (sku: string) => `Артикул «${sku}» повторюється — у кожного варіанта має бути свій`;
+
+  const seen = new Set<string>();
+  for (const sku of typed) {
+    if (!sku) continue;
+    if (seen.has(sku)) return { skus: typed, problem: repeats(sku) };
+    seen.add(sku);
+  }
+
+  const blanks = typed.filter((sku) => !sku).length;
+  if (!first || blanks === 0) return { skus: typed, problem: null };
+  if (articleAfter(first, 0) == null) {
+    // No number to count on from. One row may still carry it, exactly as typed.
+    if (blanks > 1) {
+      return {
+        skus: typed,
+        problem:
+          'Артикул має закінчуватися числом — тоді наступні варіанти отримають наступні номери. Або впишіть артикули в рядках',
+      };
+    }
+    if (seen.has(first)) return { skus: typed, problem: repeats(first) };
+    return { skus: typed.map((sku) => sku || first), problem: null };
+  }
+
+  let step = 0;
+  const skus = typed.map((sku) => {
+    if (sku) return sku;
+    // `seen` is finite and every step is a new article, so this ends.
+    let next = articleAfter(first, step)!;
+    while (seen.has(next)) {
+      step += 1;
+      next = articleAfter(first, step)!;
+    }
+    step += 1;
+    return next;
+  });
+  return { skus, problem: null };
+}

@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseSize, sizeHint } from '../../../lib/sizeLadder';
 import {
+  articleAfter,
   axesOfVariants,
   buildCells,
   canonicalColour,
@@ -14,6 +15,7 @@ import {
   detectScale,
   existingKeys,
   foldKey,
+  planArticles,
   scaleById,
   SIZE_SCALES,
   supportsMatrix,
@@ -268,5 +270,74 @@ describe('axesOfVariants — a card’s own colours and sizes', () => {
     ]);
     expect(colours).toEqual([]);
     expect(sizes).toEqual(['M']);
+  });
+});
+
+describe('articleAfter — counting on from an article', () => {
+  it.each([
+    ['0043', 0, '0043'],
+    ['0043', 1, '0044'],
+    ['т015', 3, 'т018'],
+    // The width is kept, and outgrown rather than wrapped into a number already taken.
+    ['0999', 1, '1000'],
+    ['т99', 1, 'т100'],
+    // Only the digits it ENDS with: the owner typed this one, so the column fills down.
+    ['068-130', 1, '068-131'],
+    ['  0043 ', 2, '0045'],
+    // Longer than a double holds exactly — the last digits must survive.
+    ['A90071992547409930', 1, 'A90071992547409931'],
+  ])('%s + %i → %s', (start, step, want) => {
+    expect(articleAfter(start, step)).toBe(want);
+  });
+
+  it.each(['', 'літо', '0043-а', '   '])('has no next of «%s»', (start) => {
+    expect(articleAfter(start, 1)).toBeNull();
+  });
+});
+
+describe('planArticles — an article of its own for every row of the matrix', () => {
+  it('numbers nothing when no first article was given', () => {
+    expect(planArticles('', [undefined, undefined])).toEqual({ skus: ['', ''], problem: null });
+  });
+
+  it('counts on from the first article, one number a row', () => {
+    expect(planArticles('0043', [undefined, undefined, undefined])).toEqual({
+      skus: ['0043', '0044', '0045'],
+      problem: null,
+    });
+  });
+
+  it('keeps a row\'s own article and leaves no gap for it', () => {
+    expect(planArticles('т015', [undefined, 'літо-1', undefined]).skus).toEqual(['т015', 'літо-1', 'т016']);
+  });
+
+  it('steps over a number a row claimed by hand, so the batch never holds a pair', () => {
+    expect(planArticles('0043', [undefined, '0044', undefined, '0043']).skus).toEqual(['0045', '0044', '0046', '0043']);
+  });
+
+  it('keeps the articles typed in the rows when there is no first one', () => {
+    expect(planArticles('', ['a-1', undefined])).toEqual({ skus: ['a-1', ''], problem: null });
+  });
+
+  it('refuses the same article typed into two rows, naming it', () => {
+    expect(planArticles('0043', ['т1', ' т1 ']).problem).toBe(
+      'Артикул «т1» повторюється — у кожного варіанта має бути свій'
+    );
+  });
+
+  it('gives one row an article that ends in no number, exactly as typed', () => {
+    expect(planArticles('літо', [undefined])).toEqual({ skus: ['літо'], problem: null });
+    expect(planArticles('літо', ['a', undefined, 'b']).skus).toEqual(['a', 'літо', 'b']);
+  });
+
+  it('cannot count on from an article with no number in it', () => {
+    const plan = planArticles('літо', [undefined, undefined]);
+    expect(plan.problem).toMatch(/^Артикул має закінчуватися числом/);
+  });
+
+  it('refuses a numberless first article a row already carries', () => {
+    expect(planArticles('літо', ['літо', undefined]).problem).toBe(
+      'Артикул «літо» повторюється — у кожного варіанта має бути свій'
+    );
   });
 });

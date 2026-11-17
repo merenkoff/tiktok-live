@@ -502,6 +502,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                         autoBarcode={vertical.autoBarcode === true}
                         onChange={setMatrix}
                         resetKey={matrixReset}
+                        tagIds={draft.tagIds}
                       />
                     ) : (
                       <NewVariantFields
