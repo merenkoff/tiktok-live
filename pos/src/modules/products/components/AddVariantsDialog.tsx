@@ -122,6 +122,7 @@ export function AddVariantsDialog({
             existing={existing}
             autoBarcode={vertical.autoBarcode === true}
             onChange={setMatrix}
+            tagIds={tagIds}
           />
         ) : (
           <NewVariantFields
