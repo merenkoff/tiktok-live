@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { makeCatalogItem } from '../../test/utils';
 import type { Preorder } from '../../types';
 import {
+  techCardItems,
   deviceDay,
   fiscalItems,
   lowStockItems,
@@ -131,5 +132,40 @@ describe('navCounts', () => {
 
   it('is empty when nothing waits', () => {
     expect(navCounts([])).toEqual({});
+  });
+
+  it('counts an item that opens its page filtered on the page’s own row', () => {
+    const counts = navCounts(
+      techCardItems([
+        { leaf_count: 0, has_unpriced_leaf: false, food_cost_bps: null },
+        { leaf_count: 3, has_unpriced_leaf: true, food_cost_bps: null },
+        { leaf_count: 2, has_unpriced_leaf: false, food_cost_bps: 2500 },
+      ])
+    );
+    expect(counts['/admin/tech-cards']).toEqual({ count: 2, alert: false });
+    expect(counts['/admin/tech-cards?show=attention']).toBeUndefined();
+  });
+});
+
+describe('techCardItems', () => {
+  it('says nothing while every tech card can be trusted', () => {
+    expect(techCardItems([{ leaf_count: 2, has_unpriced_leaf: false, food_cost_bps: 6800 }])).toEqual([]);
+    expect(techCardItems([])).toEqual([]);
+  });
+
+  it('counts cards with no honest cost, and turns red for a dish sold at a loss', () => {
+    const [unknown] = techCardItems([
+      { leaf_count: 0, has_unpriced_leaf: false, food_cost_bps: null },
+      { leaf_count: 4, has_unpriced_leaf: true, food_cost_bps: null },
+    ]);
+    expect(unknown).toMatchObject({ tag: 'Техкарти', meta: '2', to: '/admin/tech-cards?show=attention', alert: false });
+    expect(unknown.text).toMatch(/2 техкарти без повної собівартості/);
+
+    const [loss] = techCardItems([
+      { leaf_count: 2, has_unpriced_leaf: false, food_cost_bps: 12000 },
+      { leaf_count: 0, has_unpriced_leaf: false, food_cost_bps: null },
+    ]);
+    expect(loss).toMatchObject({ meta: '2', alert: true });
+    expect(loss.text).toMatch(/1 страва продається дешевше за собівартість; 1 техкарта без повної/);
   });
 });
