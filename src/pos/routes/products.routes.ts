@@ -5,7 +5,8 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ensureModule, ensurePosAuth } from '../core/auth.js';
 import { pool } from '../../db.js';
-import { listTechCards } from '../composites.service.js';
+import { CompositeError, listTechCards, productsUsingIngredient, replaceIngredient } from '../composites.service.js';
+import type { ReplaceIngredientInput } from '../composites.service.js';
 import * as productsService from '../products.service.js';
 import { invalidatePublicMenu } from '../public-menu/menu.service.js';
 import * as markdownsService from '../markdowns.service.js';
@@ -104,6 +105,25 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     return listTechCards(pool, auth.storeId);
+  });
+
+  /**
+   * «Замінити в усіх рецептах» — one ingredient swapped for another in every
+   * recipe of the store, in one transaction (POS_VERTICALS.md §7s). The
+   * owner's alone: a recipe is the owner's half of a card. The menu journal
+   * gets a row for each card whose recipe moved.
+   */
+  fastify.post('/products/components/replace', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    const body = (request.body ?? {}) as ReplaceIngredientInput;
+    try {
+      const touched = await productsUsingIngredient(auth.storeId, Number(body.from_variant_id) || 0);
+      return await withMenuJournal(auth, touched, () => replaceIngredient(auth.storeId, body));
+    } catch (error) {
+      if (error instanceof CompositeError) return reply.code(400).send({ error: errorMessage(error) });
+      throw error;
+    }
   });
 
   // «Імпорт техкарт» (TechDocs/POS_ONBOARDING.md, O3): the client parses the

@@ -4,8 +4,8 @@
 
 // «Потребують уваги» — what the owner should look at today, read from the
 // endpoints that already exist rather than from a new one: today's stop-list
-// (a café), today's and overdue pre-orders, stock running low, and ПРРО
-// documents the retry cron gave up on. The same list feeds the numbers in the
+// (a café), today's and overdue pre-orders, stock running low, tech cards
+// whose cost cannot be trusted, and ПРРО documents the retry cron gave up on. The same list feeds the numbers in the
 // admin sidebar, so it lives in one small store both read.
 //
 // Every source is independent and optional: a store without the stock module
@@ -15,7 +15,7 @@
 import { create } from 'zustand';
 import { api } from '@pos/platform';
 import type { CatalogItem, LowStockRow, Preorder } from '../../types';
-import { CalendarClock, ChefHat, ShieldCheck, Warehouse, type Glyph } from '../../platform/glyphs';
+import { CalendarClock, ChefHat, FileText, ShieldCheck, Warehouse, type Glyph } from '../../platform/glyphs';
 import { ukPlural } from '../../lib/plural';
 import { formatQuantity, isWeighed } from '../../lib/weighed';
 
@@ -37,6 +37,8 @@ export interface AttentionSources {
   /** The store's vertical — only a café has a stop-list. */
   vertical: string;
   fiscalEnabled: boolean;
+  /** Does this store's vertical make composites at all; absent = ask anyway (the answer is then empty). */
+  recipes?: boolean;
 }
 
 /** `YYYY-MM-DD` of `at` on this device — the stop-list's own day (К3). */
@@ -158,6 +160,46 @@ export function fiscalItems(att: { documents: readonly unknown[]; sessions: read
   return out;
 }
 
+/** The slice of `GET /products/tech-cards` the count needs (`src/pos/composites.service.ts`). */
+export interface TechCardFigure {
+  leaf_count: number;
+  has_unpriced_leaf: boolean;
+  food_cost_bps: number | null;
+}
+
+/**
+ * Tech cards whose cost cannot be acted on — an empty recipe, an ingredient
+ * that was never received with a price — and dishes that cost more than they
+ * sell for. One row, leading to the page already filtered to them; red only
+ * when something sells at a loss.
+ */
+export function techCardItems(rows: readonly TechCardFigure[]): AttentionItem[] {
+  const unknown = rows.filter((r) => r.leaf_count === 0 || r.has_unpriced_leaf).length;
+  const loss = rows.filter((r) => r.food_cost_bps != null && r.food_cost_bps >= 10000).length;
+  const total = unknown + loss;
+  if (total === 0) return [];
+  const parts: string[] = [];
+  if (loss > 0) {
+    parts.push(`${loss} ${ukPlural(loss, 'страва продається', 'страви продаються', 'страв продаються')} дешевше за собівартість`);
+  }
+  if (unknown > 0) {
+    parts.push(
+      `${unknown} ${ukPlural(unknown, 'техкарта', 'техкарти', 'техкарт')} без повної собівартості — немає рецепта або ціни складника`
+    );
+  }
+  return [
+    {
+      key: 'tech-cards',
+      glyph: FileText,
+      text: parts.join('; '),
+      tag: 'Техкарти',
+      meta: String(total),
+      to: '/admin/tech-cards?show=attention',
+      alert: loss > 0,
+    },
+  ];
+}
+
 /** The sidebar's numbers, by route: everything on «Сьогодні», and each item's own page. */
 export function navCounts(items: readonly AttentionItem[]): Record<string, { count: number; alert?: boolean }> {
   const counts: Record<string, { count: number; alert?: boolean }> = {};
@@ -165,8 +207,10 @@ export function navCounts(items: readonly AttentionItem[]): Record<string, { cou
   for (const item of items) {
     if (!item.to) continue;
     const n = item.meta && /^\d+$/.test(item.meta) ? Number(item.meta) : 1;
-    const prev = counts[item.to];
-    counts[item.to] = { count: (prev?.count ?? 0) + n, alert: Boolean(prev?.alert || item.alert) };
+    // An item may open its page already filtered; the sidebar's row is the page.
+    const route = item.to.split('?')[0];
+    const prev = counts[route];
+    counts[route] = { count: (prev?.count ?? 0) + n, alert: Boolean(prev?.alert || item.alert) };
   }
   return counts;
 }
@@ -192,6 +236,9 @@ export async function loadAttention(src: AttentionSources, now = new Date()): Pr
       ? settle(api.getCatalog(), (items) => stopListItems(items, deviceDay(now)))
       : Promise.resolve([]),
     settle(api.stockLow(), lowStockItems),
+    src.recipes === false
+      ? Promise.resolve([])
+      : settle(api.posRequest<TechCardFigure[]>('get', '/products/tech-cards'), techCardItems),
   ]);
   return parts.flat();
 }

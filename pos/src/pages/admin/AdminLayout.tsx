@@ -7,6 +7,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@pos/platform';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { Nav } from '../../components/Nav';
+import { SidebarSearch } from '../../components/SidebarSearch';
 import { AppIcon } from '../../components/AppIcon';
 import { LogOut } from '../../platform/glyphs';
 import { navCounts, useAttention } from './attention';
@@ -44,6 +45,7 @@ export function AdminLayout() {
             <p className="text-xs text-sq-muted truncate">{auth?.staff.display_name}</p>
           </div>
         </div>
+        <SidebarSearch />
         <nav
           ref={navRef}
           aria-label="Кабінет"

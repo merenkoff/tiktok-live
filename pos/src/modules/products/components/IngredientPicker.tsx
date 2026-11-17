@@ -2,8 +2,8 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useMemo, useState, type KeyboardEvent } from 'react';
-import { Search, X } from '@pos/platform/ui';
+import { useMemo, useState, type KeyboardEvent, type Ref } from 'react';
+import { Plus, Search, X } from '@pos/platform/ui';
 import type { ComponentOption } from './componentOptions';
 import { panelFieldClass } from './formStyles';
 import { matchesWords, queryWords } from '../lib/modifierWords';
@@ -24,11 +24,29 @@ export function IngredientPicker({
   value,
   onChange,
   testId,
+  placeholder = 'Що списати: молоко, сироп…',
+  ariaLabel = 'Що списати зі складу',
+  noteOf,
+  onCreate,
+  inputRef,
+  surface = 'panel',
 }: {
   options: ComponentOption[];
   value: number | null;
   onChange: (variantId: number | null) => void;
   testId?: string;
+  placeholder?: string;
+  ariaLabel?: string;
+  /** What stands on the right of a line instead of the bare unit — «40 ₴/л». */
+  noteOf?: (option: ComponentOption) => string;
+  /**
+   * «Create it»: offered under the matches whenever something is typed, so a
+   * missing ingredient is made without leaving the recipe.
+   */
+  onCreate?: (name: string) => void;
+  inputRef?: Ref<HTMLInputElement>;
+  /** Where the box sits: on a grey panel its well is white, on the white page grey. */
+  surface?: 'panel' | 'page';
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -50,6 +68,13 @@ export function IngredientPicker({
     setOpen(false);
   }
 
+  function create() {
+    const name = query.trim();
+    setQuery('');
+    setOpen(false);
+    onCreate?.(name);
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -58,9 +83,11 @@ export function IngredientPicker({
       e.preventDefault();
       setCursor((c) => Math.max(0, c - 1));
     } else if (e.key === 'Enter') {
-      // Never the dialog's submit: Enter here chooses the highlighted line.
+      // Never the dialog's submit: Enter here chooses the highlighted line —
+      // or, with nothing to choose, makes the ingredient that was typed.
       e.preventDefault();
       if (shown[cursor]) pick(shown[cursor]);
+      else if (onCreate && query.trim() !== '') create();
     } else if (e.key === 'Escape' && open) {
       e.stopPropagation();
       setOpen(false);
@@ -90,13 +117,16 @@ export function IngredientPicker({
       <div className="relative">
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none" />
         <input
-          className={`${panelFieldClass} !pl-9`}
-          placeholder="Що списати: молоко, сироп…"
+          ref={inputRef}
+          className={surface === 'page' ? 'sq-input !pl-9' : `${panelFieldClass} !pl-9`}
+          placeholder={placeholder}
           value={query}
           role="combobox"
           aria-expanded={open}
-          aria-label="Що списати зі складу"
+          aria-label={ariaLabel}
           onFocus={() => setOpen(true)}
+          // Closes a beat later, so a tap on a line of the list still lands.
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
           onChange={(e) => {
             setQuery(e.target.value);
             setCursor(0);
@@ -120,16 +150,34 @@ export function IngredientPicker({
                 onClick={() => pick(option)}
               >
                 <span className="min-w-0 truncate text-sq-text">{option.caption}</span>
-                <span className="shrink-0 text-[13px] text-sq-muted">{option.unit}</span>
+                <span className="shrink-0 text-[13px] text-sq-muted tabular-nums">
+                  {noteOf ? noteOf(option) : option.unit}
+                </span>
               </button>
             </li>
           ))}
-          {shown.length === 0 && (
+          {shown.length === 0 && !onCreate && (
             <li className="px-3 py-2.5 text-[15px] text-sq-muted">Нічого не знайдено — перевірте назву в «Товарах»</li>
+          )}
+          {shown.length === 0 && onCreate && query.trim() === '' && (
+            <li className="px-3 py-2.5 text-[15px] text-sq-muted">Почніть набирати назву</li>
           )}
           {matches.length > SHOWN && (
             <li className="px-3 py-2 text-[13px] text-sq-muted">
               Ще {matches.length - SHOWN} — уточніть назву
+            </li>
+          )}
+          {onCreate && query.trim() !== '' && (
+            <li className="shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
+              <button
+                type="button"
+                className="w-full min-h-10 px-3 flex items-center gap-2 text-left text-[15px] font-semibold text-sq-blue hover:bg-sq-sidebar"
+                onClick={create}
+                data-testid="ingredient-create"
+              >
+                <Plus size={18} />
+                Створити інгредієнт «{query.trim()}»
+              </button>
             </li>
           )}
         </ul>

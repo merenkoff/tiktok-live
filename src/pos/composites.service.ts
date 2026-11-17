@@ -424,6 +424,160 @@ export async function setComponents(
   if (options.recompute !== false) await recomputeFlat(client, storeId);
 }
 
+// ── one ingredient swapped for another, in every recipe ─────────────
+
+export interface ReplaceIngredientInput {
+  from_variant_id?: unknown;
+  to_variant_id?: unknown;
+  factor?: unknown;
+  include_modifiers?: unknown;
+}
+
+export interface ReplaceIngredientResult {
+  /** Recipes (variants) whose lines changed. */
+  recipes: number;
+  /** Cards those recipes belong to. */
+  products: number;
+  /** Modifier answers repointed. */
+  modifiers: number;
+}
+
+/** A multiplier bigger than this is a typo, not a conversion. */
+const MAX_REPLACE_FACTOR = 1000;
+
+function replaceArgs(raw: ReplaceIngredientInput): { from: number; to: number; factor: number; withModifiers: boolean } {
+  const from = Number(raw.from_variant_id);
+  const to = Number(raw.to_variant_id);
+  if (!Number.isInteger(from) || from <= 0 || !Number.isInteger(to) || to <= 0) {
+    throw new CompositeError('Вкажіть, що і на що замінити');
+  }
+  if (from === to) throw new CompositeError('Замінити можна лише на інший інгредієнт');
+  // Never defaulted: a missing multiplier that silently became 0 or 1 is how
+  // other tools empty every recipe at once.
+  const factor = typeof raw.factor === 'string' ? Number(raw.factor.replace(',', '.')) : Number(raw.factor);
+  if (raw.factor === undefined || raw.factor === null || raw.factor === '' || !Number.isFinite(factor) || factor <= 0) {
+    throw new CompositeError('Вкажіть множник кількості — число, більше за нуль');
+  }
+  if (factor > MAX_REPLACE_FACTOR) throw new CompositeError(`Множник не може бути більшим за ${MAX_REPLACE_FACTOR}`);
+  return { from, to, factor, withModifiers: raw.include_modifiers === true };
+}
+
+/**
+ * The cards whose recipes hold an ingredient — read BEFORE a replacement, so
+ * the menu journal can say what each card's recipe was.
+ */
+export async function productsUsingIngredient(
+  storeId: number,
+  variantId: number,
+  client: DbClient = pool
+): Promise<number[]> {
+  const result = await client.query(
+    `SELECT DISTINCT v.product_id
+     FROM pos_product_components c
+     JOIN pos_variants v ON v.id = c.variant_id
+     WHERE c.store_id = $1 AND c.component_variant_id = $2
+     ORDER BY v.product_id`,
+    [storeId, variantId]
+  );
+  return result.rows.map((row: Record<string, unknown>) => Number(row.product_id));
+}
+
+/**
+ * Swap one ingredient for another in every recipe of the store — the
+ * supplier changed, the cream is another cream now.
+ *
+ * One transaction under the store's recipe lock: every recipe that holds
+ * `from` gets `to` in the same place with the quantity × `factor` (rounded,
+ * never below one unit); a recipe that already holds `to` has the two
+ * quantities ADDED rather than the ingredient listed twice. Each rewritten
+ * recipe goes through `validateComponents`, so a swap that would make a
+ * recipe contain itself, or run deeper than the vertical allows, refuses the
+ * whole thing — and the expanded recipes are rebuilt once, after the last.
+ * Modifier answers that write `from` off follow only when asked to.
+ *
+ * It is its own undo: the same call the other way round, with the inverse
+ * multiplier.
+ */
+export async function replaceIngredient(
+  storeId: number,
+  raw: ReplaceIngredientInput
+): Promise<ReplaceIngredientResult> {
+  const { from, to, factor, withModifiers } = replaceArgs(raw);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(
+      `SELECT id, is_active FROM pos_variants WHERE store_id = $1 AND id = ANY($2::bigint[])`,
+      [storeId, [from, to]]
+    );
+    const byId = new Map(found.rows.map((row: Record<string, unknown>) => [Number(row.id), Boolean(row.is_active)]));
+    if (!byId.has(from)) throw new CompositeError('Інгредієнт, який замінюєте, не знайдено');
+    if (!byId.get(to)) throw new CompositeError('Інгредієнт для заміни не знайдено');
+
+    await lockRecipes(client, storeId);
+    const holders = await client.query(
+      `SELECT c.variant_id, v.product_id
+       FROM pos_product_components c
+       JOIN pos_variants v ON v.id = c.variant_id
+       WHERE c.store_id = $1 AND c.component_variant_id = $2
+       ORDER BY c.variant_id`,
+      [storeId, from]
+    );
+    const variantIds = holders.rows.map((row: Record<string, unknown>) => Number(row.variant_id));
+    if (variantIds.includes(to)) {
+      throw new CompositeError('Заміна сама зроблена з цього інгредієнта — її рецепт посилався б на себе');
+    }
+
+    for (const variantId of variantIds) {
+      const lines = await client.query(
+        `SELECT component_variant_id, quantity FROM pos_product_components
+         WHERE store_id = $1 AND variant_id = $2
+         ORDER BY sort_order ASC, id ASC`,
+        [storeId, variantId]
+      );
+      const next: ComponentInput[] = [];
+      for (const row of lines.rows as Array<Record<string, unknown>>) {
+        const id = Number(row.component_variant_id);
+        const quantity = Number(row.quantity);
+        const line =
+          id === from
+            ? { component_variant_id: to, quantity: Math.max(1, Math.round(quantity * factor)) }
+            : { component_variant_id: id, quantity };
+        const twin = next.find((n) => n.component_variant_id === line.component_variant_id);
+        if (twin) twin.quantity += line.quantity;
+        else next.push(line);
+      }
+      await setComponents(client, storeId, variantId, next, { recompute: false });
+    }
+    if (variantIds.length > 0) await recomputeFlat(client, storeId);
+
+    let modifiers = 0;
+    if (withModifiers) {
+      const moved = await client.query(
+        `UPDATE pos_modifiers
+         SET component_variant_id = $3,
+             component_quantity = GREATEST(1, ROUND(component_quantity * $4::numeric))::int,
+             updated_at = NOW()
+         WHERE store_id = $1 AND component_variant_id = $2`,
+        [storeId, from, to, factor]
+      );
+      modifiers = moved.rowCount ?? 0;
+    }
+
+    await client.query('COMMIT');
+    return {
+      recipes: variantIds.length,
+      products: new Set(holders.rows.map((row: Record<string, unknown>) => Number(row.product_id))).size,
+      modifiers,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * How many whole composites the leaves allow, for a derived composite.
  * An empty composition is 0 available, never "unlimited".
