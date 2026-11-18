@@ -19,6 +19,8 @@ export interface OnHandRow {
   barcode: string | null;
   quantity: number;
   cost_cents: number;
+  /** The precise purchase price, thousandths of a kopeck per base unit (migration 103). */
+  cost_milli: number;
   price_cents: number;
   /**
    * The purchase pack (migration 054), so «Керувати залишком» can offer the
@@ -51,6 +53,7 @@ export interface MovementRow {
   staff_id: number | null;
   staff_name: string | null;
   unit_cost_cents: number | null;
+  unit_cost_milli: number | null;
   occurred_at: Date;
   created_at: Date;
 }
@@ -79,7 +82,7 @@ export interface MovementSummaryRow {
 export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
   const result = await pool.query(
     `SELECT v.id AS variant_id, v.product_id, p.name AS product_name, v.label, v.unit,
-            v.sku, v.barcode, s.quantity, v.cost_cents, v.price_cents,
+            v.sku, v.barcode, s.quantity, v.cost_cents, v.cost_milli, v.price_cents,
             v.pack_qty, v.pack_label, v.price_per
      FROM pos_stock s
      JOIN pos_variants v ON v.id = s.variant_id
@@ -109,6 +112,7 @@ export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
     barcode: row.barcode,
     quantity: Number(row.quantity),
     cost_cents: Number(row.cost_cents),
+    cost_milli: Number(row.cost_milli),
     price_cents: Number(row.price_cents),
     pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
     pack_label: String(row.pack_label ?? ''),
@@ -175,6 +179,7 @@ export async function listMovements(
     staff_id: row.staff_id == null ? null : Number(row.staff_id),
     staff_name: row.staff_name ?? null,
     unit_cost_cents: row.unit_cost_cents == null ? null : Number(row.unit_cost_cents),
+    unit_cost_milli: row.unit_cost_milli == null ? null : Number(row.unit_cost_milli),
     occurred_at: row.occurred_at,
     created_at: row.created_at,
   }));

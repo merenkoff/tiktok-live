@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, uahInputToCents } from '@pos/platform';
+import { api, uahInputToCents, useAuthStore } from '@pos/platform';
 import type { Product, ProductComponentInput } from '@pos/platform';
 import { Dialog } from './Dialog';
 import { RecipeEditor, type RecipeSource } from './RecipeEditor';
@@ -14,6 +14,9 @@ import { foodCostPercent } from '../data/techCards';
 import { ingredientOptions } from '../lib/ingredientOptions';
 import { centsToInput } from '../lib/productDraft';
 import { foodCostBps, recipeCost, type CostIndex } from '../lib/recipeCost';
+import { recipeLineOf } from '../lib/recipeLoss';
+import { buildTechCardSheet } from '../lib/techCardSheet';
+import { useTechCardPrint } from '../lib/useTechCardPrint';
 
 interface SizeDraft {
   id: number;
@@ -29,10 +32,7 @@ function draftOf(product: Product): SizeDraft[] {
       id: v.id,
       label: v.label,
       price: centsToInput(v.price_cents),
-      components: (v.components ?? []).map((c) => ({
-        component_variant_id: c.component_variant_id,
-        quantity: c.quantity,
-      })),
+      components: (v.components ?? []).map(recipeLineOf),
     }));
 }
 
@@ -52,6 +52,7 @@ export function RecipeDialog({
   maxDepth,
   units,
   targetBps,
+  kitchen,
   onProductChanged,
   onSaved,
   onClose,
@@ -63,6 +64,8 @@ export function RecipeDialog({
   maxDepth: number;
   units: readonly string[];
   targetBps: number | null;
+  /** A café or a restaurant: its recipes may state gross, loss and net. */
+  kitchen: boolean;
   /** An ingredient was made or priced from here. */
   onProductChanged: (product: Product) => void;
   onSaved: () => void;
@@ -74,6 +77,8 @@ export function RecipeDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
+  const { print, portal } = useTechCardPrint();
 
   const options = useMemo(
     () => ingredientOptions([...products], { excludeProductId: product.id, maxDepth }),
@@ -99,7 +104,7 @@ export function RecipeDialog({
           key: `v${v.id}`,
           title: v.label ? `${other.name} · ${v.label}` : other.name,
           sibling: false,
-          components: v.components.map((c) => ({ component_variant_id: c.component_variant_id, quantity: c.quantity })),
+          components: v.components.map(recipeLineOf),
         });
       }
     }
@@ -271,14 +276,28 @@ export function RecipeDialog({
             priceCents: uahInputToCents(active.price),
             targetBps,
             selfId: active.id,
-            onSetCost: async (variantId, baseCents) => {
-              onProductChanged(await api.updateVariant(variantId, { cost_cents: baseCents }));
+            onSetCost: async (variantId, baseMilli) => {
+              onProductChanged(await api.updateVariant(variantId, { cost_milli: baseMilli }));
             },
           }}
           create={{ units, onCreated: onProductChanged }}
           sources={sources}
+          losses={kitchen}
+          // What is on screen is what is printed — saved or not.
+          onPrint={() =>
+            print(
+              buildTechCardSheet({
+                store: storeName,
+                title: product.name,
+                size: active.label,
+                components: active.components,
+                index: costs,
+              })
+            )
+          }
           emptyText="Рецепт порожній. Додайте складники — без них собівартість невідома."
         />
+        {portal}
       </div>
     </Dialog>
   );

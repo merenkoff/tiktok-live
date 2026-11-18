@@ -100,14 +100,17 @@ describe.skipIf(!hasDb)('POST /api/pos/products/tech-cards/import', () => {
     expect(plan).toMatchObject({ ok: true, applied: false, errors: [] });
     expect(plan.totals).toEqual({ dishes: 3, becomes_derived: 3, replaced: 0, ingredients_new: 4, prices_set: 5 });
     const borshch = plan.dishes.find((d: { dish: string }) => d.dish === 'Борщ');
-    // 80 г × 2 коп + 50 г × 2 коп (15 ₴/кг rounds to 2 kop/g) + 70 г × 28 коп = 160 + 100 + 1960
-    expect(borshch).toMatchObject({ becomes: 'derived', cost_cents: 2220, price_cents: 15500, food_cost_bps: 1432, error: null });
+    // To the kopeck per kilogram: 80 г × 20 ₴/кг + 50 г × 15 ₴/кг + 70 г × 280 ₴/кг
+    // = 1,60 + 0,75 + 19,60 = 21,95 ₴. (Whole kopecks per gram made the cabbage
+    // 20 ₴/кг and the dish 22,20.)
+    expect(borshch).toMatchObject({ becomes: 'derived', cost_cents: 2195, price_cents: 15500, food_cost_bps: 1416, error: null });
     expect(borshch.components).toEqual([
       { ingredient: 'Буряк', quantity: 80, unit: 'г', is_new: false },
       { ingredient: 'Капуста', quantity: 50, unit: 'г', is_new: true },
       { ingredient: 'Яловичина', quantity: 70, unit: 'г', is_new: true },
     ]);
-    expect(plan.ingredients.find((i: { name: string }) => i.name === 'Буряк')).toMatchObject({ cost_cents: 2, price_changed: true, is_new: false });
+    expect(plan.ingredients.find((i: { name: string }) => i.name === 'Буряк')).toMatchObject({ cost_cents: 2, cost_milli: 2000, price_changed: true, is_new: false });
+    expect(plan.ingredients.find((i: { name: string }) => i.name === 'Капуста')).toMatchObject({ cost_milli: 1500, is_new: true });
     expect((await product('Борщ')).kind).toBe('simple');
     expect(await product('Капуста')).toBeUndefined();
   });
@@ -146,7 +149,7 @@ describe.skipIf(!hasDb)('POST /api/pos/products/tech-cards/import', () => {
 
     const cards = await app.inject({ method: 'GET', url: '/api/pos/products/tech-cards', headers: auth(store.ownerToken) });
     const borshchCard = cards.json().find((c: { product_name: string }) => c.product_name === 'Борщ');
-    expect(borshchCard).toMatchObject({ cost_cents: 2220 });
+    expect(borshchCard).toMatchObject({ cost_cents: 2195, cost_milli: 2_195_000, food_cost_bps: 1416 });
   });
 
   it('runs again: a dish’s recipe is replaced wholesale, not added to', async () => {
@@ -191,11 +194,15 @@ describe.skipIf(!hasDb)('POST /api/pos/products/tech-cards/import', () => {
     expect(await recipe('Борщ')).toEqual(['Буряк 100']);
   });
 
-  it('keeps a price below a kopeck from reading as «unknown»', async () => {
+  it('keeps a price below a kopeck a millilitre as it was typed, never as «unknown»', async () => {
     const res = await send([{ dish: 'Компот', variant: '1 л', ingredient: 'Вода фільтрована', quantity: '900', unit: 'мл', price: '3' }, { dish: 'Компот', variant: '300 мл', ingredient: 'Вода фільтрована', quantity: '270', unit: 'мл' }]);
     expect(res.json().ok).toBe(true);
-    expect(res.json().ingredients[0]).toMatchObject({ name: 'Вода фільтрована', cost_cents: 1 });
-    expect(res.json().warnings.join('\n')).toMatch(/дешевший за копійку за мл — записано 1 коп\/мл/);
+    // 3 ₴ a litre is 0,3 kopecks a millilitre: 300 thousandths, exactly. The
+    // rounded copy older clients read is 0, and no sum reads that copy.
+    expect(res.json().ingredients[0]).toMatchObject({ name: 'Вода фільтрована', cost_cents: 0, cost_milli: 300 });
+    expect(res.json().warnings.join('\n')).not.toMatch(/найменшу можливу/);
+    // 900 мл × 0,3 коп = 2,70 ₴ — a cost, where whole kopecks had to invent «1 коп/мл» (9 ₴).
+    expect(res.json().dishes[0]).toMatchObject({ cost_cents: 270 });
   });
 
   it('is the owner’s alone', async () => {

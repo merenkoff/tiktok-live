@@ -191,6 +191,13 @@ export const POS_MIGRATIONS = [
   // The buyer's age asked once per receipt with excise goods: the owner's
   // switch and the till's answer (TechDocs/POS_AGE_CHECK.md).
   '102_pos_age_check.sql',
+  // A purchase price to the kopeck per kilogram or litre: thousandths of a
+  // kopeck per base unit beside the rounded `cost_cents`, kept in step by
+  // triggers (TechDocs/POS_VERTICALS.md §7t).
+  '103_pos_cost_precision.sql',
+  // Gross and net in a recipe: a line's loss share, and an ingredient's usual
+  // loss as a typing aid (TechDocs/POS_VERTICALS.md §7t).
+  '104_pos_recipe_losses.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -7,11 +7,11 @@ import type { Product } from '@pos/platform';
 import {
   buildCostIndex,
   foodCostBps,
-  humanPriceToBaseCents,
+  baseMilliToHumanPrice,
+  humanPriceToBaseMilli,
   moneyText,
   priceForTarget,
   recipeCost,
-  roundedByStep,
   scaleRecipe,
   unitCostOf,
   unitPriceText,
@@ -44,7 +44,9 @@ function product(
         sku: null,
         barcode: null,
         price_cents: opts.price ?? 0,
-        cost_cents: opts.cost ?? 0,
+        // `cost` is in thousandths of a kopeck per base unit, as the server keeps it.
+        cost_cents: Math.round((opts.cost ?? 0) / 1000),
+        cost_milli: opts.cost ?? 0,
         is_active: true,
         quantity: 0,
         components: (opts.parts ?? []).map(([variantId, quantity], index) => ({
@@ -67,12 +69,26 @@ function product(
  * back from `listTechCards`. If one side changes its arithmetic, one of the
  * two tests fails.
  *
- *   A 7 коп/г, B 3 коп/г
- *   prep  (derived) = 10 A + 5 B                → 85, folded into what holds it
- *   stock (own, made ahead, costs 40 a piece)   → a shelf of its own
- *   dish  (derived) = 2 prep + 3 stock + 4 A    → 170 + 120 + 28 = 318
+ * Costs are thousandths of a kopeck per base unit, so the case uses prices no
+ * whole kopeck per gram could hold:
+ *
+ *   A 35,50 ₴/кг = 3550, B 12,73 ₴/кг = 1273
+ *   prep  (derived) = 10 A + 5 B                → 41 865, folded into what holds it
+ *   stock (own, made ahead, 40 коп a piece)     → a shelf of its own, 40 000
+ *   dish  (derived) = 2 prep + 3 stock + 4 A    → 83 730 + 120 000 + 14 200 = 217 930
+ *                                                → 2,18 ₴, and 21,79 % of a 10 ₴ price:
+ *                                                  the share is taken BEFORE the rounding.
  */
-const PARITY = { a: 7, b: 3, stock: 40, price: 1000, cost: 318, bps: 3180, costWithoutB: 288 };
+const PARITY = {
+  a: 3550,
+  b: 1273,
+  stock: 40_000,
+  price: 1000,
+  costMilli: 217_930,
+  cost: 218,
+  bps: 2179,
+  costWithoutB: 205,
+};
 
 function parityCatalogue(bCost = PARITY.b): Product[] {
   return [
@@ -93,13 +109,16 @@ function parityCatalogue(bCost = PARITY.b): Product[] {
 describe('recipeCost: the server’s sum, live', () => {
   it('folds a recipe assembled on sale, and reads one made ahead as its own shelf', () => {
     const index = buildCostIndex(parityCatalogue());
-    expect(unitCostOf(index, 30)).toEqual({ cents: 85, unpriced: false });
+    expect(unitCostOf(index, 30)).toEqual({ milli: 41_865, unpriced: false });
     // Made ahead: its own purchase price, however dear its recipe looks.
-    expect(unitCostOf(index, 40)).toEqual({ cents: PARITY.stock, unpriced: false });
+    expect(unitCostOf(index, 40)).toEqual({ milli: PARITY.stock, unpriced: false });
 
     const dish = index.get(50)!;
     const cost = recipeCost(index, dish.components, 50);
-    expect(cost.lines.map((l) => l.lineCents)).toEqual([170, 120, 28]);
+    expect(cost.lines.map((l) => l.lineMilli)).toEqual([83_730, 120_000, 14_200]);
+    // Each line reads in whole kopecks; the total is rounded from the exact sum, not from these.
+    expect(cost.lines.map((l) => l.lineCents)).toEqual([84, 120, 14]);
+    expect(cost.milli).toBe(PARITY.costMilli);
     expect(cost.cents).toBe(PARITY.cost);
     expect(cost.unpriced).toBe(false);
     expect(foodCostBps(cost, PARITY.price)).toBe(PARITY.bps);
@@ -137,18 +156,18 @@ describe('recipeCost: the server’s sum, live', () => {
     expect(priceForTarget(318, 0)).toBeNull();
   });
 
-  it('prices a gram by the kilogram and a millilitre by the litre, and says when the step rounded', () => {
-    expect(unitPriceText(60, 'г')).toBe('600 ₴/кг');
-    expect(unitPriceText(4, 'мл')).toBe('40 ₴/л');
-    expect(unitPriceText(950, 'шт')).toBe('9,50 ₴/шт');
+  it('prices a gram by the kilogram and a millilitre by the litre — to the kopeck', () => {
+    expect(unitPriceText(60_000, 'г')).toBe('600 ₴/кг');
+    expect(unitPriceText(3550, 'г')).toBe('35,50 ₴/кг');
+    expect(unitPriceText(4000, 'мл')).toBe('40 ₴/л');
+    expect(unitPriceText(950_000, 'шт')).toBe('9,50 ₴/шт');
     expect(moneyText(123456)).toBe('1 234,56 ₴');
     expect(moneyText(-500)).toBe('−5 ₴');
-    // 35 ₴/кг is 3,5 коп/г: stored as 4 — and the caller says so.
-    expect(humanPriceToBaseCents(3500, 'г')).toBe(4);
-    expect(roundedByStep(3500, 'г')).toBe(true);
-    expect(roundedByStep(4000, 'г')).toBe(false);
-    expect(humanPriceToBaseCents(950, 'шт')).toBe(950);
-    expect(roundedByStep(950, 'шт')).toBe(false);
+    // 35,50 ₴/кг is 3,55 коп/г: kept exactly, where whole kopecks a gram made it 40 ₴/кг.
+    expect(humanPriceToBaseMilli(3550, 'г')).toBe(3550);
+    expect(baseMilliToHumanPrice(3550, 'г')).toBe(3550);
+    expect(humanPriceToBaseMilli(950, 'шт')).toBe(950_000);
+    expect(baseMilliToHumanPrice(950_000, 'шт')).toBe(950);
   });
 
   it('scales a recipe for another size, never below one unit', () => {
@@ -161,9 +180,13 @@ describe('recipeCost: the server’s sum, live', () => {
         1.5
       )
     ).toEqual([
-      { component_variant_id: 1, quantity: 27 },
-      { component_variant_id: 2, quantity: 2 },
+      { component_variant_id: 1, quantity: 27, loss_bps: 0 },
+      { component_variant_id: 2, quantity: 2, loss_bps: 0 },
     ]);
     expect(scaleRecipe([{ component_variant_id: 1, quantity: 1 }], 0.2)[0].quantity).toBe(1);
+    // A loss is a share of the line: a bigger portion peels the same fifth away.
+    expect(scaleRecipe([{ component_variant_id: 1, quantity: 125, loss_bps: 2000 }], 2)).toEqual([
+      { component_variant_id: 1, quantity: 250, loss_bps: 2000 },
+    ]);
   });
 });

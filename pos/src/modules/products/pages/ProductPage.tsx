@@ -150,8 +150,8 @@ function ProductCard({ id }: { id: string | undefined }) {
     setProducts((prev) => (prev.some((p) => p.id === next.id) ? prev.map((p) => (p.id === next.id ? next : p)) : [...prev, next]));
   }, []);
   const setIngredientCost = useCallback(
-    async (variantId: number, baseCents: number) => {
-      putProduct(await api.updateVariant(variantId, { cost_cents: baseCents }));
+    async (variantId: number, baseMilli: number) => {
+      putProduct(await api.updateVariant(variantId, { cost_milli: baseMilli }));
     },
     [putProduct]
   );

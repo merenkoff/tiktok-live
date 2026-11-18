@@ -11,8 +11,9 @@
 //
 // What it does, per the rules every hand edit already follows:
 //   · an ingredient it does not find is created — `sellable = false`, tagged
-//     «Складники», its price stored per BASE unit (kopecks per gram, per ml,
-//     per piece), because that is what `cost_cents` has always meant;
+//     «Складники», its price stored per BASE unit (per gram, per ml, per
+//     piece) in thousandths of a kopeck — so the table's «35,50 за кг» is kept
+//     to the kopeck (`cost.ts`, migration 103);
 //   · a dish found as `simple` with nothing on the shelf becomes a `derived`
 //     composite (cooked when sold, availability from its ingredients); one
 //     with stock is refused — a derived dish has no shelf of its own, so the
@@ -25,6 +26,7 @@ import { lockRecipes, recomputeFlat, setComponents } from './composites.service.
 import { createProductInTx } from './products.service.js';
 import { invalidatePublicMenu } from './public-menu/menu.service.js';
 import { verticalOrDefault } from './verticals/index.js';
+import { foodCostBps, MILLI, milliToCents } from './cost.js';
 
 /** A whole-request refusal (not a row's) → 400. */
 export class TechCardImportError extends Error {
@@ -88,7 +90,10 @@ export interface PlannedDish {
 export interface PlannedIngredient {
   name: string;
   unit: BaseUnit;
+  /** Per base unit, rounded to whole kopecks — the figure older clients read. */
   cost_cents: number | null;
+  /** Per base unit, in thousandths of a kopeck — what is written. */
+  cost_milli: number | null;
   is_new: boolean;
   price_changed: boolean;
 }
@@ -111,7 +116,7 @@ interface CatalogVariant {
   id: number;
   label: string;
   unit: string;
-  cost_cents: number;
+  cost_milli: number;
   price_cents: number;
   on_hand: number;
   weighed: boolean;
@@ -181,13 +186,14 @@ function parseRows(input: TechCardRowInput[], warnings: string[]): { rows: Parse
     if (priceText) {
       const price = number(priceText);
       if (price == null || price < 0) return void errors.push(`${at}: ціна «${priceText}» — потрібне число, грн за ${PRICE_PER[unit.base].word}`);
-      // The price column is per kg / l / piece; `cost_cents` is per base unit.
-      const exact = (price * 100) / PRICE_PER[unit.base].baseUnits;
+      // The price column is per kg / l / piece; the cost is kept per base unit,
+      // in thousandths of a kopeck — a price per kilogram survives to the kopeck.
+      const exact = (price * 100 * MILLI) / PRICE_PER[unit.base].baseUnits;
       let cost = Math.round(exact);
       if (exact > 0 && cost === 0) {
         cost = 1;
         warnings.push(
-          `«${ingredient}» дешевший за копійку за ${unit.base} — записано 1 коп/${unit.base}, бо 0 означав би «ціна невідома»`
+          `«${ingredient}» надто дешевий, щоб записати ціну за ${unit.base} — записано найменшу можливу, бо 0 означав би «ціна невідома»`
         );
       }
       row.cost = cost;
@@ -200,7 +206,7 @@ function parseRows(input: TechCardRowInput[], warnings: string[]): { rows: Parse
 async function loadCatalog(storeId: number): Promise<Map<string, CatalogProduct[]>> {
   const result = await pool.query(
     `SELECT p.id, p.name, p.kind, p.stock_mode,
-            v.id AS variant_id, v.label, v.unit, v.cost_cents, v.price_cents, v.price_per,
+            v.id AS variant_id, v.label, v.unit, v.cost_milli, v.price_cents, v.price_per,
             COALESCE(s.quantity, 0)::int AS on_hand
        FROM pos_products p
        JOIN pos_variants v ON v.product_id = p.id AND v.is_active
@@ -227,7 +233,7 @@ async function loadCatalog(storeId: number): Promise<Map<string, CatalogProduct[
       id: Number(r.variant_id),
       label: String(r.label ?? ''),
       unit: String(r.unit ?? 'шт'),
-      cost_cents: Number(r.cost_cents ?? 0),
+      cost_milli: Number(r.cost_milli ?? 0),
       price_cents: Number(r.price_cents ?? 0),
       on_hand: Number(r.on_hand ?? 0),
       weighed: Number(r.price_per ?? 1) > 1,
@@ -263,7 +269,7 @@ async function buildPlan(storeId: number, input: TechCardRowInput[]): Promise<{ 
     let entry = ingredients.get(key);
     if (!entry) {
       const found = catalog.get(key) ?? [];
-      entry = { name: row.ingredient, unit: row.unit, cost_cents: null, is_new: found.length === 0, price_changed: false };
+      entry = { name: row.ingredient, unit: row.unit, cost_cents: null, cost_milli: null, is_new: found.length === 0, price_changed: false };
       if (found.length > 1) entry.errorText = `складник «${row.ingredient}» неоднозначний: у магазині ${found.length} товари з такою назвою`;
       else if (found.length === 1) {
         const [product] = found;
@@ -272,7 +278,7 @@ async function buildPlan(storeId: number, input: TechCardRowInput[]): Promise<{ 
         } else {
           entry.variant = product.variants[0];
           entry.unit = product.variants[0].unit as BaseUnit;
-          entry.cost_cents = product.variants[0].cost_cents || null;
+          entry.cost_milli = product.variants[0].cost_milli || null;
           if (product.variants[0].weighed) entry.errorText = `«${row.ingredient}» продається на вагу — ваговий товар не може бути складником`;
         }
       }
@@ -286,13 +292,13 @@ async function buildPlan(storeId: number, input: TechCardRowInput[]): Promise<{ 
         warnings.push(`«${row.ingredient}»: різні ціни в таблиці — береться остання (рядок ${row.line})`);
       }
       entry.seenPrice = row.cost;
-      entry.price_changed = entry.is_new || entry.variant?.cost_cents !== row.cost;
-      entry.cost_cents = row.cost;
+      entry.price_changed = entry.is_new || entry.variant?.cost_milli !== row.cost;
+      entry.cost_milli = row.cost;
     }
   }
   for (const entry of ingredients.values()) {
     if (entry.errorText) errors.push(entry.errorText[0].toUpperCase() + entry.errorText.slice(1));
-    else if (entry.is_new && entry.cost_cents == null) warnings.push(`«${entry.name}» без ціни — фудкост страв із ним буде «—», доки не прийде прихід`);
+    else if (entry.is_new && entry.cost_milli == null) warnings.push(`«${entry.name}» без ціни — фудкост страв із ним буде «—», доки не прийде прихід`);
   }
 
   // ── Dishes ──
@@ -383,15 +389,15 @@ async function buildPlan(storeId: number, input: TechCardRowInput[]): Promise<{ 
     for (const part of dish.components) {
       const ing = ingredients.get(lower(part.ingredient))!;
       // A recipe inside a recipe has no single price here; the tech-card page computes it.
-      if (ing.cost_cents == null || dishNames.has(lower(part.ingredient))) {
+      if (ing.cost_milli == null || dishNames.has(lower(part.ingredient))) {
         cost = Number.NaN;
         break;
       }
-      cost += part.quantity * ing.cost_cents;
+      cost += part.quantity * ing.cost_milli;
     }
-    dish.cost_cents = Number.isNaN(cost) ? null : cost;
-    dish.food_cost_bps =
-      dish.cost_cents != null && dish.price_cents ? Math.round((dish.cost_cents / dish.price_cents) * 10000) : null;
+    // Summed in thousandths, rounded once — the sum «Техкарти» will show.
+    dish.cost_cents = Number.isNaN(cost) ? null : milliToCents(cost);
+    dish.food_cost_bps = !Number.isNaN(cost) && dish.price_cents ? foodCostBps(cost, dish.price_cents) : null;
   }
 
   // A derived dish needs a recipe on EVERY variant — say which ones are missing.
@@ -405,10 +411,11 @@ async function buildPlan(storeId: number, input: TechCardRowInput[]): Promise<{ 
     }
   }
 
-  const ingredientList = [...ingredients.values()].map(({ name, unit, cost_cents, is_new, price_changed }) => ({
+  const ingredientList = [...ingredients.values()].map(({ name, unit, cost_milli, is_new, price_changed }) => ({
     name,
     unit,
-    cost_cents,
+    cost_cents: cost_milli == null ? null : milliToCents(cost_milli),
+    cost_milli,
     is_new,
     price_changed,
   }));
@@ -476,17 +483,17 @@ export async function applyTechCardImport(storeId: number, input: TechCardRowInp
         const { productId, variantIds } = await createProductInTx(client, storeId, {
           name: ing.name,
           sellable: false,
-          variants: [{ attributes: {}, unit: ing.unit, price_cents: 0, cost_cents: ing.cost_cents ?? 0, quantity: 0 }],
+          variants: [{ attributes: {}, unit: ing.unit, price_cents: 0, cost_milli: ing.cost_milli ?? 0, quantity: 0 }],
         });
         await client.query(`INSERT INTO pos_product_tags (product_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [
           productId,
           tagId,
         ]);
         variantOf.set(key, variantIds[0]);
-      } else if (ing.price_changed && ing.cost_cents != null) {
+      } else if (ing.price_changed && ing.cost_milli != null) {
         await client.query(
-          `UPDATE pos_variants SET cost_cents = $1, updated_at = NOW() WHERE id = $2 AND store_id = $3`,
-          [ing.cost_cents, variantOf.get(key), storeId]
+          `UPDATE pos_variants SET cost_milli = $1, updated_at = NOW() WHERE id = $2 AND store_id = $3`,
+          [ing.cost_milli, variantOf.get(key), storeId]
         );
       }
     }

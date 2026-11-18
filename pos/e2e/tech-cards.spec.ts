@@ -77,9 +77,14 @@ test('the owner finds a dish, fixes its recipe in place and prices an ingredient
     await route.fulfill({ json: LATTE });
   });
   await page.route('**/api/pos/variants/10', async (route) => {
-    const body = route.request().postDataJSON() as { cost_cents: number };
+    // Thousandths of a kopeck per gram (migration 103): the server keeps the
+    // precise figure and its rounded copy side by side.
+    const body = route.request().postDataJSON() as { cost_milli: number };
     patches.push({ url: route.request().url(), body });
-    beans = { ...BEANS, variants: [{ ...BEANS.variants[0], cost_cents: body.cost_cents }] };
+    beans = {
+      ...BEANS,
+      variants: [{ ...BEANS.variants[0], cost_milli: body.cost_milli, cost_cents: Math.round(body.cost_milli / 1000) }],
+    };
     await route.fulfill({ json: beans });
   });
 
@@ -95,28 +100,38 @@ test('the owner finds a dish, fixes its recipe in place and prices an ingredient
   // 2. The beans have never been received with a price: no food cost, and why.
   await expect(dialog.getByTestId('recipe-totals')).toContainText('немає ціни: Зерно арабіка');
 
-  // 3. More milk — and one request, with the whole recipe of this one size.
-  await dialog.getByTestId('composition-row').nth(1).getByLabel('Кількість', { exact: true }).fill('250');
+  // 3. More milk, and the beans by what reaches the cup: a tenth is lost in the
+  //    grinder, so 18 г net is 20 г off the shelf — worked out, not typed. One
+  //    request, with the whole recipe of this one size.
+  await dialog.getByTestId('recipe-gross-net').click();
+  const beansRow = dialog.getByTestId('composition-row').nth(0);
+  await beansRow.getByLabel('Втрати «Зерно арабіка», %').fill('10');
+  await beansRow.getByLabel('Нетто', { exact: true }).fill('18');
+  await expect(beansRow.getByLabel('Брутто', { exact: true })).toHaveValue('20');
+  await dialog.getByTestId('composition-row').nth(1).getByLabel('Брутто', { exact: true }).fill('250');
+  await expect(dialog.getByTestId('recipe-yield')).toHaveText('Вихід ≈ 268 г');
   await dialog.getByTestId('recipe-dialog-save').click();
   await expect.poll(() => patches.find((p) => p.url.endsWith('/variants/30'))?.body).toEqual({
     components: [
-      { component_variant_id: 10, quantity: 18 },
-      { component_variant_id: 20, quantity: 250 },
+      { component_variant_id: 10, quantity: 20, loss_bps: 1000 },
+      { component_variant_id: 20, quantity: 250, loss_bps: 0 },
     ],
     price_cents: 7500,
   });
   await expect(dialog).toBeHidden();
 
-  // 4. The dish is flagged; the ingredient is first on its own tab. 600 ₴/кг.
+  // 4. The dish is flagged; the ingredient is first on its own tab. 637,50 ₴/кг
+  //    — with its kopecks: whole kopecks a gram would have stored 640.
   await expect(page.getByTestId('tech-card-3').getByTestId('tech-reason')).toContainText('немає ціни: Зерно арабіка');
   await page.getByTestId('tech-tab-ingredients').click();
   const price = page.getByTestId('ingredient-price-10');
-  await price.fill('600');
+  await price.fill('637,50');
   await price.press('Enter');
-  await expect.poll(() => patches.find((p) => p.url.endsWith('/variants/10'))?.body).toEqual({ cost_cents: 60 });
+  await expect.poll(() => patches.find((p) => p.url.endsWith('/variants/10'))?.body).toEqual({ cost_milli: 63_750 });
+  await expect(price).toHaveValue('637.50');
   await expect(page.getByTestId('tech-cards-flash')).toContainText('собівартість перераховано в 1 рецепті');
 
-  // 5. And the dish has an honest figure: 18 г × 60 коп + 200 мл × 4 коп = 18,80 ₴ of 75 ₴.
+  // 5. And the dish has an honest figure: 18 г × 63,75 коп + 200 мл × 4 коп = 19,475 ₴ of 75 ₴.
   await page.getByTestId('tech-tab-dishes').click();
-  await expect(page.getByTestId('tech-card-3').getByTestId('tech-food-cost')).toHaveText('25,1 %');
+  await expect(page.getByTestId('tech-card-3').getByTestId('tech-food-cost')).toHaveText('26,0 %');
 });

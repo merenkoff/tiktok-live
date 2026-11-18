@@ -4,8 +4,6 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  costBaseText,
-  costPerKgText,
   isWeighedUnit,
   openingStockOf,
   priceCaption,
@@ -41,15 +39,5 @@ describe('the product card for goods sold by weight', () => {
     expect(openingStockOf('12,5', true)).toBe(12_500);
     expect(openingStockOf('abc', true)).toBe(0);
     expect(openingStockOf('3', false)).toBe(3);
-  });
-
-  it('turns a purchase price per kilogram into the per-gram figure stored, and back', () => {
-    // 119,90 ₴/кг is 11,99 коп/г — stored as 12, which reads back as 120 ₴/кг.
-    expect(costBaseText('119,90')).toBe('0.12');
-    expect(costPerKgText('0.12')).toBe('120');
-    expect(costBaseText('14,50')).toBe('0.01');
-    expect(costPerKgText('0.01')).toBe('10');
-    expect(costBaseText('')).toBe('');
-    expect(costPerKgText('')).toBe('');
   });
 });

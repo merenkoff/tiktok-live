@@ -17,6 +17,7 @@ import {
   isDirty,
   rowName,
   variantChanged,
+  costMilliOfDraft,
   variantDraftOf,
   variantPayload,
 } from './productDraft';
@@ -135,6 +136,43 @@ describe('variantChanged — by what the text means', () => {
   });
 });
 
+describe('the purchase price: typed per kilogram, litre or piece, kept to the kopeck', () => {
+  it('reads grams by the kilogram and sends thousandths of a kopeck a gram', () => {
+    // 35,50 ₴/кг — what whole kopecks a gram stored as «4», i.e. 40 ₴/кг.
+    const sugar = variantDraftOf(variant({ unit: 'г', cost_cents: 4, cost_milli: 3550 }));
+    expect(sugar.cost).toBe('35.50');
+    expect(costMilliOfDraft(sugar)).toBe(3550);
+    expect(costMilliOfDraft({ ...sugar, cost: '36,20' })).toBe(3620);
+    expect(variantChanged(sugar, { ...sugar, cost: '36,20' })).toBe(true);
+    expect(variantChanged(sugar, { ...sugar, cost: '35,5' })).toBe(false);
+  });
+
+  it('reads a server that knows only whole kopecks per base unit', () => {
+    const old = variantDraftOf(variant({ unit: 'г', cost_cents: 4 }));
+    expect(old.cost).toBe('40');
+    expect(costMilliOfDraft(old)).toBe(4000);
+  });
+
+  it('does not round a figure finer than the box shows while the box is untouched', () => {
+    // 100 ₴ for a pack of 24: 4,1666… ₴ a piece, received as 416 667 thousandths.
+    const napkin = variantDraftOf(variant({ cost_cents: 417, cost_milli: 416_667 }));
+    expect(napkin.cost).toBe('4.17');
+    // Saving the card's other fields sends what is stored, not what the box rounds to.
+    expect(variantPayload({ ...napkin, sku: 'NEW' }, 'omit').cost_milli).toBe(416_667);
+    expect(variantChanged(napkin, { ...napkin })).toBe(false);
+    // A price that IS typed is taken as typed.
+    expect(variantPayload({ ...napkin, cost: '4,20' }, 'omit').cost_milli).toBe(420_000);
+    // And clearing the box clears the price.
+    expect(variantPayload({ ...napkin, cost: '' }, 'omit').cost_milli).toBe(0);
+  });
+
+  it('re-reads the same text under a new unit — the box is per kilogram from then on', () => {
+    const v = variantDraftOf(variant({ cost_cents: 3550, cost_milli: 3_550_000 }));
+    expect(v.cost).toBe('35.50');
+    expect(costMilliOfDraft({ ...v, unit: 'г' })).toBe(3550);
+  });
+});
+
 describe('variantPayload — the whole row, as the server replaces it', () => {
   const v = { ...variantDraftOf(variant()), cost: '120', components: [{ component_variant_id: 1, quantity: 2 }] };
 
@@ -146,7 +184,9 @@ describe('variantPayload — the whole row, as the server replaces it', () => {
 
   it('parses the text once, clears an emptied code, and sends the pack as a pair', () => {
     const body = variantPayload({ ...v, sku: '', pack: { qty: '', label: '' } }, 'omit');
-    expect(body).toMatchObject({ price_cents: 40000, cost_cents: 12000, sku: '', pack_qty: null, pack_label: '' });
+    // 120 ₴ a piece, in thousandths of a kopeck.
+    expect(body).toMatchObject({ price_cents: 40000, cost_milli: 12_000_000, sku: '', pack_qty: null, pack_label: '' });
+    expect(body).not.toHaveProperty('cost_cents');
     expect(variantPayload({ ...v, pack: { qty: '12', label: 'ящик' } }, 'omit')).toMatchObject({
       pack_qty: 12,
       pack_label: 'ящик',

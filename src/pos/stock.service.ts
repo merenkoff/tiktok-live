@@ -53,7 +53,8 @@ export async function applyStockDelta(
     referenceType?: string;
     referenceId?: number;
     note?: string;
-    unitCostCents?: number | null;
+    /** Thousandths of a kopeck per base unit (`cost.ts`); the rounded column follows by trigger. */
+    unitCostMilli?: number | null;
     occurredAt?: Date | string;
   }
 ): Promise<number> {
@@ -90,7 +91,7 @@ export async function applyStockDelta(
   await client.query(
     `INSERT INTO pos_stock_movements
        (store_id, variant_id, delta, reason, reference_type, reference_id, note, staff_id,
-        unit_cost_cents, occurred_at)
+        unit_cost_milli, occurred_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, NOW()))`,
     [
       params.storeId,
@@ -101,7 +102,7 @@ export async function applyStockDelta(
       params.referenceId ?? null,
       params.note ?? null,
       params.staffId,
-      params.unitCostCents ?? null,
+      params.unitCostMilli ?? null,
       params.occurredAt ?? null,
     ]
   );
@@ -171,17 +172,17 @@ export async function writeOffPostedTx(
   for (const line of params.lines) {
     if (line.quantity <= 0) continue;
     const variant = await client.query(
-      `SELECT v.cost_cents, p.name
+      `SELECT v.cost_milli, p.name
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.id = $1 AND v.store_id = $2`,
       [line.variantId, params.storeId]
     );
     const unitCost =
-      variant.rows[0]?.cost_cents == null ? null : Number(variant.rows[0].cost_cents);
+      variant.rows[0]?.cost_milli == null ? null : Number(variant.rows[0].cost_milli);
     await client.query(
       `INSERT INTO pos_stock_document_lines
-         (document_id, store_id, variant_id, quantity, unit_cost_cents)
+         (document_id, store_id, variant_id, quantity, unit_cost_milli)
        VALUES ($1, $2, $3, $4, $5)`,
       [documentId, params.storeId, line.variantId, line.quantity, unitCost]
     );
@@ -195,7 +196,7 @@ export async function writeOffPostedTx(
         referenceType: 'stock_document',
         referenceId: documentId,
         note: params.note,
-        unitCostCents: unitCost,
+        unitCostMilli: unitCost,
       });
     } catch (error) {
       // Only reachable when the shelf was already below zero before the

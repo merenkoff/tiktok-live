@@ -112,19 +112,21 @@ describe('receiving goods sold by weight', () => {
     // 1 kopeck a gram on the variant is 10 ₴ a kilogram.
     expect(cost).toHaveValue('10.00');
     fireEvent.change(cost, { target: { value: '14,50' } });
-    // 14,50 ₴ a kilogram is 1.45 kopecks a gram: the document will hold 1.
-    expect(screen.getByTestId('stock-cost-step')).toHaveTextContent(/запишеться 10,00 ₴ за кг/);
-    expect(screen.getByText(/Сума закупки: 297,25 ₴ · запишеться 205,00 ₴/)).toBeInTheDocument();
+    // 14,50 ₴ a kilogram is 1,45 kopecks a gram — kept exactly (whole kopecks
+    // a gram stored it as 10 ₴/кг), so the box reads back what was typed.
+    expect(cost).toHaveValue('14.50');
+    expect(screen.queryByTestId('stock-cost-step')).not.toBeInTheDocument();
+    expect(screen.getByText(/Сума закупки: 297,25 ₴/)).not.toHaveTextContent('запишеться');
 
     await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
     await waitFor(() => expect(api.addStockDocumentLine).toHaveBeenCalled());
     expect(api.addStockDocumentLine.mock.calls[0]).toEqual([
       91,
-      { variant_id: 21, quantity: 20500, unit_cost_cents: 1 },
+      { variant_id: 21, quantity: 20500, unit_cost_milli: 1450, unit_cost_cents: 1 },
     ]);
   });
 
-  it('says nothing about a step when the price per kilogram is a whole 10 ₴', async () => {
+  it('sums the purchase from the price per kilogram', async () => {
     renderPage('receipt');
     await userEvent.click(await screen.findByRole('button', { name: /Картопля/ }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Закупка за кг ₴' }), { target: { value: '120' } });
@@ -139,7 +141,12 @@ describe('receiving goods sold by weight', () => {
     expect(screen.getByRole('textbox', { name: 'Закупка за шт ₴' })).toHaveValue('28.00');
     await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
     await waitFor(() => expect(api.addStockDocumentLine).toHaveBeenCalled());
-    expect(api.addStockDocumentLine.mock.calls[0][1]).toEqual({ variant_id: 22, quantity: 1, unit_cost_cents: 2800 });
+    expect(api.addStockDocumentLine.mock.calls[0][1]).toEqual({
+      variant_id: 22,
+      quantity: 1,
+      unit_cost_milli: 2_800_000,
+      unit_cost_cents: 2800,
+    });
   });
 
   it('creates a new product sold by weight from kilograms and a price per kilogram', async () => {
@@ -165,7 +172,8 @@ describe('receiving goods sold by weight', () => {
       quantity: 15250,
       // The new variant's price is per kilogram from its first save…
       price_cents: 2990,
-      // …and its cost per gram: 18 ₴ a kilogram is 1.8 kopecks, kept as 2.
+      // …and its cost per gram: 18 ₴ a kilogram is 1,8 kopecks — 1800 thousandths.
+      unit_cost_milli: 1800,
       unit_cost_cents: 2,
     });
   });
@@ -196,6 +204,11 @@ describe('writing off goods sold by weight', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'К-сть, кг' }), { target: { value: '0.35' } });
     await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
     await waitFor(() => expect(api.addStockDocumentLine).toHaveBeenCalled());
-    expect(api.addStockDocumentLine.mock.calls[0][1]).toEqual({ variant_id: 21, quantity: 350, unit_cost_cents: null });
+    expect(api.addStockDocumentLine.mock.calls[0][1]).toEqual({
+      variant_id: 21,
+      quantity: 350,
+      unit_cost_milli: null,
+      unit_cost_cents: null,
+    });
   });
 });

@@ -141,8 +141,8 @@ describe('a variant that arrives in bottles', () => {
   });
 
   // The trap the toggle creates: a clerk typing «5 пляшок» types the BOTTLE's
-  // price next to it, and `unit_cost_cents` has only ever meant cents per base
-  // unit. 120 ₴ a bottle is 12 kopecks a millilitre.
+  // price next to it, and the document's price is per base unit. 120 ₴ a
+  // bottle is 12 kopecks a millilitre — 12 000 thousandths of a kopeck.
   it('reads the purchase price as the price of a pack', async () => {
     open(row());
     await userEvent.click(screen.getByRole('button', { name: 'Прихід' }));
@@ -153,17 +153,18 @@ describe('a variant that arrives in bottles', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
     await waitFor(() => expect(addStockDocumentLine).toHaveBeenCalled());
-    expect(addStockDocumentLine.mock.calls[0][1]).toMatchObject({ unit_cost_cents: 12 });
+    expect(addStockDocumentLine.mock.calls[0][1]).toMatchObject({ unit_cost_milli: 12_000, unit_cost_cents: 12 });
   });
 
   it('rescales the price when the box changes sides, so the caption never lies', async () => {
-    open(row());
+    open(row({ pack_qty: 500, pack_label: 'пляшка' }));
     await userEvent.click(screen.getByRole('button', { name: 'Прихід' }));
-    // 12 kopecks per ml on the row → 120,00 ₴ for a 1000 ml bottle.
-    expect(screen.getByRole('textbox', { name: /за пляшка/ })).toHaveValue('120.00');
+    // 12 kopecks per ml on the row → 60,00 ₴ for a 500 ml bottle.
+    expect(screen.getByRole('textbox', { name: /за пляшка/ })).toHaveValue('60.00');
 
+    // Counting millilitres, the price is still one a person can type: per litre.
     await userEvent.click(screen.getByRole('button', { name: 'мл' }));
-    expect(screen.getByRole('textbox', { name: /за мл/ })).toHaveValue('0.12');
+    expect(screen.getByRole('textbox', { name: /за л/ })).toHaveValue('120.00');
   });
 
   it('refuses a number of packs that is not a whole number of base units', async () => {
@@ -178,6 +179,44 @@ describe('a variant that arrives in bottles', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
     expect(await screen.findByText(/склад рахується цілими/)).toBeInTheDocument();
     expect(addStockDocumentLine).not.toHaveBeenCalled();
+  });
+});
+
+// A café's ingredient: counted in grams, never sold by weight — and still
+// bought by the kilogram. The price box is per kilogram, to the kopeck
+// (migration 103); «за 1 г» was a price nobody could type.
+describe('an ingredient counted in grams', () => {
+  const sugar = () =>
+    row({
+      product_name: 'Цукор',
+      label: '',
+      unit: 'г',
+      quantity: 3000,
+      cost_cents: 4,
+      cost_milli: 3550,
+      pack_qty: null,
+      pack_label: '',
+    });
+
+  it('counts grams, prices the kilogram, and sends the price as it was typed', async () => {
+    open(sugar());
+    await userEvent.click(screen.getByRole('button', { name: 'Прихід' }));
+    // The count stays grams: nothing about a café's stock sheet changes.
+    const qty = screen.getByRole('spinbutton', { name: 'Скільки надійшло' });
+    fireEvent.change(qty, { target: { value: '5000' } });
+    const cost = screen.getByRole('textbox', { name: /Ціна закупки за кг/ });
+    // 3550 thousandths of a kopeck a gram is 35,50 ₴ a kilogram — not «40,00».
+    expect(cost).toHaveValue('35.50');
+    await userEvent.clear(cost);
+    await userEvent.type(cost, '36,20');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
+    await waitFor(() => expect(addStockDocumentLine).toHaveBeenCalled());
+    expect(addStockDocumentLine.mock.calls[0][1]).toMatchObject({
+      quantity: 5000,
+      unit_cost_milli: 3620,
+      unit_cost_cents: 4,
+    });
   });
 });
 
@@ -217,14 +256,15 @@ describe('a variant sold by weight', () => {
     expect(cost).toHaveValue('120.00');
     await userEvent.clear(cost);
     await userEvent.type(cost, '145');
-    // 145 ₴ a kilogram is 14.5 kopecks a gram, kept as 15: said before the tap.
-    expect(screen.getByTestId('stock-cost-step')).toHaveTextContent(/запишеться 150,00 ₴ за кг/);
+    // 145 ₴ a kilogram is 14,5 kopecks a gram — kept exactly, so there is nothing to warn about.
+    expect(screen.queryByTestId('stock-cost-step')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
     await waitFor(() => expect(addStockDocumentLine).toHaveBeenCalled());
     expect(addStockDocumentLine.mock.calls[0][1]).toMatchObject({
       variant_id: 7,
       quantity: 20500,
+      unit_cost_milli: 14_500,
       unit_cost_cents: 15,
     });
   });

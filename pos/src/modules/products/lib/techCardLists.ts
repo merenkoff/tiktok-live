@@ -9,7 +9,9 @@
 // moves. Pure: the page, its filters and the sidebar's count all read these.
 
 import type { ModifierGroup, Product } from '@pos/platform';
+import { costMilliOf } from '../../../lib/costUnits';
 import { foodCostBps, recipeCost, type CostIndex, type RecipeCost } from './recipeCost';
+import { recipeLineOf } from './recipeLoss';
 
 /** Why a dish's cost cannot be acted on — or that it loses money. */
 export type DishProblem = 'empty' | 'unpriced' | 'loss';
@@ -38,10 +40,7 @@ export interface DishRow {
 }
 
 function sizeRow(index: CostIndex, variant: Product['variants'][number]): SizeRow {
-  const components = (variant.components ?? []).map((c) => ({
-    component_variant_id: c.component_variant_id,
-    quantity: c.quantity,
-  }));
+  const components = (variant.components ?? []).map(recipeLineOf);
   const cost = recipeCost(index, components, variant.id);
   const bps = foodCostBps(cost, variant.price_cents);
   const problem: DishProblem | null =
@@ -122,8 +121,10 @@ export interface IngredientRow {
   productId: number;
   caption: string;
   unit: string;
-  /** Per one base unit, kopecks; 0 = never received with a price. */
-  costCents: number;
+  /** Per one base unit, thousandths of a kopeck (`lib/costUnits.ts`); 0 = never received with a price. */
+  costMilli: number;
+  /** Its usual preparation loss, basis points — what a recipe offers when it is added; null = not said. */
+  prepLossBps: number | null;
   /** On the shelf, in base units. */
   quantity: number;
   /** The dishes and preps whose recipes take it — directly or through a prep. */
@@ -195,7 +196,8 @@ export function ingredientRows(
         productId: product.id,
         caption: node.caption,
         unit: variant.unit,
-        costCents: variant.cost_cents ?? 0,
+        costMilli: costMilliOf(variant),
+        prepLossBps: variant.prep_loss_bps ?? null,
         quantity: variant.quantity,
         usedIn: [...(where ?? new Map<number, string>()).entries()]
           .map(([productId, name]) => ({ productId, name }))
@@ -205,7 +207,7 @@ export function ingredientRows(
     }
   }
   return rows.sort(
-    (a, b) => Number(a.costCents > 0) - Number(b.costCents > 0) || a.caption.localeCompare(b.caption, 'uk')
+    (a, b) => Number(a.costMilli > 0) - Number(b.costMilli > 0) || a.caption.localeCompare(b.caption, 'uk')
   );
 }
 

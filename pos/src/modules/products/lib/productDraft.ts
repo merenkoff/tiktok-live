@@ -14,7 +14,10 @@
 
 import { uahInputToCents } from '@pos/platform';
 import type { AttributeValues, Product, ProductComponentInput, ProductVariant } from '@pos/platform';
+import { costMilliOf } from '../../../lib/costUnits';
 import { shapeOf, type ProductShape } from './productShape';
+import { baseMilliToHumanPrice, humanPriceToBaseMilli } from './recipeCost';
+import { recipeLineOf } from './recipeLoss';
 import { countToInput, numberInputToWire, strengthInputToWire, tenthsToInput } from './dishNumbers';
 
 export interface VariantDraft {
@@ -28,8 +31,20 @@ export interface VariantDraft {
   /** Raw text — «400», «400,50». */
   price: string;
   compareAtCents: number | null;
-  /** Raw text of the purchase price; empty means «not said» (0 on the wire). */
+  /**
+   * Raw text of the purchase price, in hryvnias per PRICING unit — a kilogram
+   * for grams, a litre for millilitres, one piece otherwise (`costUnits.ts`),
+   * the way the owner reads it on a delivery note. Empty means «not said».
+   */
   cost: string;
+  /**
+   * The stored price behind that text, thousandths of a kopeck per base unit.
+   * A receipt by the pack can leave a figure finer than the kopeck the box
+   * shows (100 ₴ for 24 pieces), and saving the card's OTHER fields must not
+   * round it: while the text still reads what this figure reads, this figure
+   * is what is sent (`costMilliOfDraft`).
+   */
+  costMilli?: number;
   sku: string;
   barcode: string;
   pack: { qty: string; label: string };
@@ -98,15 +113,13 @@ export function variantDraftOf(v: ProductVariant): VariantDraft {
     unit: v.unit,
     price: centsToInput(v.price_cents),
     compareAtCents: v.compare_at_cents ?? null,
-    cost: v.cost_cents ? centsToInput(v.cost_cents) : '',
+    cost: costMilliOf(v) > 0 ? centsToInput(baseMilliToHumanPrice(costMilliOf(v), v.unit)) : '',
+    costMilli: costMilliOf(v),
     sku: v.sku ?? '',
     barcode: v.barcode ?? '',
     pack: { qty: v.pack_qty == null ? '' : String(v.pack_qty), label: v.pack_label ?? '' },
     bottleMl: v.bottle_ml == null ? '' : String(v.bottle_ml),
-    components: (v.components ?? []).map((c) => ({
-      component_variant_id: c.component_variant_id,
-      quantity: c.quantity,
-    })),
+    components: (v.components ?? []).map(recipeLineOf),
   };
 }
 
@@ -215,7 +228,10 @@ function sameAttributes(a: AttributeValues, b: AttributeValues): boolean {
 function sameComponents(a: ProductComponentInput[], b: ProductComponentInput[]): boolean {
   if (a.length !== b.length) return false;
   return a.every(
-    (row, i) => row.component_variant_id === b[i]!.component_variant_id && row.quantity === b[i]!.quantity
+    (row, i) =>
+      row.component_variant_id === b[i]!.component_variant_id &&
+      row.quantity === b[i]!.quantity &&
+      (row.loss_bps ?? 0) === (b[i]!.loss_bps ?? 0)
   );
 }
 
@@ -234,7 +250,7 @@ function bottleMlOf(text: string | undefined): number | null {
  */
 export function variantChanged(a: VariantDraft, b: VariantDraft): boolean {
   if (uahInputToCents(a.price) !== uahInputToCents(b.price)) return true;
-  if (uahInputToCents(a.cost) !== uahInputToCents(b.cost)) return true;
+  if (costMilliOfDraft(a) !== costMilliOfDraft(b)) return true;
   if ((a.compareAtCents ?? null) !== (b.compareAtCents ?? null)) return true;
   if (a.sku.trim() !== b.sku.trim()) return true;
   if (a.barcode.trim() !== b.barcode.trim()) return true;
@@ -252,6 +268,16 @@ export function variantChanged(a: VariantDraft, b: VariantDraft): boolean {
  * `clear` sends an empty one (the product is becoming simple), `omit` leaves
  * it out (a simple product may not carry one, so it is never mentioned).
  */
+/**
+ * The purchase price a row will send: what was typed, per kilogram, litre or
+ * piece — or the stored figure untouched while the box still shows it.
+ */
+export function costMilliOfDraft(v: Pick<VariantDraft, 'cost' | 'costMilli' | 'unit'>): number {
+  const typedCents = uahInputToCents(v.cost);
+  if (v.costMilli != null && baseMilliToHumanPrice(v.costMilli, v.unit) === typedCents) return v.costMilli;
+  return humanPriceToBaseMilli(typedCents, v.unit);
+}
+
 export type ComponentsMode = 'keep' | 'clear' | 'omit';
 
 export interface VariantPayload {
@@ -259,8 +285,11 @@ export interface VariantPayload {
   unit: string;
   price_cents: number;
   compare_at_cents: number | null;
-  /** Left out for the café's marketer, who is never sent it (track МР). */
-  cost_cents?: number;
+  /**
+   * Thousandths of a kopeck per base unit (migration 103). Left out for the
+   * café's marketer, who is never sent it (track МР).
+   */
+  cost_milli?: number;
   sku: string;
   barcode: string;
   pack_qty: number | null;
@@ -281,7 +310,7 @@ export function variantPayload(
     unit: v.unit,
     price_cents: uahInputToCents(v.price),
     compare_at_cents: v.compareAtCents ?? null,
-    ...(menuOnly ? {} : { cost_cents: uahInputToCents(v.cost) }),
+    ...(menuOnly ? {} : { cost_milli: costMilliOfDraft(v) }),
     // An empty string clears the field, which is what an emptied box means.
     sku: v.sku.trim(),
     barcode: v.barcode.trim(),

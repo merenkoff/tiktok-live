@@ -38,11 +38,13 @@ const PRODUCT_FIELDS: Record<string, string> = {
 
 const VARIANT_FIELDS: Record<string, string> = {
   cost_cents: 'закупівельна ціна',
+  cost_milli: 'закупівельна ціна',
   quantity: 'залишок',
   components: 'техкарта',
   pack_qty: 'фасування',
   pack_label: 'фасування',
   bottle_ml: 'пляшка за маркою',
+  prep_loss_bps: 'відходи при обробці',
 };
 
 /** What a field holds when nobody set it — a new card's value. */
@@ -56,10 +58,12 @@ const DEFAULTS: Record<string, unknown> = {
   excise_per_unit: false,
   fiscal_uktzed: null,
   cost_cents: 0,
+  cost_milli: 0,
   quantity: 0,
   components: [],
   pack_qty: null,
   pack_label: null,
+  prep_loss_bps: null,
   bottle_ml: null,
 };
 
@@ -122,8 +126,8 @@ export function assertMarketerVariantWrite(input: unknown, current: Record<strin
 /**
  * Products as the marketer reads them: no purchase price and no stock. Any
  * answer of the product routes goes through — a list, a card, a variant — and
- * every object priced for sale (`price_cents`) loses `cost_cents` and
- * `quantity`; a recipe line keeps its `quantity`, which is the recipe.
+ * every object priced for sale (`price_cents`) loses `cost_cents`,
+ * `cost_milli` and `quantity`; a recipe line keeps its `quantity`, which is the recipe.
  */
 export function catalogForMarketer<T>(value: T): T {
   if (Array.isArray(value)) return value.map((item) => catalogForMarketer(item)) as T;
@@ -132,7 +136,7 @@ export function catalogForMarketer<T>(value: T): T {
     const priced = 'price_cents' in source;
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(source)) {
-      if (priced && (key === 'cost_cents' || key === 'quantity')) continue;
+      if (priced && (key === 'cost_cents' || key === 'cost_milli' || key === 'quantity')) continue;
       out[key] = catalogForMarketer(item);
     }
     return out as T;

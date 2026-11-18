@@ -58,7 +58,13 @@ export function IngredientPicker({
   );
   const matches = useMemo(() => {
     const words = queryWords(query);
-    return options.filter((o) => matchesWords(o.caption, words));
+    const found = options.filter((o) => matchesWords(o.caption, words));
+    // What BEGINS with the typing comes first: «картопля» is the potato, not
+    // «Гарнір: картопля фрі» that merely contains it — Enter takes the top line.
+    const typed = query.trim().toLocaleLowerCase('uk');
+    if (typed === '') return found;
+    const starts = (o: ComponentOption) => o.caption.toLocaleLowerCase('uk').startsWith(typed);
+    return [...found.filter(starts), ...found.filter((o) => !starts(o))];
   }, [options, query]);
   const shown = matches.slice(0, SHOWN);
 

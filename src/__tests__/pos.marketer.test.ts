@@ -276,6 +276,7 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       const borshch = list.find((p) => p.id === productId)!;
       expect(borshch.variants[0]).toMatchObject({ price_cents: 18_000 });
       expect(borshch.variants[0]).not.toHaveProperty('cost_cents');
+      expect(borshch.variants[0]).not.toHaveProperty('cost_milli');
       expect(borshch.variants[0]).not.toHaveProperty('quantity');
       const one = (await call('GET', `/products/${productId}`, marketerToken)).json();
       expect(one.variants[0]).not.toHaveProperty('cost_cents');
@@ -295,6 +296,7 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       expect(edited.statusCode).toBe(200);
       expect(edited.json()).toMatchObject({ name: 'Борщ український', allergens: ['celery'], menu_labels: ['hit'] });
       expect(edited.json().variants[0]).not.toHaveProperty('cost_cents');
+      expect(edited.json().variants[0]).not.toHaveProperty('cost_milli');
 
       const excise = await call('PATCH', `/products/${productId}`, marketerToken, { fiscal_excise: true, fiscal_uktzed: '2208' });
       expect(excise.statusCode).toBe(403);
@@ -304,6 +306,9 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { price_cents: 19_000 })).statusCode).toBe(200);
       // A form that resends the cost it was never shown cannot change it…
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_cents: 1 })).json().error).toMatch(/закупівельна/);
+      expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_milli: 1 })).json().error).toMatch(/закупівельна/);
+      // The ingredient's usual loss is the kitchen's figure, not the menu's.
+      expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { prep_loss_bps: 2000 })).json().error).toMatch(/відходи/);
       // …while the same value is not a change.
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_cents: 4_500, price_cents: 19_500 })).statusCode).toBe(200);
 

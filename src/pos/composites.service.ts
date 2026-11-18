@@ -34,18 +34,47 @@ import { applyStockDelta } from './stock.service.js';
 import type { StockReason } from './types.js';
 import { loadStoreVertical } from './verticals/index.js';
 import { pourLine, type PourContext } from './bottles.service.js';
+import { foodCostBps, milliToCents } from './cost.js';
 
 type DbClient = { query: typeof pool.query };
 
 /** One line of a composite's composition, as the admin edits it. */
 export interface ComponentInput {
   component_variant_id: number;
-  /** In the component variant's own unit. INTEGER, like every other quantity. */
+  /**
+   * In the component variant's own unit. INTEGER, like every other quantity —
+   * and the GROSS weight: what leaves the shelf, what stock and cost read.
+   */
   quantity: number;
+  /**
+   * The share of that quantity that does not reach the dish — peel, bones,
+   * what boils away — in basis points (2000 = 20 %; migration 104). The net
+   * weight is derived from the two (`netQuantity`), never stored. Left out by
+   * a client built before it: the line then KEEPS the loss it already has.
+   */
+  loss_bps?: number;
+}
+
+/** The largest loss a line may state: 99 %. */
+export const MAX_LOSS_BPS = 9900;
+
+/** What reaches the dish out of `quantity` taken from the shelf. */
+export function netQuantity(quantity: number, lossBps: number): number {
+  return Math.round((quantity * (10000 - lossBps)) / 10000);
+}
+
+/** A loss share from a request: an integer of basis points, 0…99 %. */
+export function normalizeLossBps(raw: unknown): number {
+  const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_LOSS_BPS) {
+    throw new CompositeError('Втрати — від 0 до 99 %');
+  }
+  return value;
 }
 
 /** One line of a composition, resolved for display. */
 export interface ComponentRow extends ComponentInput {
+  loss_bps: number;
   id: number;
   sort_order: number;
   product_name: string;
@@ -148,7 +177,7 @@ export async function listComponentsForStore(
   client: DbClient = pool
 ): Promise<Map<number, ComponentRow[]>> {
   const result = await client.query(
-    `SELECT c.id, c.variant_id, c.component_variant_id, c.quantity, c.sort_order,
+    `SELECT c.id, c.variant_id, c.component_variant_id, c.quantity, c.loss_bps, c.sort_order,
             p.name AS product_name, v.label, v.unit
      FROM pos_product_components c
      JOIN pos_variants v ON v.id = c.component_variant_id
@@ -165,6 +194,7 @@ export async function listComponentsForStore(
       id: Number(row.id),
       component_variant_id: Number(row.component_variant_id),
       quantity: Number(row.quantity),
+      loss_bps: Number(row.loss_bps ?? 0),
       sort_order: Number(row.sort_order),
       product_name: row.product_name,
       label: row.label ?? '',
@@ -214,7 +244,12 @@ export async function validateComponents(
       throw new CompositeError(`Component ${componentVariantId} listed twice`);
     }
     seen.add(componentVariantId);
-    rows.push({ component_variant_id: componentVariantId, quantity });
+    rows.push({
+      component_variant_id: componentVariantId,
+      quantity,
+      // Absent stays absent — `setComponents` reads that as «keep what the line has».
+      ...(raw?.loss_bps === undefined || raw.loss_bps === null ? {} : { loss_bps: normalizeLossBps(raw.loss_bps) }),
+    });
   }
 
   if (rows.length > 0) {
@@ -408,6 +443,18 @@ export async function setComponents(
   await lockRecipes(client, storeId);
   const rows = await validateComponents(client, storeId, variantId, components);
 
+  // The bag is replaced wholesale, and a client built before migration 104
+  // sends lines with no loss at all: a line it kept must not lose the loss
+  // the owner typed elsewhere, so an absent `loss_bps` reads the stored one.
+  const stored = await client.query(
+    `SELECT component_variant_id, loss_bps FROM pos_product_components
+     WHERE store_id = $1 AND variant_id = $2`,
+    [storeId, variantId]
+  );
+  const storedLoss = new Map<number, number>(
+    stored.rows.map((row: Record<string, unknown>) => [Number(row.component_variant_id), Number(row.loss_bps ?? 0)])
+  );
+
   await client.query(
     `DELETE FROM pos_product_components WHERE store_id = $1 AND variant_id = $2`,
     [storeId, variantId]
@@ -415,9 +462,16 @@ export async function setComponents(
   for (const [index, row] of rows.entries()) {
     await client.query(
       `INSERT INTO pos_product_components
-         (store_id, variant_id, component_variant_id, quantity, sort_order)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [storeId, variantId, row.component_variant_id, row.quantity, index]
+         (store_id, variant_id, component_variant_id, quantity, loss_bps, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        storeId,
+        variantId,
+        row.component_variant_id,
+        row.quantity,
+        row.loss_bps ?? storedLoss.get(row.component_variant_id) ?? 0,
+        index,
+      ]
     );
   }
   // A batch of recipes (the tech-card import) rebuilds once, after the last.
@@ -507,12 +561,17 @@ export async function replaceIngredient(
   try {
     await client.query('BEGIN');
     const found = await client.query(
-      `SELECT id, is_active FROM pos_variants WHERE store_id = $1 AND id = ANY($2::bigint[])`,
+      `SELECT id, is_active, prep_loss_bps FROM pos_variants WHERE store_id = $1 AND id = ANY($2::bigint[])`,
       [storeId, [from, to]]
     );
     const byId = new Map(found.rows.map((row: Record<string, unknown>) => [Number(row.id), Boolean(row.is_active)]));
     if (!byId.has(from)) throw new CompositeError('Інгредієнт, який замінюєте, не знайдено');
     if (!byId.get(to)) throw new CompositeError('Інгредієнт для заміни не знайдено');
+    // The replacement's own usual loss, when its card states one: peeled
+    // potato in place of unpeeled must not inherit the peel. Not stated — the
+    // line keeps the loss it had.
+    const toRow = found.rows.find((row: Record<string, unknown>) => Number(row.id) === to);
+    const toLoss = toRow?.prep_loss_bps == null ? null : Number(toRow.prep_loss_bps);
 
     await lockRecipes(client, storeId);
     const holders = await client.query(
@@ -530,19 +589,31 @@ export async function replaceIngredient(
 
     for (const variantId of variantIds) {
       const lines = await client.query(
-        `SELECT component_variant_id, quantity FROM pos_product_components
+        `SELECT component_variant_id, quantity, loss_bps FROM pos_product_components
          WHERE store_id = $1 AND variant_id = $2
          ORDER BY sort_order ASC, id ASC`,
         [storeId, variantId]
+      );
+      // Every line states its loss: the bag is rewritten, and `setComponents`
+      // would otherwise look the new ingredient's loss up under an id the
+      // recipe never held.
+      const twinLoss = (lines.rows as Array<Record<string, unknown>>).find(
+        (row) => Number(row.component_variant_id) === to
       );
       const next: ComponentInput[] = [];
       for (const row of lines.rows as Array<Record<string, unknown>>) {
         const id = Number(row.component_variant_id);
         const quantity = Number(row.quantity);
-        const line =
+        const loss = Number(row.loss_bps ?? 0);
+        const line: ComponentInput =
           id === from
-            ? { component_variant_id: to, quantity: Math.max(1, Math.round(quantity * factor)) }
-            : { component_variant_id: id, quantity };
+            ? {
+                component_variant_id: to,
+                quantity: Math.max(1, Math.round(quantity * factor)),
+                // A recipe that already holds the replacement keeps that line's loss.
+                loss_bps: twinLoss ? Number(twinLoss.loss_bps ?? 0) : (toLoss ?? loss),
+              }
+            : { component_variant_id: id, quantity, loss_bps: loss };
         const twin = next.find((n) => n.component_variant_id === line.component_variant_id);
         if (twin) twin.quantity += line.quantity;
         else next.push(line);
@@ -967,8 +1038,8 @@ export interface FlatLeaf {
   leafVariantId: number;
   /** Per ONE unit of the composite, in the leaf's own unit. */
   quantityPerUnit: number;
-  /** Last purchase price of the leaf, per its own unit. */
-  costCents: number;
+  /** Last purchase price of the leaf per its own unit, in thousandths of a kopeck. */
+  costMilli: number;
 }
 
 /**
@@ -982,7 +1053,7 @@ async function loadFlatComposition(
   variantId: number
 ): Promise<FlatLeaf[]> {
   const result = await client.query(
-    `SELECT f.leaf_variant_id, f.quantity_per_unit, v.cost_cents
+    `SELECT f.leaf_variant_id, f.quantity_per_unit, v.cost_milli
      FROM pos_product_components_flat f
      JOIN pos_variants v ON v.id = f.leaf_variant_id
      WHERE f.store_id = $1 AND f.variant_id = $2
@@ -992,7 +1063,7 @@ async function loadFlatComposition(
   return result.rows.map((row: Record<string, unknown>) => ({
     leafVariantId: Number(row.leaf_variant_id),
     quantityPerUnit: Number(row.quantity_per_unit),
-    costCents: Number(row.cost_cents),
+    costMilli: Number(row.cost_milli),
   }));
 }
 
@@ -1000,39 +1071,44 @@ async function loadFlatComposition(
  * What one unit of a composite costs to assemble, and whether that number can
  * be trusted.
  *
- * `hasUnpricedLeaf` is the whole point of returning a pair. A leaf whose
- * `cost_cents` is 0 has never been received with a price, and zero there means
+ * `hasUnpricedLeaf` is the whole point of returning it. A leaf whose
+ * `cost_milli` is 0 has never been received with a price, and zero there means
  * «we do not know», not «free» — a dish whose sum quietly omits its meat is a
  * food-cost figure the owner would make decisions on. The reader is expected
  * to show «—» rather than a percentage in that case.
  *
- * `cost_cents` itself is the LAST purchase price, not a weighted average: it
- * is written by posting a receipt and by production, and nothing here changes
+ * The cost itself is the LAST purchase price, not a weighted average: it is
+ * written by posting a receipt and by production, and nothing here changes
  * that.
+ *
+ * The sum is exact in thousandths of a kopeck (`cost.ts`) — 18 g of sugar at
+ * 35,50 ₴/кг is 63,9 kopecks, not 18 × «4 kopecks a gram» — and is rounded to
+ * whole kopecks once, at the end, never line by line.
  */
 export function sumUnitCost(leaves: FlatLeaf[]): {
+  unitCostMilli: number;
   unitCostCents: number;
   hasUnpricedLeaf: boolean;
 } {
-  let unitCostCents = 0;
+  let unitCostMilli = 0;
   let hasUnpricedLeaf = false;
   for (const leaf of leaves) {
-    unitCostCents += leaf.quantityPerUnit * leaf.costCents;
-    if (leaf.costCents <= 0) hasUnpricedLeaf = true;
+    unitCostMilli += leaf.quantityPerUnit * leaf.costMilli;
+    if (leaf.costMilli <= 0) hasUnpricedLeaf = true;
   }
-  return { unitCostCents, hasUnpricedLeaf };
+  return { unitCostMilli, unitCostCents: milliToCents(unitCostMilli), hasUnpricedLeaf };
 }
 
 /**
  * Read-only: what one unit of this composite costs today. The same sum
  * `produceComposite` writes onto a production document — the production
- * document stays the only WRITER of `cost_cents`, this only reads.
+ * document stays the only WRITER of a composite's cost, this only reads.
  */
 export async function unitCostOf(
   client: DbClient,
   storeId: number,
   variantId: number
-): Promise<{ unitCostCents: number; hasUnpricedLeaf: boolean; leafCount: number }> {
+): Promise<{ unitCostMilli: number; unitCostCents: number; hasUnpricedLeaf: boolean; leafCount: number }> {
   const leaves = await loadFlatComposition(client, storeId, variantId);
   return { ...sumUnitCost(leaves), leafCount: leaves.length };
 }
@@ -1059,7 +1135,7 @@ export async function produceComposite(
     note?: string | null;
     occurredAt?: Date | string;
   }
-): Promise<{ unitCostCents: number }> {
+): Promise<{ unitCostMilli: number }> {
   if (!Number.isInteger(params.quantity) || params.quantity <= 0) {
     throw new CompositeError('Production quantity must be a positive integer');
   }
@@ -1074,7 +1150,9 @@ export async function produceComposite(
 
   // The same sum the owner reads on «Техкарти» — one definition, so a tech
   // card and the document that assembles it can never disagree.
-  const { unitCostCents } = sumUnitCost(leaves);
+  // Exact, in thousandths: the assembled cost is a plain sum, so nothing is
+  // rounded on the way from the ingredients to the thing made of them.
+  const { unitCostMilli } = sumUnitCost(leaves);
   for (const leaf of leaves) {
     await applyStockDelta(client, {
       storeId: params.storeId,
@@ -1098,11 +1176,11 @@ export async function produceComposite(
     referenceType: params.referenceType,
     referenceId: params.referenceId,
     note: params.note ?? undefined,
-    unitCostCents,
+    unitCostMilli,
     occurredAt: params.occurredAt,
   });
 
-  return { unitCostCents };
+  return { unitCostMilli };
 }
 
 /** One row of the owner's «Техкарти» list. */
@@ -1116,8 +1194,10 @@ export interface TechCardRow {
   stock_mode: 'own' | 'derived';
   /** What it sells for. */
   price_cents: number;
-  /** What it costs to assemble, at the last purchase prices of its leaves. */
+  /** What it costs to assemble, at the last purchase prices of its leaves — whole kopecks. */
   cost_cents: number;
+  /** The same sum before rounding, in thousandths of a kopeck. */
+  cost_milli: number;
   /** How many shelves it takes from, expanded. Zero = a recipe that is empty. */
   leaf_count: number;
   /** At least one leaf has never been received with a price — see below. */
@@ -1154,9 +1234,9 @@ export async function listTechCards(
             v.unit,
             p.stock_mode,
             v.price_cents,
-            COALESCE(SUM(f.quantity_per_unit * lv.cost_cents), 0)::bigint AS cost_cents,
+            COALESCE(SUM(f.quantity_per_unit * lv.cost_milli), 0)::bigint AS cost_milli,
             COUNT(f.leaf_variant_id)::int                                 AS leaf_count,
-            COALESCE(BOOL_OR(lv.cost_cents <= 0), FALSE)                  AS has_unpriced_leaf
+            COALESCE(BOOL_OR(lv.cost_milli <= 0), FALSE)                  AS has_unpriced_leaf
      FROM pos_variants v
      JOIN pos_products p ON p.id = v.product_id
      LEFT JOIN pos_product_components_flat f
@@ -1173,7 +1253,7 @@ export async function listTechCards(
 
   return result.rows.map((row: Record<string, unknown>) => {
     const price = Number(row.price_cents);
-    const cost = Number(row.cost_cents);
+    const costMilli = Number(row.cost_milli);
     const leafCount = Number(row.leaf_count);
     const hasUnpricedLeaf = Boolean(row.has_unpriced_leaf);
     return {
@@ -1185,14 +1265,15 @@ export async function listTechCards(
       kind: 'composite' as const,
       stock_mode: row.stock_mode === 'derived' ? ('derived' as const) : ('own' as const),
       price_cents: price,
-      cost_cents: cost,
+      cost_cents: milliToCents(costMilli),
+      cost_milli: costMilli,
       leaf_count: leafCount,
       has_unpriced_leaf: hasUnpricedLeaf,
       // Null, never 0: «we cannot tell» and «this dish costs nothing» are
       // different facts, and only one of them is ever true.
       food_cost_bps:
         price > 0 && leafCount > 0 && !hasUnpricedLeaf
-          ? Math.round((cost * 10000) / price)
+          ? foodCostBps(costMilli, price)
           : null,
     };
   });

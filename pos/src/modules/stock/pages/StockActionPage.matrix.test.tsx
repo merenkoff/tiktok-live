@@ -165,11 +165,17 @@ describe('StockActionPage — «Матрицею»', () => {
     await waitFor(() => expect(api.postStockDocument).toHaveBeenCalledWith(77, expect.any(String)));
     expect(api.createStockDocument).toHaveBeenCalledTimes(1);
     expect(window.confirm).toHaveBeenCalledWith('Буде створено 1 новий розмір на наявних картках у каталозі. Продовжити?');
-    expect(api.addStockDocumentLine).toHaveBeenCalledWith(77, { variant_id: 10, quantity: 2, unit_cost_cents: 15000 });
+    expect(api.addStockDocumentLine).toHaveBeenCalledWith(77, {
+      variant_id: 10,
+      quantity: 2,
+      unit_cost_milli: 15_000_000,
+      unit_cost_cents: 15000,
+    });
     expect(api.addStockDocumentPlaceholderLine).toHaveBeenCalledWith(77, {
       name: 'Боді',
       quantity: 1,
       price_cents: 39000,
+      unit_cost_milli: null,
       unit_cost_cents: null,
       attributes: { color: 'Синій', size: '98' },
       unit: 'шт',

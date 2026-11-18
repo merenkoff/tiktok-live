@@ -9,7 +9,8 @@ import { Segmented } from '@pos/platform/ui';
 import { Dialog } from './Dialog';
 import { captionClass } from './formStyles';
 import { errorText } from './modifierInput';
-import { humanPriceToBaseCents, pricingUnit, roundedByStep, unitPriceText } from '../lib/recipeCost';
+import { humanPriceToBaseMilli, pricingUnit } from '../lib/recipeCost';
+import { parseLossPercent } from '../lib/recipeLoss';
 
 /** How a unit is offered: what it is counted in, and what the price is asked per. */
 function unitChoice(unit: string): string {
@@ -45,13 +46,14 @@ export function NewIngredientDialog({
   const [name, setName] = useState(initialName);
   const [unit, setUnit] = useState(choices.includes('г') ? 'г' : choices[0]);
   const [price, setPrice] = useState('');
+  const [loss, setLoss] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { label } = pricingUnit(unit);
   const humanCents = uahInputToCents(price);
-  const baseCents = humanPriceToBaseCents(humanCents, unit);
-  const stepRounded = humanCents > 0 && roundedByStep(humanCents, unit);
+  // To the kopeck per kilogram or litre: thousandths of a kopeck per base unit.
+  const baseMilli = humanPriceToBaseMilli(humanCents, unit);
 
   async function submit() {
     if (busy) return;
@@ -59,8 +61,9 @@ export function NewIngredientDialog({
       setError('Вкажіть назву');
       return;
     }
-    if (humanCents > 0 && baseCents <= 0) {
-      setError(`Ціна замала: зберігається з кроком 10 ₴ за ${label}`);
+    const lossBps = parseLossPercent(loss);
+    if (lossBps == null) {
+      setError('Відходи — від 0 до 99 %');
       return;
     }
     setBusy(true);
@@ -69,7 +72,16 @@ export function NewIngredientDialog({
       const created = await api.createProduct({
         name: name.trim(),
         sellable: false,
-        variants: [{ attributes: {}, unit, price_cents: 0, cost_cents: baseCents }],
+        variants: [
+          {
+            attributes: {},
+            unit,
+            price_cents: 0,
+            cost_milli: baseMilli,
+            // Said only when it is: an empty box is «not said», not «0 %».
+            ...(loss.trim() === '' ? {} : { prep_loss_bps: lossBps }),
+          },
+        ],
       });
       onCreated(created);
     } catch (err) {
@@ -143,7 +155,20 @@ export function NewIngredientDialog({
           />
           <span className="text-[13px] text-sq-muted">
             Без ціни собівартість страви буде «невідома» — її перепише перший прихід з ціною.
-            {stepRounded && baseCents > 0 && ` Запишеться як ${unitPriceText(baseCents, unit)} — крок 10 ₴ за ${label}.`}
+          </span>
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className={captionClass}>Відходи при обробці, %</span>
+          <input
+            className="sq-input tabular-nums"
+            inputMode="decimal"
+            placeholder="Якщо є: шкірка, кістки"
+            value={loss}
+            onChange={(e) => setLoss(e.target.value)}
+            data-testid="new-ingredient-loss"
+          />
+          <span className="text-[13px] text-sq-muted">
+            Підставиться в рецепт: впишете нетто — брутто порахується само.
           </span>
         </label>
       </div>

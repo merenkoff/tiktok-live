@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { uahInputToCents } from '@pos/platform';
 import type { Product, ProductComponentInput } from '@pos/platform';
-import { Search, X } from '@pos/platform/ui';
+import { Printer, Search, X } from '@pos/platform/ui';
 import { Dialog } from './Dialog';
 import { IngredientPicker } from './IngredientPicker';
 import { NewIngredientDialog } from './NewIngredientDialog';
@@ -15,7 +15,7 @@ import { foodCostPercent } from '../data/techCards';
 import { matchesWords, queryWords } from '../lib/modifierWords';
 import {
   foodCostBps,
-  humanPriceToBaseCents,
+  humanPriceToBaseMilli,
   moneyText,
   priceForTarget,
   pricingUnit,
@@ -24,6 +24,35 @@ import {
   unitPriceText,
   type CostIndex,
 } from '../lib/recipeCost';
+import {
+  grossFor,
+  hasLosses,
+  lossPercentText,
+  netOf,
+  parseLossPercent,
+  recipeYield,
+  yieldText,
+} from '../lib/recipeLoss';
+
+/** Whether this device shows the gross / loss / net columns for a recipe that has no losses yet. */
+const GROSS_NET_KEY = 'products:recipeGrossNet';
+
+function readGrossNetPref(): boolean {
+  try {
+    return window.localStorage.getItem(GROSS_NET_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeGrossNetPref(on: boolean): void {
+  try {
+    if (on) window.localStorage.setItem(GROSS_NET_KEY, '1');
+    else window.localStorage.removeItem(GROSS_NET_KEY);
+  } catch {
+    // A blocked storage only means the choice is not remembered.
+  }
+}
 
 /** The money beside a recipe: what its parts cost and what the dish sells for. */
 export interface RecipeMoney {
@@ -34,8 +63,11 @@ export interface RecipeMoney {
   targetBps: number | null;
   /** The variant being composed — so a draft that names itself is not walked forever. */
   selfId?: number;
-  /** Write an ingredient's purchase price (per BASE unit) at once. Absent = read-only prices. */
-  onSetCost?: (variantId: number, baseCents: number) => Promise<void>;
+  /**
+   * Write an ingredient's purchase price at once — per BASE unit, in
+   * thousandths of a kopeck (`lib/costUnits.ts`). Absent = read-only prices.
+   */
+  onSetCost?: (variantId: number, baseMilli: number) => Promise<void>;
 }
 
 /** A recipe that can be copied into this one. */
@@ -49,17 +81,17 @@ export interface RecipeSource {
 }
 
 /** «Вказати ціну»: an unpriced ingredient gets its purchase price without leaving the recipe. */
-function SetCost({ unit, onSave }: { unit: string; onSave: (baseCents: number) => Promise<void> }) {
+function SetCost({ unit, onSave }: { unit: string; onSave: (baseMilli: number) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { per, label } = pricingUnit(unit);
+  const { label } = pricingUnit(unit);
 
   async function save() {
-    const base = humanPriceToBaseCents(uahInputToCents(text), unit);
+    const base = humanPriceToBaseMilli(uahInputToCents(text), unit);
     if (base <= 0) {
-      setError(per > 1 ? `Замало: крок 10 ₴ за ${label}` : 'Вкажіть ціну');
+      setError('Вкажіть ціну');
       return;
     }
     setBusy(true);
@@ -125,6 +157,43 @@ function SetCost({ unit, onSave }: { unit: string; onSave: (baseCents: number) =
         {error ?? 'зберігається одразу, для всіх рецептів'}
       </span>
     </span>
+  );
+}
+
+/**
+ * The loss of one line, as a percent. It keeps its own text so «12,» can be
+ * typed on the way to «12,5»; every text that reads as 0…99 % is handed up at
+ * once, and one that does not is ringed and changes nothing.
+ */
+function LossCell({ bps, caption, onChange, onEnter }: { bps: number; caption: string; onChange: (bps: number) => void; onEnter: () => void }) {
+  const [text, setText] = useState(() => lossPercentText(bps));
+  const textRef = useRef(text);
+  textRef.current = text;
+  // The loss changed from outside — a copied recipe, an ingredient's usual loss.
+  useEffect(() => {
+    if (parseLossPercent(textRef.current) !== bps) setText(lossPercentText(bps));
+  }, [bps]);
+  const invalid = parseLossPercent(text) == null;
+  return (
+    <input
+      className={`sq-input !px-2 text-right tabular-nums ${invalid ? 'ring-2 ring-inset ring-red-500' : ''}`}
+      inputMode="decimal"
+      placeholder="0"
+      aria-label={`Втрати «${caption}», %`}
+      aria-invalid={invalid}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const parsed = parseLossPercent(e.target.value);
+        if (parsed != null) onChange(parsed);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        onEnter();
+      }}
+      data-testid="recipe-loss"
+    />
   );
 }
 
@@ -233,6 +302,8 @@ export function RecipeEditor({
   money,
   create,
   sources,
+  onPrint,
+  losses = false,
   emptyText = 'Порожньо. Складений товар без складу продати не можна.',
 }: {
   value: ProductComponentInput[];
@@ -244,13 +315,35 @@ export function RecipeEditor({
   create?: { units: readonly string[]; onCreated: (product: Product) => void };
   /** Recipes this one can be copied from. */
   sources?: RecipeSource[];
+  /** «Друк техкарти»: the sheet for the kitchen — offered once the recipe has a line. */
+  onPrint?: () => void;
+  /**
+   * Offer «Брутто / нетто». A kitchen's question — a florist's stems lose
+   * nothing on the way into a bouquet — so only a caller that knows it is a
+   * kitchen asks for it. A recipe that already HAS a loss shows it anywhere.
+   */
+  losses?: boolean;
   emptyText?: string;
 }) {
   const [creating, setCreating] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
   const [focusQty, setFocusQty] = useState<number | null>(null);
   const qtyRefs = useRef(new Map<number, HTMLInputElement>());
+  const netRefs = useRef(new Map<number, HTMLInputElement>());
   const pickerRef = useRef<HTMLInputElement>(null);
+  // Gross / loss / net: three columns a coffee shop never needs, so they are
+  // off until asked for — and on by themselves the moment a line has a loss,
+  // because a loss nobody can see is a weight nobody can explain.
+  const lossy = hasLosses(value);
+  const [shown, setShown] = useState(() => lossy || (losses && readGrossNetPref()));
+  // Once shown they stay for as long as this recipe is open: emptying the one
+  // loss box of a recipe must not take the box away from under the caret.
+  useEffect(() => {
+    if (lossy) setShown(true);
+  }, [lossy]);
+  // Derived as well as remembered, so the columns are there in the very
+  // render a lossy line arrives in — the caret is handed to «Нетто» in it.
+  const grossNet = shown || lossy;
 
   const byVariant = useMemo(() => new Map(options.map((option) => [option.variant_id, option])), [options]);
   const used = useMemo(() => new Set(value.map((row) => row.component_variant_id)), [value]);
@@ -263,19 +356,34 @@ export function RecipeEditor({
   // A line that was just picked hands the caret to its quantity.
   useEffect(() => {
     if (focusQty == null) return;
-    const input = qtyRefs.current.get(focusQty);
+    // A line that came with its ingredient's usual loss is typed as the cook's
+    // card states it — the net — and the gross is worked out from it.
+    const row = value.find((line) => line.component_variant_id === focusQty);
+    const input =
+      (grossNet && (row?.loss_bps ?? 0) > 0 ? netRefs.current.get(focusQty) : undefined) ?? qtyRefs.current.get(focusQty);
     if (input) {
       input.focus();
       input.select();
       setFocusQty(null);
     }
-  }, [focusQty, value]);
+  }, [focusQty, value, grossNet]);
 
   function add(variantId: number) {
     if (used.has(variantId)) return;
-    onChange([...value, { component_variant_id: variantId, quantity: 1 }]);
+    // The ingredient's usual loss (its card says «відходи 20 %») comes with it.
+    const usual = money?.index.get(variantId)?.prepLossBps ?? 0;
+    onChange([...value, { component_variant_id: variantId, quantity: 1, loss_bps: usual }]);
     setFocusQty(variantId);
   }
+
+  function setLine(idx: number, patch: Partial<ProductComponentInput>) {
+    const next = [...value];
+    next[idx] = { ...value[idx]!, ...patch };
+    onChange(next);
+  }
+
+  const toPicker = () => pickerRef.current?.focus();
+  const portion = money && grossNet ? yieldText(recipeYield(money.index, value)) : '';
 
   const bps = cost && money ? foodCostBps(cost, money.priceCents) : null;
   const suggested =
@@ -288,9 +396,11 @@ export function RecipeEditor({
       {value.length > 0 && (
         <div className="hidden sm:flex items-end gap-3 text-[12px] leading-4 text-sq-muted" aria-hidden>
           <span className="flex-1" />
-          <span className="w-32">кількість</span>
+          <span className={grossNet ? 'w-24' : 'w-32'}>{grossNet ? 'брутто' : 'кількість'}</span>
+          {grossNet && <span className="w-14 whitespace-nowrap">втрати %</span>}
+          {grossNet && <span className="w-24">нетто</span>}
           {money && <span className="w-28 text-right">ціна закупівлі</span>}
-          {money && <span className="w-24 text-right">сума</span>}
+          {money && <span className={`${grossNet ? 'w-20' : 'w-24'} text-right`}>сума</span>}
           <span className="w-9" />
         </div>
       )}
@@ -313,36 +423,83 @@ export function RecipeEditor({
                 line?.unpriced ? 'bg-amber-50/60 -mx-2 px-2 rounded-lg' : ''
               }`}
             >
-              <span className="flex-1 basis-44 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              {/* On a phone the three boxes take a line of their own under the name. */}
+              <span
+                className={`flex-1 ${grossNet ? 'basis-full sm:basis-32' : 'basis-44'} min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5`}
+              >
                 <span className="text-[15px] text-sq-text truncate">{caption}</span>
                 {node?.recipe && <span className={`${chipClass} bg-sq-blue/10 text-sq-blue-press`}>заготовка</span>}
                 {emptyPrep && <span className={`${chipClass} bg-amber-50 text-amber-800`}>порожній рецепт</span>}
               </span>
 
-              <span className="w-32 flex items-center gap-1.5">
+              <span className={grossNet ? 'basis-[30%] grow sm:grow-0 sm:basis-auto sm:w-24 flex flex-col gap-0.5' : 'w-32 flex flex-col'}>
+                {grossNet && <span className="sm:hidden text-[12px] leading-4 text-sq-muted">брутто</span>}
+                <span className="flex items-center gap-1.5">
                 <input
                   ref={(el) => {
                     if (el) qtyRefs.current.set(row.component_variant_id, el);
                     else qtyRefs.current.delete(row.component_variant_id);
                   }}
-                  className="sq-input text-right tabular-nums"
+                  // Three boxes share the row: each keeps room for «12500».
+                  className={`sq-input text-right tabular-nums ${grossNet ? '!px-2' : ''}`}
                   inputMode="numeric"
-                  aria-label="Кількість"
+                  // The one weight the line keeps: what leaves the shelf.
+                  aria-label={grossNet ? 'Брутто' : 'Кількість'}
                   value={row.quantity > 0 ? String(row.quantity) : ''}
-                  onChange={(e) => {
-                    const next = [...value];
-                    next[idx] = { ...row, quantity: Number(e.target.value.replace(/\D/g, '')) || 0 };
-                    onChange(next);
-                  }}
+                  onChange={(e) => setLine(idx, { quantity: Number(e.target.value.replace(/\D/g, '')) || 0 })}
                   onKeyDown={(e) => {
                     if (e.key !== 'Enter') return;
                     // Never the card's «Зберегти»: Enter goes on to the next line.
                     e.preventDefault();
-                    pickerRef.current?.focus();
+                    toPicker();
                   }}
                 />
                 <span className="w-7 text-[13px] text-sq-muted shrink-0">{unit}</span>
+                </span>
               </span>
+
+              {grossNet && (
+                <span className="basis-[20%] grow sm:grow-0 sm:basis-auto sm:w-14 flex flex-col gap-0.5">
+                  <span className="sm:hidden text-[12px] leading-4 text-sq-muted">втрати %</span>
+                  <LossCell
+                    bps={row.loss_bps ?? 0}
+                    caption={caption}
+                    onChange={(loss_bps) => setLine(idx, { loss_bps })}
+                    onEnter={toPicker}
+                  />
+                </span>
+              )}
+              {grossNet && (
+                <span className="basis-[30%] grow sm:grow-0 sm:basis-auto sm:w-24 flex flex-col gap-0.5">
+                  <span className="sm:hidden text-[12px] leading-4 text-sq-muted">нетто</span>
+                  <span className="flex items-center gap-1.5">
+                  <input
+                    ref={(el) => {
+                      if (el) netRefs.current.set(row.component_variant_id, el);
+                      else netRefs.current.delete(row.component_variant_id);
+                    }}
+                    className="sq-input !px-2 text-right tabular-nums"
+                    inputMode="numeric"
+                    aria-label="Нетто"
+                    // Derived, never stored: what reaches the dish. Typing it
+                    // works the gross out — 100 г at 20 % is 125 г off the shelf.
+                    value={row.quantity > 0 ? String(netOf(row.quantity, row.loss_bps ?? 0)) : ''}
+                    onChange={(e) =>
+                      setLine(idx, {
+                        quantity: grossFor(Number(e.target.value.replace(/\D/g, '')) || 0, row.loss_bps ?? 0),
+                      })
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      toPicker();
+                    }}
+                    data-testid="recipe-net"
+                  />
+                  <span className="w-7 text-[13px] text-sq-muted shrink-0">{unit}</span>
+                  </span>
+                </span>
+              )}
 
               {money && (
                 <span className="w-28 text-right text-[14px] text-sq-secondary tabular-nums" data-testid="recipe-unit-price">
@@ -353,12 +510,15 @@ export function RecipeEditor({
                       <span className="text-amber-700">немає ціни</span>
                     )
                   ) : (
-                    unitPriceText(line?.unitCents ?? 0, unit)
+                    unitPriceText(line?.unitMilli ?? 0, unit)
                   )}
                 </span>
               )}
               {money && (
-                <span className="w-24 text-right text-[15px] font-medium text-sq-text tabular-nums" data-testid="recipe-line-sum">
+                <span
+                  className={`${grossNet ? 'w-20' : 'w-24'} text-right text-[15px] font-medium text-sq-text tabular-nums`}
+                  data-testid="recipe-line-sum"
+                >
                   {line?.unpriced ? '—' : moneyText(line?.lineCents ?? 0)}
                 </span>
               )}
@@ -391,7 +551,7 @@ export function RecipeEditor({
               money
                 ? (option) => {
                     const one = money.index.get(option.variant_id);
-                    return one && !one.derived && one.costCents > 0 ? unitPriceText(one.costCents, option.unit) : option.unit;
+                    return one && !one.derived && one.costMilli > 0 ? unitPriceText(one.costMilli, option.unit) : option.unit;
                   }
                 : undefined
             }
@@ -411,7 +571,52 @@ export function RecipeEditor({
             Скопіювати рецепт…
           </button>
         )}
+        {(losses || lossy) && value.length > 0 && (
+          <button
+            type="button"
+            aria-pressed={grossNet}
+            // A recipe that has losses always shows them.
+            disabled={lossy}
+            title={lossy ? 'У рецепті є втрати — колонки показуються завжди' : 'Показати вагу до обробки, втрати й вагу в страві'}
+            className={`min-h-11 px-3 rounded-[10px] text-[15px] font-semibold ${
+              grossNet ? 'bg-sq-blue/10 text-sq-blue-press' : 'text-sq-blue hover:bg-sq-sidebar'
+            } disabled:cursor-default`}
+            onClick={() => {
+              writeGrossNetPref(!grossNet);
+              setShown(!grossNet);
+            }}
+            data-testid="recipe-gross-net"
+          >
+            Брутто / нетто
+          </button>
+        )}
+        {onPrint && value.length > 0 && (
+          <button
+            type="button"
+            className="min-h-11 px-3 rounded-[10px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-sq-blue hover:bg-sq-sidebar"
+            onClick={onPrint}
+            data-testid="recipe-print"
+          >
+            <Printer size={18} />
+            Друк
+          </button>
+        )}
       </div>
+
+      {grossNet && value.length > 0 && (
+        <p className="text-[13px] text-sq-muted leading-snug" data-testid="recipe-gross-net-hint">
+          Брутто — скільки береться зі складу (воно списується й рахується в собівартість). Нетто — скільки
+          потрапляє в страву. Впишіть нетто й відсоток втрат — брутто порахується само.
+          {portion && (
+            <>
+              {' '}
+              <strong className="font-semibold text-sq-text tabular-nums" data-testid="recipe-yield">
+                Вихід {portion}
+              </strong>
+            </>
+          )}
+        </p>
+      )}
 
       {cost && money && value.length > 0 && (
         <div
@@ -464,8 +669,7 @@ export function RecipeEditor({
             </>
           )}
           <span className="basis-full text-[12px] text-sq-muted">
-            За останніми цінами закупівлі. Ціна за грам і мілілітр зберігається з кроком 1 коп — тобто 10 ₴ за кг чи
-            літр.
+            За останніми цінами закупівлі.
           </span>
         </div>
       )}

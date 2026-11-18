@@ -147,7 +147,7 @@ test('the owner gives a bouquet its composition', async ({ page }) => {
   await expect.poll(() => variantPatches.length).toBeGreaterThan(0);
   // The composition travels whole — that is how "remove this component" is
   // expressible at all, and it is exactly how the server stores it.
-  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 9 }]);
+  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 9, loss_bps: 0 }]);
 });
 
 test('an existing plain product can be turned into a bouquet', async ({ page }) => {
@@ -204,7 +204,7 @@ test('an existing plain product can be turned into a bouquet', async ({ page }) 
   // a simple product, and refuses `derived` until every variant is composed.
   // So it goes through `own`, the composition lands, then the mode flips.
   expect(productPatches[0]).toMatchObject({ kind: 'composite', stock_mode: 'own' });
-  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 5 }]);
+  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 5, loss_bps: 0 }]);
   expect(productPatches[productPatches.length - 1]).toMatchObject({ stock_mode: 'derived' });
 });
 

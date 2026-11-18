@@ -777,8 +777,13 @@ export type ProductStockMode = 'own' | 'derived';
 export interface ProductComponent {
   id: number;
   component_variant_id: number;
-  /** In the component's own unit. */
+  /** In the component's own unit — the GROSS weight, what leaves the shelf. */
   quantity: number;
+  /**
+   * The share of `quantity` that does not reach the dish, in basis points
+   * (2000 = 20 %; migration 104). Absent from an older server → 0.
+   */
+  loss_bps?: number;
   sort_order: number;
   product_name: string;
   label: string;
@@ -788,7 +793,14 @@ export interface ProductComponent {
 /** What a composition write sends — the server resolves the rest. */
 export interface ProductComponentInput {
   component_variant_id: number;
+  /** The gross weight: what the recipe takes off the shelf. */
   quantity: number;
+  /**
+   * What share of it is lost in preparation, in basis points. Left out, the
+   * server keeps whatever the line already has — so a caller that knows
+   * nothing about losses cannot erase one (migration 104).
+   */
+  loss_bps?: number;
 }
 
 /**
@@ -822,7 +834,20 @@ export interface ProductVariant {
   sku: string | null;
   barcode: string | null;
   price_cents: number;
+  /** The purchase price rounded to whole kopecks per base unit — see `cost_milli`. */
   cost_cents: number;
+  /**
+   * The purchase price in thousandths of a kopeck per base unit (migration 103,
+   * `lib/costUnits.ts`) — what every cost is computed from. Absent from an
+   * older server; read it through `costMilliOf`.
+   */
+  cost_milli?: number;
+  /**
+   * The ingredient's usual preparation loss — peel, bones — in basis points
+   * (migration 104): what the recipe editor offers when the ingredient is
+   * added to a recipe. No sum reads it. Null or absent = not said.
+   */
+  prep_loss_bps?: number | null;
   compare_at_cents?: number | null;
   is_active: boolean;
   /**
@@ -1664,6 +1689,8 @@ export interface StockDocumentLine {
   variant_id: number | null;
   quantity: number;
   unit_cost_cents: number | null;
+  /** The line's price in thousandths of a kopeck per base unit (migration 103); absent from an older server. */
+  unit_cost_milli?: number | null;
   system_qty: number | null;
   counted_qty: number | null;
   line_note: string | null;
@@ -1737,6 +1764,8 @@ export interface OnHandRow {
   barcode: string | null;
   quantity: number;
   cost_cents: number;
+  /** The precise purchase price, thousandths of a kopeck per base unit (migration 103); absent from an older server. */
+  cost_milli?: number;
   price_cents: number;
   /**
    * The purchase pack (migration 054): `pack_qty` base units in one pack,
@@ -1770,6 +1799,8 @@ export interface StockMovementRow {
   note: string | null;
   staff_name: string | null;
   unit_cost_cents: number | null;
+  /** The same price in thousandths of a kopeck per base unit (migration 103); absent from an older server. */
+  unit_cost_milli?: number | null;
   occurred_at: string;
 }
 

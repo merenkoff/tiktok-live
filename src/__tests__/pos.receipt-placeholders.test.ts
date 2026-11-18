@@ -100,7 +100,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       name: 'Бодик коричневий',
       quantity: 3,
       priceCents: 45000,
-      unitCostCents: 20000,
+      unitCostMilli: 20000_000,
       attributes: { size: '86', color: 'brown' },
     });
     expect(line.variant_id).toBeNull();
@@ -143,7 +143,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
 
   it('getDocument carries the variant’s current price, old price, article and barcode on a line — nothing on a stub', async () => {
     const doc = await createDocument({ storeId, staffId, type: 'receipt' });
-    await addLine({ storeId, documentId: doc.id, variantId, quantity: 1, unitCostCents: 4000 });
+    await addLine({ storeId, documentId: doc.id, variantId, quantity: 1, unitCostMilli: 4000_000 });
     await addPlaceholderLine({
       storeId,
       documentId: doc.id,
@@ -178,7 +178,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       documentId: doc.id,
       variantId,
       quantity: 2,
-      unitCostCents: 4100,
+      unitCostMilli: 4100_000,
     });
     await addPlaceholderLine({
       storeId,
@@ -186,7 +186,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       name,
       quantity: 4,
       priceCents: 12000,
-      unitCostCents: 5000,
+      unitCostMilli: 5000_000,
       attributes: { size: 'S', color: 'red' },
     });
 
@@ -283,7 +283,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       name,
       quantity: 5,
       priceCents: 8000,
-      unitCostCents: 3000,
+      unitCostMilli: 3000_000,
     });
     const key = `idem-ph-${doc.id}`;
     const first = await postDocument({
@@ -320,7 +320,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       name,
       quantity: 6,
       priceCents: 7000,
-      unitCostCents: 2500,
+      unitCostMilli: 2500_000,
     });
     const posted = await postDocument({ storeId, documentId: doc.id, staffId });
     const vid = Number(posted.lines?.[0].variant_id);
@@ -361,7 +361,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
         name,
         quantity,
         priceCents: 39000,
-        unitCostCents: 15000,
+        unitCostMilli: 15000_000,
         attributes: { color: 'Синій', size },
       });
     }
@@ -395,7 +395,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       productId,
       quantity: 2,
       priceCents: 11000,
-      unitCostCents: 4500,
+      unitCostMilli: 4500_000,
       attributes: { color: 'Black', size: 'L' },
     });
     expect(line.placeholder_name).toBe('Existing Tee');

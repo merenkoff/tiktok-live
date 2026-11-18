@@ -115,7 +115,7 @@ describe.skipIf(!hasDb)('POS stock documents ledger', () => {
       documentId: doc.id,
       variantId,
       quantity: 5,
-      unitCostCents: 4500,
+      unitCostMilli: 4500_000,
     });
     expect(await stockQty(variantId)).toBe(before);
 

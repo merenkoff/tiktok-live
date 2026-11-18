@@ -17,7 +17,8 @@ import { captionClass } from './formStyles';
 import { canonicalColour, type ColourUse } from '../lib/variantMatrix';
 import { centsToInput, rowName, type VariantDraft } from '../lib/productDraft';
 import type { ProductShape } from '../lib/productShape';
-import { costBaseText, costPerKgText, isWeighedUnit, priceCaption, stockText, unitLabels } from '../lib/weighedUnit';
+import { isWeighedUnit, priceCaption, stockText, unitLabels } from '../lib/weighedUnit';
+import { pricingUnit } from '../lib/recipeCost';
 
 /**
  * One variant, every field, in a sheet: the table on the card keeps the daily
@@ -58,11 +59,11 @@ export function VariantSheet({
   const [local, setLocal] = useState<VariantDraft>(variant);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<VariantDraft>) => setLocal((prev) => ({ ...prev, ...patch }));
-  // Sold by weight here (G4_WEIGHED.md): the price is per kilogram already,
-  // while the purchase price is stored per gram — typed per kilogram, kept
-  // as typed on screen and stored with the per-gram step.
+  // Sold by weight here (G4_WEIGHED.md): the selling price is per kilogram.
   const weighed = isWeighedUnit(vertical, local.unit);
-  const [costKg, setCostKg] = useState(() => costPerKgText(variant.cost));
+  // What the purchase price is typed per — a kilogram of grams, a litre of
+  // millilitres, a piece — whether or not the variant is sold by weight.
+  const costPer = pricingUnit(local.unit);
 
   const composite = shape !== '';
   const colourSpec = vertical.attributes.find((a) => a.key === 'color' && a.type === 'text');
@@ -147,11 +148,7 @@ export function VariantSheet({
             unit={{
               value: local.unit,
               options: vertical.units,
-              onChange: (unit) => {
-                set({ unit });
-                // The purchase price box follows what the unit means from here on.
-                setCostKg(costPerKgText(local.cost));
-              },
+              onChange: (unit) => set({ unit }),
               labels: unitLabels(vertical),
             }}
           />
@@ -172,29 +169,14 @@ export function VariantSheet({
             />
             {error && <span className="text-sm text-red-600">{error}</span>}
           </label>
-          {menuOnly ? null : weighed ? (
+          {menuOnly ? null : (
             <label className="flex flex-col gap-1.5">
-              <span className={captionClass}>Закупівельна ціна за 1 кг, грн</span>
-              <input
-                className="sq-input tabular-nums"
-                inputMode="decimal"
-                placeholder="Не вказано"
-                value={costKg}
-                onChange={(e) => {
-                  setCostKg(e.target.value);
-                  set({ cost: costBaseText(e.target.value) });
-                }}
-              />
-              <span className="text-[12px] text-sq-muted" data-testid="variant-cost-step">
-                Зберігається за 1 г з кроком 1 коп (10 ₴ за 1 кг)
-                {local.cost !== '' && costPerKgText(local.cost) !== centsToInput(uahInputToCents(costKg))
-                  ? ` — запишеться як ${costPerKgText(local.cost)} ₴ за 1 кг`
-                  : ''}
+              {/* Grams are bought by the kilogram and millilitres by the litre,
+                  whether or not the variant is SOLD by weight: the box takes the
+                  figure on the delivery note, kept to the kopeck (costUnits.ts). */}
+              <span className={captionClass} data-testid="variant-cost-caption">
+                {costPer.per > 1 ? `Закупівельна ціна за 1 ${costPer.label}, грн` : 'Закупівельна ціна, грн'}
               </span>
-            </label>
-          ) : (
-            <label className="flex flex-col gap-1.5">
-              <span className={captionClass}>Закупівельна ціна, грн</span>
               <input
                 className="sq-input tabular-nums"
                 inputMode="decimal"
