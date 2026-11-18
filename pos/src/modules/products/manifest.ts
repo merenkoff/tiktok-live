@@ -62,7 +62,8 @@ export const productsModule: ModuleDescriptor = {
     { path: 'tech-cards', mount: 'admin', element: TechCardsPage, desktop: true },
   ],
   nav: [
-    { to: '/admin/products', label: 'Товари', location: 'admin-sidebar', order: 20, roles: MENU },
+    // The marketer's «Товари» is the menu (МР5), so it is called that for her.
+    { to: '/admin/products', label: 'Товари', roleLabels: { marketer: 'Меню' }, location: 'admin-sidebar', order: 20, roles: MENU },
     // Shown to every owner, not only a café: a clothing shop CAN make a product
     // composite (phase A), so hiding the screen from it would be a lie. Where
     // there is nothing to show, the page says so and points at the product card.

@@ -141,6 +141,27 @@ describe('the product card for the marketer', () => {
     expect(field).toHaveValue('Масло вершкове, рібай, соус демі-глас');
   });
 
+  it('suggests allergens from the recipe, ticks one only on a tap, and goes back to «Меню»', async () => {
+    getProducts.mockResolvedValue([
+      steak(),
+      corkFee(),
+      { id: 50, name: 'Рібай', is_active: true, sellable: false, tag_ids: [], variants: [{ id: 501, product_id: 50, attributes: {}, label: '', unit: 'г', price_cents: 0, is_active: true }] },
+      { id: 51, name: 'Масло вершкове', is_active: true, sellable: false, tag_ids: [], variants: [{ id: 502, product_id: 51, attributes: {}, label: '', unit: 'г', price_cents: 0, is_active: true }] },
+      { id: 52, name: 'Соус демі-глас, порція', is_active: true, sellable: false, tag_ids: [], allergens: ['celery'], variants: [{ id: 503, product_id: 52, attributes: {}, label: '', unit: 'шт', price_cents: 0, is_active: true }] },
+    ] as unknown as Product[]);
+    await openCard();
+    expect(screen.getByRole('link', { name: /Меню/ })).toBeInTheDocument();
+    const hints = await screen.findByTestId('allergen-hints');
+    expect(hints).toHaveTextContent('Можливо, є в страві — перевірте:');
+    expect(screen.getByTestId('allergen-hint-milk')).toHaveTextContent('+ Молоко (масло вершкове)');
+    expect(screen.getByTestId('allergen-hint-celery')).toHaveTextContent('+ Селера (соус демі-глас)');
+    // Nothing is ticked by itself.
+    expect(screen.getByTestId('allergen-chip-milk')).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(screen.getByTestId('allergen-hint-milk'));
+    expect(screen.getByTestId('allergen-chip-milk')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByTestId('allergen-hint-milk')).not.toBeInTheDocument();
+  });
+
   it('links this dish on the published guest menu', async () => {
     await openCard();
     const link = await screen.findByTestId('guest-view');

@@ -58,6 +58,18 @@ describe('admin sidebar', () => {
     expect(select({ shell: 'web', role: 'marketer', variant: 'rail' }, 'cashier-primary')).toEqual([]);
   });
 
+  it('calls «Товари» «Меню» for the marketer only, and the owner’s rename wins for everyone (МР5)', () => {
+    const label = (role: 'owner' | 'marketer', overrides: NavOverrides = {}) =>
+      selectNavItems(MODULES, ALL, { shell: 'web', role }, 'admin-sidebar', overrides).find(
+        (n) => n.to === '/admin/products'
+      )?.label;
+    expect(label('marketer')).toBe('Меню');
+    expect(label('owner')).toBe('Товари');
+    const renamed: NavOverrides = { 'products:admin-sidebar:/admin/products': { label: 'Страви' } };
+    expect(label('marketer', renamed)).toBe('Страви');
+    expect(label('owner', renamed)).toBe('Страви');
+  });
+
   it('offers «Відгуки» only to a store with a guest menu — a kitchen vertical, or an auth that does not say', () => {
     // Guests write from the QR menu, which only a café or a restaurant has;
     // the product form reads the same `dishFacts` mark and defaults to «yes».

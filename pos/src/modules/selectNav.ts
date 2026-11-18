@@ -43,7 +43,16 @@ export function selectNavItems(
         .filter(
           (n) => n.location === location && navOpenTo(m, n, ctx.role) && (!n.visible || n.visible(ctx))
         )
-        .map((n) => ({ ...applyNavOverride(n, overrides[navItemKey(m.id, n)]), group: navGroupOf(m.id, n.group) }))
+        .map((n) => ({
+          ...applyNavOverride(withRoleLabel(n, ctx.role), overrides[navItemKey(m.id, n)]),
+          group: navGroupOf(m.id, n.group),
+        }))
     )
     .sort((a, b) => a.order - b.order);
+}
+
+/** The entry under its role's own name, when it has one (`NavItem.roleLabels`). */
+function withRoleLabel(item: NavItem, role: NavCtx['role']): NavItem {
+  const label = role ? item.roleLabels?.[role] : undefined;
+  return label ? { ...item, label } : item;
 }
