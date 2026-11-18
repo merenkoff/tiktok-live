@@ -5,6 +5,58 @@
 import { AllergenPicker } from './AllergenPicker';
 import { COMPOSITION_MAX } from './allergens';
 import { MenuLabelPicker } from './MenuLabelPicker';
+import { appendAll, appendWord, mentions } from '../lib/guestComposition';
+
+/**
+ * «З рецепта:» — the recipe's words as buttons under the guest's composition.
+ * A tap adds one to the end of the text, «Додати всі» every one not written
+ * yet; a word already in the text is not offered again. Nothing is written by
+ * itself: the text stays whoever typed it's.
+ */
+function CompositionHint({
+  words,
+  text,
+  onChange,
+}: {
+  words: string[];
+  text: string;
+  onChange: (next: string) => void;
+}) {
+  const left = words.filter((word) => !mentions(text, word));
+  if (words.length === 0) return null;
+  return (
+    <div className="sm:col-span-2 -mt-2 flex flex-wrap items-center gap-1.5" data-testid="composition-hint">
+      <span className="text-[13px] text-sq-muted mr-0.5">З рецепта:</span>
+      {left.length === 0 ? (
+        <span className="text-[13px] text-sq-muted">усе вже в тексті</span>
+      ) : (
+        <>
+          {left.map((word) => (
+            <button
+              key={word}
+              type="button"
+              className="min-h-8 px-2.5 rounded-full bg-sq-sidebar text-[14px] text-sq-text hover:bg-sq-selected"
+              onClick={() => onChange(appendWord(text, word))}
+              data-testid="composition-hint-word"
+            >
+              + {word}
+            </button>
+          ))}
+          {left.length > 1 && (
+            <button
+              type="button"
+              className="min-h-8 px-2.5 rounded-full text-[14px] font-semibold text-sq-blue hover:bg-sq-blue/10"
+              onClick={() => onChange(appendAll(text, left))}
+              data-testid="composition-hint-all"
+            >
+              Додати всі
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 /**
  * What the guest reads about a dish on the QR menu beyond its name and price:
@@ -30,7 +82,13 @@ export function DishFactsFields({
   onStrength,
   prepMinutes,
   onPrepMinutes,
+  recipeWords = [],
 }: {
+  /**
+   * The recipe's words, offered under «Склад для гостя» to pick from (МР5):
+   * names only, never written in by themselves. Empty draws nothing.
+   */
+  recipeWords?: string[];
   composition: string;
   onComposition: (next: string) => void;
   allergens: string[];
@@ -64,6 +122,7 @@ export function DishFactsFields({
           самі напишете.
         </span>
       </label>
+      <CompositionHint words={recipeWords} text={composition} onChange={onComposition} />
       <AllergenPicker value={allergens} onChange={onAllergens} />
       <MenuLabelPicker value={menuLabels} onChange={onMenuLabels} />
       <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3">

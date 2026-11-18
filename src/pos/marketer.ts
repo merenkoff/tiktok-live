@@ -123,11 +123,16 @@ export function assertMarketerVariantWrite(input: unknown, current: Record<strin
   check((input ?? {}) as Record<string, unknown>, VARIANT_FIELDS, current);
 }
 
+/** What a recipe line keeps for the marketer: what goes in, never how much (track МР, МР5). */
+const RECIPE_LINE_KEEPS = new Set(['id', 'component_variant_id', 'sort_order', 'product_name', 'label', 'unit']);
+
 /**
- * Products as the marketer reads them: no purchase price and no stock. Any
- * answer of the product routes goes through — a list, a card, a variant — and
- * every object priced for sale (`price_cents`) loses `cost_cents`,
- * `cost_milli` and `quantity`; a recipe line keeps its `quantity`, which is the recipe.
+ * Products as the marketer reads them: no purchase price, no stock and no
+ * grams. Any answer of the product routes goes through — a list, a card, a
+ * variant — and every object priced for sale (`price_cents`) loses
+ * `cost_cents`, `cost_milli` and `quantity`, while a recipe line (under
+ * `components`) keeps only what goes in: the names are what the hint under
+ * «Склад для гостя» offers, the quantities and losses are the kitchen's.
  */
 export function catalogForMarketer<T>(value: T): T {
   if (Array.isArray(value)) return value.map((item) => catalogForMarketer(item)) as T;
@@ -137,11 +142,57 @@ export function catalogForMarketer<T>(value: T): T {
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(source)) {
       if (priced && (key === 'cost_cents' || key === 'cost_milli' || key === 'quantity')) continue;
+      if (key === 'components' && Array.isArray(item)) {
+        out[key] = item.map((line) =>
+          line && typeof line === 'object'
+            ? Object.fromEntries(Object.entries(line as Record<string, unknown>).filter(([k]) => RECIPE_LINE_KEEPS.has(k)))
+            : line
+        );
+        continue;
+      }
       out[key] = catalogForMarketer(item);
     }
     return out as T;
   }
   return value;
+}
+
+/**
+ * The recipe in a marketer's edit of a variant is not a recipe: she read it
+ * without its grams. It is taken out of the body — the stored one stays as it
+ * was — rather than compared and refused, so a card she opened before this
+ * change and saves after it still saves.
+ */
+export function dropMarketerRecipe(body: unknown): void {
+  if (body && typeof body === 'object') delete (body as Record<string, unknown>).components;
+}
+
+/** A modifier answer's write-off as stored: what it takes off the shelf, and how much. */
+export interface StoredWriteOff {
+  variantId: number | null;
+  quantity: number | null;
+}
+
+/**
+ * Refuse a marketer's modifier answer that changes what it writes off the shelf
+ * (МР5): the answers, their prices and the rule are the menu's, the write-off
+ * is the kitchen's. An answer that says nothing about it keeps what it has; one
+ * that repeats what is stored (a card opened before the change) is not a change.
+ * `stored` is null for a new answer, which may write nothing off.
+ */
+export function assertMarketerModifierWrite(entry: unknown, stored: StoredWriteOff | null): void {
+  const body = (entry ?? {}) as Record<string, unknown>;
+  const sentVariant = body.component_variant_id;
+  const sentQuantity = body.component_quantity;
+  if (sentVariant === undefined && sentQuantity === undefined) return;
+  const asNumber = (value: unknown): number | null =>
+    value === undefined || value === null || value === '' || Number(value) === 0 ? null : Number(value);
+  const variant = sentVariant === undefined ? (stored?.variantId ?? null) : asNumber(sentVariant);
+  const quantity = sentQuantity === undefined ? (stored?.quantity ?? null) : asNumber(sentQuantity);
+  const before = stored ?? { variantId: null, quantity: null };
+  if (variant !== before.variantId || (variant !== null && quantity !== before.quantity)) {
+    throw new MarketerFieldError('списання зі складу');
+  }
 }
 
 /**

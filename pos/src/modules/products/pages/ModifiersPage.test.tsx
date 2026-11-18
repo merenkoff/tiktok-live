@@ -37,6 +37,7 @@ vi.mock('@pos/platform', async () => {
 });
 
 const { ModifiersPage } = await import('./ModifiersPage');
+const { useAuthStore } = await import('@pos/platform');
 const { signedUahInputToCents } = await import('../components/modifierInput');
 
 const milk: ModifierGroup = {
@@ -148,6 +149,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  useAuthStore.setState({ auth: null } as never);
 });
 
 async function openPage() {
@@ -404,5 +406,33 @@ describe('signedUahInputToCents', () => {
     expect(signedUahInputToCents('+15')).toBe(1500);
     expect(signedUahInputToCents('15')).toBe(1500);
     expect(signedUahInputToCents('')).toBe(0);
+  });
+
+  it('for the marketer, edits answers and prices but never shows or sends what an answer writes off (МР5)', async () => {
+    useAuthStore.setState({ auth: { staff: { id: 9, role: 'marketer', display_name: 'Оля' }, store: { id: 1 } } } as never);
+    const user = userEvent.setup();
+    posRequest.mockImplementation((_m: string, _p: string, body: { name: string }) => Promise.resolve({ ...milk, name: body.name }));
+    await openPage();
+    await user.click(screen.getByTestId('group-edit-1'));
+    const dialog = within(await screen.findByTestId('modifier-group-dialog'));
+    expect(dialog.queryByTestId('answer-writeoff-link')).not.toBeInTheDocument();
+    // «Дублювати» would copy the write-offs she cannot see.
+    expect(dialog.queryByTestId('modifier-group-fork')).not.toBeInTheDocument();
+    const first = within(dialog.getAllByTestId('answer-row')[0]);
+    await user.click(first.getByTestId('answer-more'));
+    expect(within(first.getByTestId('answer-details')).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(first.queryByTestId('answer-component-qty')).not.toBeInTheDocument();
+
+    const delta = within(dialog.getAllByTestId('answer-row')[1]).getByTestId('answer-delta');
+    await user.clear(delta);
+    await user.type(delta, '20');
+    await user.click(dialog.getByTestId('modifier-group-save'));
+    await waitFor(() => expect(posRequest).toHaveBeenCalledTimes(1));
+    const body = posRequest.mock.calls[0][2] as { modifiers: Array<Record<string, unknown>> };
+    expect(body.modifiers[1]).toMatchObject({ id: 12, price_delta_cents: 2000 });
+    for (const answer of body.modifiers) {
+      expect(answer).not.toHaveProperty('component_variant_id');
+      expect(answer).not.toHaveProperty('component_quantity');
+    }
   });
 });

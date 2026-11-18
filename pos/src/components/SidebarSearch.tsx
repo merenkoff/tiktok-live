@@ -42,9 +42,15 @@ export function SidebarSearch() {
   const hasProducts = pages.some((p) => p.to === '/admin/products');
   const hasRecipes = pages.some((p) => p.to === '/admin/tech-cards');
 
+  // The marketer's «Товари» is the menu (МР5): the search offers the dishes,
+  // not the ingredients and preps the kitchen keeps beside them.
+  const searched = useMemo(
+    () => (role === 'marketer' ? products.filter((p) => p.sellable !== false) : products),
+    [products, role]
+  );
   const hits = useMemo(
-    () => searchSidebar(query, pages, products, { recipes: hasRecipes }),
-    [query, pages, products, hasRecipes]
+    () => searchSidebar(query, pages, searched, { recipes: hasRecipes }),
+    [query, pages, searched, hasRecipes]
   );
 
   function load() {

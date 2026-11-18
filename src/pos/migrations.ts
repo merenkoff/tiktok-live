@@ -198,6 +198,10 @@ export const POS_MIGRATIONS = [
   // Gross and net in a recipe: a line's loss share, and an ingredient's usual
   // loss as a typing aid (TechDocs/POS_VERTICALS.md §7t).
   '104_pos_recipe_losses.sql',
+  // The cork fee and the product the waiter rings for it are one thing: the
+  // product's price is the fee the guest reads, and switching the terms off
+  // archives it instead of losing it (TechDocs/POS_QR_MENU_FEEDBACK.md).
+  '105_pos_corkage_product.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -23,7 +23,10 @@ export function ProductFields({
   onPatch,
   showShape,
   showDishFacts,
+  recipeWords,
 }: {
+  /** The recipe's words for the hint under «Склад для гостя»; absent draws none. */
+  recipeWords?: string[];
   value: Fields;
   onPatch: (patch: Partial<Fields>) => void;
   /** Offer «Що це за товар» — a florist or a café, or a card that already is composite. */
@@ -93,6 +96,7 @@ export function ProductFields({
           onStrength={(strength) => onPatch({ strength })}
           prepMinutes={value.prepMinutes}
           onPrepMinutes={(prepMinutes) => onPatch({ prepMinutes })}
+          recipeWords={recipeWords}
         />
       )}
     </div>

@@ -10,6 +10,8 @@ import { TagDot } from './TagDot';
 import { VariantsTable } from './VariantsTable';
 import { checkboxClass, chipClass } from './formStyles';
 import { productSummary, rowVariants } from '../lib/productSummary';
+import { GAP_WORDS, menuGaps } from '../lib/menuGaps';
+import { useMenuOnly } from '../lib/menuOnly';
 
 /**
  * One product in the list (C1e, PR3): a row, not a card with a table under it.
@@ -51,6 +53,10 @@ export function ProductRow({
   const active = rowVariants(product);
   const derived = product.kind === 'composite' && product.stock_mode === 'derived';
   const panelId = `variants-${product.id}`;
+  // The marketer reads the row as the guest's card (МР5): what is missing on
+  // it, never how the kitchen assembles the dish or whether the till sells it.
+  const menuOnly = useMenuOnly();
+  const gaps = menuOnly && !archived ? menuGaps(product) : [];
 
   return (
     <article role="listitem" className="sq-row">
@@ -91,9 +97,11 @@ export function ProductRow({
               <span className={`${chipClass} ring-1 ring-inset ring-sq-divider text-sq-secondary`}>В архіві</span>
             )}
             {product.needs_review && (
-              <span className={`${chipClass} bg-amber-50 text-amber-800`}>Потребує перевірки</span>
+              <span className={`${chipClass} bg-amber-50 text-amber-800`}>
+                {menuOnly ? 'Нова — заповніть' : 'Потребує перевірки'}
+              </span>
             )}
-            {product.kind === 'composite' && (
+            {!menuOnly && product.kind === 'composite' && (
               <span className={`${chipClass} bg-sq-blue/10 text-sq-blue-press`}>
                 {derived ? 'Складений · при продажу' : 'Складений · збираємо'}
               </span>
@@ -103,7 +111,15 @@ export function ProductRow({
                 {registerLabel}
               </span>
             )}
-            {product.sellable === false && (
+            {menuOnly && product.menu_hidden && (
+              <span className={`${chipClass} ring-1 ring-inset ring-sq-divider text-sq-secondary`}>Не в QR-меню</span>
+            )}
+            {gaps.map((gap) => (
+              <span key={gap} className={`${chipClass} bg-amber-50 text-amber-800`} data-testid={`missing-${gap}`}>
+                {GAP_WORDS[gap]}
+              </span>
+            ))}
+            {!menuOnly && product.sellable === false && (
               <span className={`${chipClass} ring-1 ring-inset ring-sq-divider text-sq-secondary`}>Не на касі</span>
             )}
             {(product.modifier_group_ids?.length ?? 0) > 0 && (

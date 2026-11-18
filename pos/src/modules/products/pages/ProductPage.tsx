@@ -22,7 +22,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
 import type { ModifierGroup, PosTag, Product } from '@pos/platform';
-import { Package, PageHeader, SectionHead } from '@pos/platform/ui';
+import { Package, PageHeader, QrCode, SectionHead } from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { AddVariantsDialog } from '../components/AddVariantsDialog';
 import { NewVariantFields } from '../components/NewVariantFields';
@@ -59,6 +59,8 @@ import {
 import { registerChoices } from '../lib/registerChoices';
 import { batchErrorMessage, saveErrorMessage } from '../lib/saveErrors';
 import { useMenuOnly } from '../lib/menuOnly';
+import { recipeWords } from '../lib/guestComposition';
+import { guestDishUrl, readCorkageProductId, readGuestMenuUrl } from '../data/guestMenuApi';
 import { useLeaveGuard } from '../lib/useLeaveGuard';
 
 /** What the list hands over so «← Товари» lands on the same search and tag. */
@@ -459,6 +461,25 @@ function ProductCard({ id }: { id: string | undefined }) {
   // vertical, a florist's bouquet): hiding existing data is not cleaning up.
   const scope = productFormScope(vertical);
   const showShape = !menuOnly && (scope.canComposite || (snapshot?.shape ?? '') !== '');
+  // The published menu (for «Як бачить гість») and the store's cork fee (for
+  // its note): asked once, only where the store has a guest menu at all.
+  const [menuUrl, setMenuUrl] = useState<string | null>(null);
+  const [corkageId, setCorkageId] = useState<number | null>(null);
+  useEffect(() => {
+    if (mode !== 'edit' || !scope.askDishFacts) return;
+    let live = true;
+    void readGuestMenuUrl().then((url) => live && setMenuUrl(url));
+    void readCorkageProductId().then((id) => live && setCorkageId(id));
+    return () => {
+      live = false;
+    };
+  }, [mode, scope.askDishFacts]);
+
+  // Only the marketer gets the hint (МР5); the owner has the recipe itself.
+  const recipeWordsOf = useMemo(
+    () => (menuOnly ? recipeWords(products.find((p) => p.id === productId)) : []),
+    [menuOnly, products, productId]
+  );
   const showDishFacts =
     scope.askDishFacts ||
     !!snapshot?.composition ||
@@ -487,7 +508,25 @@ function ProductCard({ id }: { id: string | undefined }) {
 
   return (
     <div className="animate-fade-up text-sq-text">
-      <PageHeader glyph={Package} title={title} back={{ to: backTo, label: 'Товари' }} />
+      <PageHeader
+        glyph={Package}
+        title={title}
+        back={{ to: backTo, label: 'Товари' }}
+        actions={
+          mode === 'edit' && menuUrl && draft && !draft.menuHidden ? (
+            <a
+              href={guestDishUrl(menuUrl, productId)}
+              target="_blank"
+              rel="noreferrer"
+              className="sq-btn-quiet"
+              data-testid="guest-view"
+            >
+              <QrCode size={20} />
+              Як бачить гість
+            </a>
+          ) : undefined
+        }
+      />
 
       {flash && (
         <div className="mb-5 rounded-sq bg-amber-50 text-amber-800 px-4 py-3 text-sm" role="status">
@@ -514,6 +553,9 @@ function ProductCard({ id }: { id: string | undefined }) {
                     onPatch={patchDraft}
                     showShape={showShape}
                     showDishFacts={showDishFacts}
+                    // The marketer writes the guest's composition with the
+                    // recipe's words at hand — names only (МР5).
+                    recipeWords={menuOnly ? recipeWordsOf : undefined}
                   />
                 </section>
                 {mode === 'create' ? (
@@ -606,6 +648,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                 askMenuHidden={scope.askDishFacts}
                 registers={registers}
                 askExcise={!menuOnly && fiscal?.enabled === true}
+                corkage={mode === 'edit' && corkageId === productId}
               />
             </div>
           </fieldset>

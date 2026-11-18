@@ -19,6 +19,7 @@ import {
   assertMarketerProductWrite,
   assertMarketerVariantWrite,
   catalogForMarketer,
+  dropMarketerRecipe,
 } from '../marketer.js';
 import type { PosAuthContext } from '../types.js';
 
@@ -293,18 +294,23 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
       if (auth.role === 'marketer') {
         const current = await findVariant(auth.storeId, Number(id));
         if (!current) return reply.code(400).send({ error: 'Variant not found' });
+        // The recipe is the kitchen's: the marketer reads its names without the
+        // grams, so whatever comes back in an edit is not a recipe — dropped,
+        // and the stored one stays exactly as it was.
+        dropMarketerRecipe(request.body);
         assertMarketerVariantWrite(request.body, current);
       }
-      return forRole(
-        auth,
-        await withMenuJournal(auth, await productOfVariant(auth.storeId, Number(id)), () =>
-          productsService.updateVariant(
-            auth.storeId,
-            Number(id),
-            request.body as Parameters<typeof productsService.updateVariant>[2]
-          )
+      const updated = await withMenuJournal(auth, await productOfVariant(auth.storeId, Number(id)), () =>
+        productsService.updateVariant(
+          auth.storeId,
+          Number(id),
+          request.body as Parameters<typeof productsService.updateVariant>[2]
         )
       );
+      // A price is what the guest reads — a dish's, or the cork fee's, whose
+      // product price IS the fee on the page (migration 105).
+      invalidatePublicMenu(auth.storeId);
+      return forRole(auth, updated);
     } catch (error) {
       if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       const status = isUniqueViolation(error) ? 409 : 400;

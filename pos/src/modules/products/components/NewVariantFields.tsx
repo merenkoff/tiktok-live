@@ -53,7 +53,13 @@ export function NewVariantFields({
         schema={vertical.attributes}
         value={value.attributes}
         onChange={(attributes) => set({ attributes })}
-        unit={{ value: value.unit, options: vertical.units, onChange: (unit) => set({ unit }), labels: unitLabels(vertical) }}
+        // The unit, the article and the barcode are the kitchen's and the
+        // till's (МР5): the marketer names a size and prices it.
+        unit={
+          menuOnly
+            ? undefined
+            : { value: value.unit, options: vertical.units, onChange: (unit) => set({ unit }), labels: unitLabels(vertical) }
+        }
       />
       <label className="flex flex-col gap-1.5">
         <span className={captionClass}>{priceCaption(weighed, value.unit)}</span>
@@ -93,24 +99,28 @@ export function NewVariantFields({
           <p className="text-[13px] text-sq-muted mt-1.5">{compositionHint(shape)}</p>
         </div>
       )}
-      <SkuField
-        value={value.sku}
-        onChange={(sku) => set({ sku })}
-        tagIds={tagIds ?? []}
-        caption="Артикул (SKU) — ваш внутрішній код"
-        captionClass={captionClass}
-      />
-      <label className="flex flex-col gap-1.5">
-        <span className={captionClass}>Штрихкод — те, що читає сканер</span>
-        <div className="flex gap-2">
-          <input
-            className="sq-input tabular-nums min-w-0"
-            value={value.barcode}
-            onChange={(e) => set({ barcode: e.target.value })}
-          />
-          <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
-        </div>
-      </label>
+      {!menuOnly && (
+        <SkuField
+          value={value.sku}
+          onChange={(sku) => set({ sku })}
+          tagIds={tagIds ?? []}
+          caption="Артикул (SKU) — ваш внутрішній код"
+          captionClass={captionClass}
+        />
+      )}
+      {!menuOnly && (
+        <label className="flex flex-col gap-1.5">
+          <span className={captionClass}>Штрихкод — те, що читає сканер</span>
+          <div className="flex gap-2">
+            <input
+              className="sq-input tabular-nums min-w-0"
+              value={value.barcode}
+              onChange={(e) => set({ barcode: e.target.value })}
+            />
+            <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
+          </div>
+        </label>
+      )}
       {!menuOnly && (
       <PackFields
         className="sm:col-span-2"

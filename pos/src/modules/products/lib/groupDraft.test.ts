@@ -110,6 +110,18 @@ describe('groupDraft: a question as the owner edits it', () => {
     expect(sameDraft(draft, draftOfGroup(crust))).toBe(true);
   });
 
+  it('for the marketer, sends the answers without what they write off — the server keeps it (МР5)', () => {
+    const sent = toWholeInput(draftOfGroup(crust), { writeOffs: false });
+    for (const answer of sent.modifiers) {
+      expect(answer).not.toHaveProperty('component_variant_id');
+      expect(answer).not.toHaveProperty('component_quantity');
+    }
+    expect(sent.modifiers.map((m) => [m.id, m.name, m.price_delta_cents])).toEqual([
+      [11, 'Філадельфія', 8000],
+      [12, 'Кунжутний', 1000],
+    ]);
+  });
+
   it('says the rule in the server’s two numbers', () => {
     const base = emptyGroupDraft();
     expect(ruleOf({ ...base, pick: 'one', required: false })).toEqual({ min_select: 0, max_select: 1 });

@@ -11,6 +11,7 @@ import type { ComponentOption } from './componentOptions';
 import { captionClass, checkboxClass, chipClass, panelFieldClass } from './formStyles';
 import { errorText, signedUahInputToCents } from './modifierInput';
 import { saveGroupWhole } from '../data/modifiersApi';
+import { useMenuOnly } from '../lib/menuOnly';
 import {
   GROUP_TEMPLATES,
   addSizeColumn,
@@ -128,6 +129,10 @@ export function ModifierGroupDialog({
   const [draft, setDraft] = useState<GroupDraft>(initial);
   const [baseline, setBaseline] = useState<GroupDraft>(initial);
   const [open, setOpen] = useState<string | null>(null);
+  // The café's marketer edits the answers, prices and rule — never what an
+  // answer writes off the shelf (МР5): she neither sees it nor sends it, and
+  // a copy of a question that writes something off is the owner's to make.
+  const menuOnly = useMenuOnly();
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -143,6 +148,9 @@ export function ModifierGroupDialog({
   const dirty = !sameDraft(draft, baseline);
   const rule = ruleOf(draft);
   const shared = (others?.count ?? 0) > 0;
+  // A copy of a question whose answers write something off would carry the
+  // kitchen's half: the marketer leaves that to the owner.
+  const canFork = !!fork && !(menuOnly && draft.answers.some((answer) => answer.componentId != null));
   // Up to two size columns a row stays on one line, so the heads are said once.
   const columnHead = draft.sizeColumns.length <= 2;
 
@@ -178,7 +186,7 @@ export function ModifierGroupDialog({
     setBusy(true);
     setError(null);
     try {
-      const input = toWholeInput(draft);
+      const input = toWholeInput(draft, { writeOffs: !menuOnly });
       if (asCopy && group && fork) {
         // The copy is a NEW question: no answer ids, and a name that tells it
         // from the shared one in every list.
@@ -243,7 +251,7 @@ export function ModifierGroupDialog({
           </>
         ) : (
           <>
-            {shared && fork && group && (
+            {shared && canFork && group && (
               <button
                 type="button"
                 className="sq-btn-quiet mr-auto"
@@ -274,7 +282,7 @@ export function ModifierGroupDialog({
           <div className="rounded-sq bg-amber-50 text-amber-900 px-4 py-3 text-[15px] leading-relaxed" data-testid="modifier-group-shared">
             Це питання ставлять {fork ? 'ще ' : ''}
             {usageText(others.count, noun)}: {namesPreview(others.names)}. Зміни побачать усі.
-            {fork && ` Щоб змінити лише тут — «Зберегти лише для цієї ${dish ? 'страви' : 'позиції'}».`}
+            {canFork && ` Щоб змінити лише тут — «Зберегти лише для цієї ${dish ? 'страви' : 'позиції'}».`}
           </div>
         )}
         {error && (
@@ -449,7 +457,7 @@ export function ModifierGroupDialog({
                         onKeyDown={(e) => onRowEnter(e, index)}
                         data-testid="answer-name"
                       />
-                      {!blank && !expanded && (
+                      {!blank && !expanded && !menuOnly && (
                         <button
                           type="button"
                           className="mt-1 text-left text-[13px] text-sq-blue font-medium"
@@ -529,7 +537,7 @@ export function ModifierGroupDialog({
                     <button
                       type="button"
                       className="shrink-0 w-11 h-11 grid place-items-center rounded-[10px] text-sq-secondary hover:bg-sq-sidebar disabled:opacity-25"
-                      aria-label={expanded ? 'Згорнути' : 'Списання й інше'}
+                      aria-label={expanded ? 'Згорнути' : menuOnly ? 'Інше' : 'Списання й інше'}
                       aria-expanded={expanded}
                       disabled={blank}
                       onClick={() => setOpen(expanded ? null : answer.key)}
@@ -541,6 +549,8 @@ export function ModifierGroupDialog({
 
                   {expanded && !blank && (
                     <div className="mx-2 mb-2 rounded-[10px] bg-sq-sidebar p-3 space-y-3" data-testid="answer-details">
+                      {!menuOnly && (
+                      <>
                       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem] items-end">
                         <div className="flex flex-col gap-1.5 min-w-0">
                           <span className={captionClass}>Списує зі складу</span>
@@ -578,6 +588,8 @@ export function ModifierGroupDialog({
                       <p className="text-[13px] text-sq-muted leading-relaxed">
                         «Вівсяне» списує вівсяне молоко, а не звичайне — так склад сходиться з тим, що налили.
                       </p>
+                      </>
+                      )}
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <label className="inline-flex items-center gap-2 min-h-9 text-[15px] text-sq-text cursor-pointer">
                           <input

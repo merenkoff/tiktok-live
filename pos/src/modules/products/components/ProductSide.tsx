@@ -13,6 +13,7 @@ import { tagPathLabel } from './tagLabels';
 import type { TechCardRow } from '../data/techCardsApi';
 import { rowName, type ProductDraft } from '../lib/productDraft';
 import type { RegisterChoice } from '../lib/registerChoices';
+import { useMenuOnly } from '../lib/menuOnly';
 
 type Fields = Pick<
   ProductDraft,
@@ -194,8 +195,11 @@ export function ProductSide({
   askMenuHidden = false,
   registers = [],
   askExcise = false,
+  corkage = false,
 }: {
   value: Fields;
+  /** This card is the store's cork fee (migration 105): its price is the fee the guest reads. */
+  corkage?: boolean;
   onPatch: (patch: Partial<Fields>) => void;
   /** Offer «Не показувати в QR-меню» — only where the store has a guest menu. */
   askMenuHidden?: boolean;
@@ -228,12 +232,21 @@ export function ProductSide({
   }
 
   const costLines = (variants ?? []).filter((v) => techCards?.has(v.id));
+  // The marketer's card is the menu (МР5): whether the guest sees it, never
+  // whether the till sells it — that switch is for ingredients and preps.
+  const menuOnly = useMenuOnly();
 
   return (
     <div className="space-y-7">
       <section className="space-y-3">
-        <SectionHead title="На касі" />
-        <SellableField checked={value.sellable} onChange={(sellable) => onPatch({ sellable })} />
+        <SectionHead title={menuOnly ? 'QR-меню' : 'На касі'} />
+        {corkage && (
+          <p className="rounded-xl bg-sq-blue/[0.06] px-3.5 py-3 text-[14px] text-sq-secondary leading-snug" data-testid="corkage-note">
+            Це <strong className="font-semibold text-sq-text">корковий збір</strong> закладу. Його ціну гість бачить у
+            QR-меню під назвою закладу — змінюйте тут або на сторінці «QR-меню», це одне число.
+          </p>
+        )}
+        {!menuOnly && <SellableField checked={value.sellable} onChange={(sellable) => onPatch({ sellable })} />}
         {askMenuHidden && (
           <MenuHiddenField checked={value.menuHidden} onChange={(menuHidden) => onPatch({ menuHidden })} />
         )}

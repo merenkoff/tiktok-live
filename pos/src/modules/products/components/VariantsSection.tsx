@@ -67,11 +67,13 @@ export function VariantsSection({
           <table className="sq-table">
             <thead>
               <tr>
-                <th>Варіант</th>
+                {/* The marketer edits the menu's half (МР5): a size and its
+                    price — the article and the barcode are the till's codes. */}
+                <th>{stock ? 'Варіант' : 'Розмір'}</th>
                 <th>Ціна, грн</th>
                 {stock && <th className="!text-right whitespace-nowrap">{derived ? 'Можна зібрати' : 'Залишок'}</th>}
-                <th>Артикул</th>
-                <th>Штрихкод</th>
+                {stock && <th>Артикул</th>}
+                {stock && <th>Штрихкод</th>}
                 <th className="!pr-0" aria-label="Ще" />
               </tr>
             </thead>
@@ -140,7 +142,7 @@ function VariantRow({
           >
             {name}
           </button>
-          {composite && (
+          {composite && stock && (
             <span className="block text-[13px] text-sq-muted">Склад · {v.components.length}</span>
           )}
         </td>
@@ -172,39 +174,43 @@ function VariantRow({
             )}
           </td>
         )}
-        <td className="align-middle">
-          <input
-            className={`${cell} w-28`}
-            aria-label={`Артикул · ${name}`}
-            value={v.sku}
-            onChange={(e) => onPatch(v.id, { sku: e.target.value })}
-          />
-        </td>
-        <td className="align-middle">
-          {/* A row with no code offers to mint one in place of the empty box;
-              a row that has one shows it — the sheet has both side by side. */}
-          {v.barcode === '' ? (
-            <GenerateBarcodeButton
-              label="Згенерувати"
-              className="text-[15px] font-semibold text-sq-blue whitespace-nowrap min-h-10 px-1"
-              onGenerated={(barcode) => onPatch(v.id, { barcode })}
-            />
-          ) : (
+        {stock && (
+          <td className="align-middle">
             <input
-              className={`${cell} tabular-nums w-36`}
-              inputMode="numeric"
-              aria-label={`Штрихкод · ${name}`}
-              value={v.barcode}
-              onChange={(e) => onPatch(v.id, { barcode: e.target.value })}
+              className={`${cell} w-28`}
+              aria-label={`Артикул · ${name}`}
+              value={v.sku}
+              onChange={(e) => onPatch(v.id, { sku: e.target.value })}
             />
-          )}
-        </td>
+          </td>
+        )}
+        {stock && (
+          <td className="align-middle">
+            {/* A row with no code offers to mint one in place of the empty box;
+                a row that has one shows it — the sheet has both side by side. */}
+            {v.barcode === '' ? (
+              <GenerateBarcodeButton
+                label="Згенерувати"
+                className="text-[15px] font-semibold text-sq-blue whitespace-nowrap min-h-10 px-1"
+                onGenerated={(barcode) => onPatch(v.id, { barcode })}
+              />
+            ) : (
+              <input
+                className={`${cell} tabular-nums w-36`}
+                inputMode="numeric"
+                aria-label={`Штрихкод · ${name}`}
+                value={v.barcode}
+                onChange={(e) => onPatch(v.id, { barcode: e.target.value })}
+              />
+            )}
+          </td>
+        )}
         <td className="align-middle !pr-0">
           <button
             type="button"
             onClick={() => onOpen(v.id)}
             aria-label={`Ще · ${name}`}
-            title="Усі поля варіанта: знижка, закупівельна ціна, фасування, склад"
+            title={stock ? 'Усі поля варіанта: знижка, закупівельна ціна, фасування, склад' : 'Розмір, ціна, знижка'}
             className="w-9 h-9 grid place-items-center rounded-lg text-sq-secondary hover:bg-sq-sidebar hover:text-sq-text"
           >
             <MoreHorizontal size={20} />
@@ -213,7 +219,7 @@ function VariantRow({
       </tr>
       {error && (
         <tr>
-          <td colSpan={stock ? 6 : 5} className="!pt-0 text-sm text-red-600" role="alert">
+          <td colSpan={stock ? 6 : 3} className="!pt-0 text-sm text-red-600" role="alert">
             {error}
           </td>
         </tr>

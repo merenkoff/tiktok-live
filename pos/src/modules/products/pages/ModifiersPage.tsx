@@ -17,6 +17,7 @@ import { productFormScope } from '../components/productFormScope';
 import { flattenTags } from '../components/tagLabels';
 import { saveGroupWhole, setGroupActive } from '../data/modifiersApi';
 import { draftOfGroup, toWholeInput } from '../lib/groupDraft';
+import { useMenuOnly } from '../lib/menuOnly';
 import { ingredientOptions } from '../lib/ingredientOptions';
 import {
   PROBLEM_WORDS,
@@ -76,6 +77,7 @@ function copyName(name: string, taken: Set<string>): string {
  */
 export function ModifiersPage() {
   const vertical = useVertical();
+  const menuOnly = useMenuOnly();
   const dish = productFormScope(vertical).askDishFacts;
   const noun = nounFor(dish);
 
@@ -145,7 +147,7 @@ export function ModifiersPage() {
     setMenu(null);
     setError(null);
     try {
-      const input = toWholeInput(draftOfGroup(group));
+      const input = toWholeInput(draftOfGroup(group), { writeOffs: !menuOnly });
       const taken = new Set((groups ?? []).map((g) => g.name.toLowerCase()));
       const copy = await saveGroupWhole(null, {
         ...input,
@@ -384,15 +386,19 @@ export function ModifiersPage() {
                               role="menu"
                               className="absolute right-0 top-full mt-1 z-20 w-56 rounded-xl bg-white shadow-[0_12px_32px_rgba(0,20,60,.2)] ring-1 ring-sq-divider p-1.5"
                             >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="w-full min-h-10 px-3 rounded-lg text-left text-[15px] text-sq-text hover:bg-sq-sidebar"
-                                onClick={() => void duplicate(group)}
-                                data-testid={`group-duplicate-${group.id}`}
-                              >
-                                Дублювати
-                              </button>
+                              {/* A copy carries what each answer writes off — the
+                                  kitchen's half, so not the marketer's to make (МР5). */}
+                              {!(menuOnly && group.modifiers.some((m) => m.component_variant_id != null)) && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="w-full min-h-10 px-3 rounded-lg text-left text-[15px] text-sq-text hover:bg-sq-sidebar"
+                                  onClick={() => void duplicate(group)}
+                                  data-testid={`group-duplicate-${group.id}`}
+                                >
+                                  Дублювати
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 role="menuitem"
