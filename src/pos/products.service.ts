@@ -32,6 +32,7 @@ import {
   loadGroupsForProducts,
   toCatalogGroup,
 } from './modifiers.service.js';
+import { normalizeLossBps } from './composites.service.js';
 import type { ComponentInput } from './composites.service.js';
 import { activeRegisters, effectiveRegister } from './fiscal/routing.js';
 import { bottleSourcesOf, type BottleSource } from './bottles.service.js';
@@ -80,6 +81,19 @@ export interface VariantInput {
    * Its own field (Д10): a receiving pack may be a case of six bottles.
    */
   bottle_ml?: number | null;
+  /**
+   * The ingredient's usual preparation loss — peel, bones — in basis points
+   * (migration 104). A typing aid: the recipe editor offers it when the
+   * ingredient is added to a recipe; no sum reads it. Null = not said.
+   */
+  prep_loss_bps?: number | null;
+}
+
+/** `undefined` leaves it, `null` or '' clears it, anything else must be 0…99 %. */
+function normalizePrepLoss(raw: unknown, current: number | null): number | null {
+  if (raw === undefined) return current;
+  if (raw === null || raw === '') return null;
+  return normalizeLossBps(raw);
 }
 
 /** The stored tenths from whichever the client sent: the form's percent («4,5») or the importer's tenths. */
@@ -391,6 +405,8 @@ export async function listProducts(storeId: number, onlyIds?: readonly number[])
       pack_label: String(row.pack_label ?? ''),
       // Poured from a bottle opened by its stamp (ДК5, migration 093).
       bottle_ml: row.bottle_ml == null ? null : Number(row.bottle_ml),
+      // The ingredient's usual preparation loss, offered by the recipe editor (migration 104).
+      prep_loss_bps: row.prep_loss_bps == null ? null : Number(row.prep_loss_bps),
       // What the price is for: 1000 = per kg/l, a weighed variant (migration 075).
       price_per: Number(row.price_per ?? 1),
     });
@@ -476,8 +492,8 @@ async function insertVariantTx(
   const variantResult = await client.query(
     `INSERT INTO pos_variants
        (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_milli, compare_at_cents,
-        pack_qty, pack_label, price_per, bottle_ml)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        pack_qty, pack_label, price_per, bottle_ml, prep_loss_bps)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING id`,
     [
       storeId,
@@ -496,6 +512,7 @@ async function insertVariantTx(
       // Per kilogram or litre for a unit the vertical weighs (migration 075).
       derived.price_per,
       bottleMl,
+      normalizePrepLoss(variant.prep_loss_bps, null),
     ]
   );
   const variantId = Number(variantResult.rows[0].id);
@@ -1017,6 +1034,7 @@ export async function updateVariant(
          pack_label = $11,
          price_per = $14,
          bottle_ml = $15,
+         prep_loss_bps = $16,
          updated_at = NOW()
        WHERE id = $12 AND store_id = $13
        RETURNING product_id`,
@@ -1040,6 +1058,7 @@ export async function updateVariant(
         // variant is in a unit the vertical weighs (migration 075).
         derived.price_per,
         bottleMl,
+        normalizePrepLoss(input.prep_loss_bps, row.prep_loss_bps == null ? null : Number(row.prep_loss_bps)),
       ]
     );
     productId = Number(result.rows[0].product_id);

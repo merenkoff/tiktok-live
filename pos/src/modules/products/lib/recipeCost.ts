@@ -37,6 +37,8 @@ export interface CostNode {
    * THOUSANDTHS of a kopeck (`lib/costUnits.ts`) — 35,50 ₴/кг is 3550 a gram.
    */
   costMilli: number;
+  /** The ingredient's usual preparation loss, basis points; null = not said (migration 104). */
+  prepLossBps: number | null;
   /** Assembled when it sells: its cost is its recipe's, and its own `costMilli` is not read. */
   derived: boolean;
   /** Any recipe at all (`derived` or made in advance). */
@@ -59,12 +61,14 @@ export function buildCostIndex(products: readonly Product[]): CostIndex {
         caption: variant.label ? `${product.name} · ${variant.label}` : product.name,
         unit: variant.unit,
         costMilli: costMilliOf(variant),
+        prepLossBps: variant.prep_loss_bps ?? null,
         derived: composite && product.stock_mode === 'derived',
         recipe: composite,
         ingredient: product.sellable === false,
         components: (variant.components ?? []).map((c) => ({
           component_variant_id: c.component_variant_id,
           quantity: c.quantity,
+          loss_bps: c.loss_bps ?? 0,
         })),
       });
     }
@@ -190,10 +194,14 @@ export function baseMilliToHumanPrice(costMilli: number, unit: string): number {
   return milliToPrice(costMilli, pricingUnit(unit).per);
 }
 
-/** A recipe scaled for another size: every quantity × factor, never below one unit. */
+/**
+ * A recipe scaled for another size: every quantity × factor, never below one
+ * unit. A line's loss is a share, so it is carried as it is.
+ */
 export function scaleRecipe(components: readonly ProductComponentInput[], factor: number): ProductComponentInput[] {
   return components.map((c) => ({
     component_variant_id: c.component_variant_id,
     quantity: Math.max(1, Math.round(c.quantity * factor)),
+    loss_bps: c.loss_bps ?? 0,
   }));
 }

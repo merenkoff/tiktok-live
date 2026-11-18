@@ -189,8 +189,8 @@ describe('TechCardsPage', () => {
     await waitFor(() => expect(updateVariant).toHaveBeenCalledTimes(1));
     expect(updateVariant).toHaveBeenCalledWith(50, {
       components: [
-        { component_variant_id: 10, quantity: 120 },
-        { component_variant_id: 30, quantity: 20 },
+        { component_variant_id: 10, quantity: 120, loss_bps: 0 },
+        { component_variant_id: 30, quantity: 20, loss_bps: 0 },
       ],
       price_cents: 25000,
     });
@@ -247,6 +247,55 @@ describe('TechCardsPage', () => {
     await user.click(screen.getByTestId('tech-tab-dishes'));
     // 60 г × 55 коп = 33 ₴ of 265 ₴ — 12,45 %, however the last digit rounds.
     expect(within(await screen.findByTestId('tech-card-6')).getByTestId('tech-food-cost')).toHaveTextContent(/12,[45] %/);
+  });
+
+  it('takes an ingredient’s usual loss where its price is, and «not said» for an emptied box', async () => {
+    const user = userEvent.setup();
+    updateVariant.mockResolvedValue({ ...BEEF, variants: [{ ...BEEF.variants[0], prep_loss_bps: 1250 }] });
+    open('/admin/tech-cards?tab=ingredients');
+    const loss = await screen.findByTestId('ingredient-loss-10');
+    expect(loss).toHaveValue('');
+    await user.type(loss, '12,5{Enter}');
+    await waitFor(() => expect(updateVariant).toHaveBeenCalledWith(10, { prep_loss_bps: 1250 }));
+    expect(await screen.findByTestId('tech-cards-flash')).toHaveTextContent(
+      '«Яловичина»: відходи 12,5 % — підставлятимуться в нові рядки рецептів.'
+    );
+    await waitFor(() => expect(screen.getByTestId('ingredient-loss-10')).toHaveValue('12,5'));
+
+    // 150 % is not a loss: nothing is sent.
+    updateVariant.mockClear();
+    await user.clear(screen.getByTestId('ingredient-loss-10'));
+    await user.type(screen.getByTestId('ingredient-loss-10'), '150{Enter}');
+    expect(await screen.findByText('від 0 до 99')).toBeInTheDocument();
+    expect(updateVariant).not.toHaveBeenCalled();
+
+    // Emptied: «not said», which is null on the wire — not 0 %.
+    updateVariant.mockResolvedValue(BEEF);
+    await user.clear(screen.getByTestId('ingredient-loss-10'));
+    await user.tab();
+    await waitFor(() => expect(updateVariant).toHaveBeenCalledWith(10, { prep_loss_bps: null }));
+  });
+
+  it('prints the recipe that is on screen as a sheet of weights, with no money on it', async () => {
+    const user = userEvent.setup();
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    open();
+    await user.click(await screen.findByTestId('tech-card-5'));
+    const dialog = within(await screen.findByTestId('recipe-dialog'));
+    // Unsaved edits are printed too: what the cook is handed is what the owner sees.
+    await user.click(dialog.getByTestId('recipe-gross-net'));
+    await user.type(dialog.getByLabelText('Втрати «Яловичина», %'), '20');
+    await user.click(dialog.getByTestId('recipe-print'));
+
+    const sheet = within(await screen.findByTestId('tech-card-printable'));
+    expect(sheet.getByRole('heading', { name: 'Технологічна карта' })).toBeInTheDocument();
+    expect(sheet.getByText(/Борщ · на 1 порцію/)).toBeInTheDocument();
+    const rows = sheet.getAllByRole('row').map((row) => row.textContent);
+    expect(rows).toEqual(['СкладникБруттоНеттоВтрати, %', 'Яловичина100 г80 г20', 'Сіль20 г20 г']);
+    expect(sheet.getByText('Вихід: ≈ 100 г')).toBeInTheDocument();
+    expect(screen.getByTestId('tech-card-printable').textContent).not.toMatch(/₴/);
+    await waitFor(() => expect(print).toHaveBeenCalled());
+    print.mockRestore();
   });
 
   it('replaces an ingredient everywhere: says what it will touch, never sends an empty multiplier', async () => {

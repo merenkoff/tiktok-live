@@ -99,14 +99,33 @@ type VariantView = ProductView['variants'][number] & {
   id: number;
   label: string;
   price_cents: number;
-  components?: Array<{ component_variant_id: number; quantity: number; product_name: string; label: string; unit: string }>;
+  components?: Array<{
+    component_variant_id: number;
+    quantity: number;
+    loss_bps?: number;
+    product_name: string;
+    label: string;
+    unit: string;
+  }>;
 };
 
 function recipeText(variant: VariantView): string[] {
   return (variant.components ?? []).map((c) => {
     const what = [c.product_name, c.label].filter(Boolean).join(' · ');
-    return `${what} — ${c.quantity}${c.unit ? ` ${c.unit}` : ''}`;
+    // The gross weight, and the loss when the line states one: «Картопля — 125 г (втрати 20 %)».
+    const loss = c.loss_bps ? ` (втрати ${lossText(c.loss_bps)})` : '';
+    return `${what} — ${c.quantity}${c.unit ? ` ${c.unit}` : ''}${loss}`;
   });
+}
+
+/** «20 %», «12,5 %» from basis points. */
+function lossText(bps: number): string {
+  return `${String(bps / 100).replace('.', ',')} %`;
+}
+
+function prepLossText(variant: VariantView): string | null {
+  const bps = (variant as unknown as { prep_loss_bps?: number | null }).prep_loss_bps;
+  return bps == null ? null : lossText(bps);
 }
 
 function costText(variant: VariantView): string | null {
@@ -180,6 +199,11 @@ export function diffProduct(
     const costTo = costText(variant);
     if (costFrom !== costTo) {
       changes.push({ field: 'variant.cost', variant: variantName(variant), from: costFrom, to: costTo });
+    }
+    const lossFrom = prepLossText(old);
+    const lossTo = prepLossText(variant);
+    if (lossFrom !== lossTo) {
+      changes.push({ field: 'variant.prep_loss', variant: variantName(variant), from: lossFrom, to: lossTo });
     }
     const recipeFrom = recipeText(old);
     const recipeTo = recipeText(variant);

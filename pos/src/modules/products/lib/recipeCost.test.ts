@@ -180,9 +180,13 @@ describe('recipeCost: the server’s sum, live', () => {
         1.5
       )
     ).toEqual([
-      { component_variant_id: 1, quantity: 27 },
-      { component_variant_id: 2, quantity: 2 },
+      { component_variant_id: 1, quantity: 27, loss_bps: 0 },
+      { component_variant_id: 2, quantity: 2, loss_bps: 0 },
     ]);
     expect(scaleRecipe([{ component_variant_id: 1, quantity: 1 }], 0.2)[0].quantity).toBe(1);
+    // A loss is a share of the line: a bigger portion peels the same fifth away.
+    expect(scaleRecipe([{ component_variant_id: 1, quantity: 125, loss_bps: 2000 }], 2)).toEqual([
+      { component_variant_id: 1, quantity: 250, loss_bps: 2000 },
+    ]);
   });
 });

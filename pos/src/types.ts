@@ -777,8 +777,13 @@ export type ProductStockMode = 'own' | 'derived';
 export interface ProductComponent {
   id: number;
   component_variant_id: number;
-  /** In the component's own unit. */
+  /** In the component's own unit — the GROSS weight, what leaves the shelf. */
   quantity: number;
+  /**
+   * The share of `quantity` that does not reach the dish, in basis points
+   * (2000 = 20 %; migration 104). Absent from an older server → 0.
+   */
+  loss_bps?: number;
   sort_order: number;
   product_name: string;
   label: string;
@@ -788,7 +793,14 @@ export interface ProductComponent {
 /** What a composition write sends — the server resolves the rest. */
 export interface ProductComponentInput {
   component_variant_id: number;
+  /** The gross weight: what the recipe takes off the shelf. */
   quantity: number;
+  /**
+   * What share of it is lost in preparation, in basis points. Left out, the
+   * server keeps whatever the line already has — so a caller that knows
+   * nothing about losses cannot erase one (migration 104).
+   */
+  loss_bps?: number;
 }
 
 /**
@@ -830,6 +842,12 @@ export interface ProductVariant {
    * older server; read it through `costMilliOf`.
    */
   cost_milli?: number;
+  /**
+   * The ingredient's usual preparation loss — peel, bones — in basis points
+   * (migration 104): what the recipe editor offers when the ingredient is
+   * added to a recipe. No sum reads it. Null or absent = not said.
+   */
+  prep_loss_bps?: number | null;
   compare_at_cents?: number | null;
   is_active: boolean;
   /**

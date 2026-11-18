@@ -274,6 +274,8 @@ class PosApi {
       cost_cents?: number;
       /** The same, in thousandths of a kopeck per base unit — wins over `cost_cents`. */
       cost_milli?: number;
+      /** The ingredient's usual preparation loss, basis points (migration 104). */
+      prep_loss_bps?: number | null;
       quantity?: number;
       /** The purchase pack — both halves or neither (migration 054). */
       pack_qty?: number | null;
@@ -336,6 +338,8 @@ class PosApi {
       cost_cents?: number;
       /** The same, in thousandths of a kopeck per base unit — wins over `cost_cents`. */
       cost_milli?: number;
+      /** The ingredient's usual preparation loss, basis points (migration 104). */
+      prep_loss_bps?: number | null;
       quantity?: number;
       compare_at_cents?: number | null;
       /** The purchase pack — both halves or neither (migration 054). */
@@ -384,6 +388,8 @@ class PosApi {
       cost_cents: number;
       /** The purchase price in thousandths of a kopeck per base unit — wins over `cost_cents`. */
       cost_milli: number;
+      /** The ingredient's usual preparation loss, basis points; null clears it (migration 104). */
+      prep_loss_bps: number | null;
       is_active: boolean;
       /**
        * The purchase pack. Leaving both out keeps whatever the row has; an

@@ -100,13 +100,21 @@ test('the owner finds a dish, fixes its recipe in place and prices an ingredient
   // 2. The beans have never been received with a price: no food cost, and why.
   await expect(dialog.getByTestId('recipe-totals')).toContainText('немає ціни: Зерно арабіка');
 
-  // 3. More milk — and one request, with the whole recipe of this one size.
-  await dialog.getByTestId('composition-row').nth(1).getByLabel('Кількість', { exact: true }).fill('250');
+  // 3. More milk, and the beans by what reaches the cup: a tenth is lost in the
+  //    grinder, so 18 г net is 20 г off the shelf — worked out, not typed. One
+  //    request, with the whole recipe of this one size.
+  await dialog.getByTestId('recipe-gross-net').click();
+  const beansRow = dialog.getByTestId('composition-row').nth(0);
+  await beansRow.getByLabel('Втрати «Зерно арабіка», %').fill('10');
+  await beansRow.getByLabel('Нетто', { exact: true }).fill('18');
+  await expect(beansRow.getByLabel('Брутто', { exact: true })).toHaveValue('20');
+  await dialog.getByTestId('composition-row').nth(1).getByLabel('Брутто', { exact: true }).fill('250');
+  await expect(dialog.getByTestId('recipe-yield')).toHaveText('Вихід ≈ 268 г');
   await dialog.getByTestId('recipe-dialog-save').click();
   await expect.poll(() => patches.find((p) => p.url.endsWith('/variants/30'))?.body).toEqual({
     components: [
-      { component_variant_id: 10, quantity: 18 },
-      { component_variant_id: 20, quantity: 250 },
+      { component_variant_id: 10, quantity: 20, loss_bps: 1000 },
+      { component_variant_id: 20, quantity: 250, loss_bps: 0 },
     ],
     price_cents: 7500,
   });

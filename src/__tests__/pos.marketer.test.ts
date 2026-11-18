@@ -307,6 +307,8 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       // A form that resends the cost it was never shown cannot change it…
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_cents: 1 })).json().error).toMatch(/закупівельна/);
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_milli: 1 })).json().error).toMatch(/закупівельна/);
+      // The ingredient's usual loss is the kitchen's figure, not the menu's.
+      expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { prep_loss_bps: 2000 })).json().error).toMatch(/відходи/);
       // …while the same value is not a change.
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_cents: 4_500, price_cents: 19_500 })).statusCode).toBe(200);
 

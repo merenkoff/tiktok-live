@@ -195,6 +195,9 @@ export const POS_MIGRATIONS = [
   // kopeck per base unit beside the rounded `cost_cents`, kept in step by
   // triggers (TechDocs/POS_VERTICALS.md §7t).
   '103_pos_cost_precision.sql',
+  // Gross and net in a recipe: a line's loss share, and an ingredient's usual
+  // loss as a typing aid (TechDocs/POS_VERTICALS.md §7t).
+  '104_pos_recipe_losses.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -26,6 +26,7 @@ import {
   pricingUnit,
   type CostIndex,
 } from '../lib/recipeCost';
+import { lossPercentText, parseLossPercent } from '../lib/recipeLoss';
 import {
   PROBLEM_TEXT,
   dishRows,
@@ -159,6 +160,68 @@ function DishCard({
         <ChevronRight size={18} className="hidden md:block shrink-0 text-sq-muted" />
       </button>
     </li>
+  );
+}
+
+/**
+ * An ingredient's usual preparation loss — peel, bones — typed where its price
+ * is. A recipe that takes the ingredient afterwards starts from this figure;
+ * the recipes that already hold it keep their own.
+ */
+function PrepLossCell({ row, onSave }: { row: IngredientRow; onSave: (bps: number | null) => Promise<void> }) {
+  const stored = lossPercentText(row.prepLossBps);
+  const [text, setText] = useState(stored);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => setText(stored), [stored]);
+
+  async function commit() {
+    if (busy || text.trim() === stored) return;
+    const bps = parseLossPercent(text);
+    if (bps == null) {
+      setError('від 0 до 99');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      // An emptied box is «not said», not «0 %».
+      await onSave(text.trim() === '' ? null : bps);
+    } catch {
+      setError('не збереглося');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex flex-col items-end">
+      <span className="inline-flex items-center gap-1.5">
+        <input
+          className="sq-input !min-h-9 !w-16 text-right tabular-nums"
+          inputMode="decimal"
+          placeholder="—"
+          aria-label={`Відходи при обробці «${row.caption}», %`}
+          title="Звичайні відходи при обробці: шкірка, кістки. Підставляться в рецепт, коли додасте туди цей інгредієнт."
+          value={text}
+          disabled={busy}
+          onChange={(e) => {
+            setText(e.target.value);
+            setError(null);
+          }}
+          onBlur={() => void commit()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          data-testid={`ingredient-loss-${row.variantId}`}
+        />
+        <span className="text-[13px] text-sq-muted whitespace-nowrap">% відходів</span>
+      </span>
+      {error && <span className="text-[12px] text-red-600">{error}</span>}
+    </span>
   );
 }
 
@@ -601,7 +664,8 @@ export function TechCardsPage() {
             <p className="text-[14px] text-sq-muted leading-relaxed max-w-2xl">
               Усе, що списують рецепти й модифікатори. Постачальник підняв ціну — впишіть нову тут, і
               собівартість кожної {dish ? 'страви' : 'позиції'} з цим інгредієнтом перерахується одразу. Прихід з
-              ціною теж її оновлює.
+              ціною теж її оновлює. «% відходів» — скільки зазвичай іде в шкірку чи кістки: коли додасте
+              інгредієнт у рецепт, брутто порахується з нетто само.
             </p>
             <ul className="rounded-card bg-sq-surface shadow-card divide-y divide-sq-divider">
               {shownIngredients.map((row) => {
@@ -643,6 +707,17 @@ export function TechCardsPage() {
                             uses > 0
                               ? `«${row.caption}»: ціну збережено, собівартість перераховано в ${uses} ${plural(uses, ['рецепті', 'рецептах', 'рецептах'])}.`
                               : `«${row.caption}»: ціну збережено.`
+                          );
+                        }}
+                      />
+                      <PrepLossCell
+                        row={row}
+                        onSave={async (bps) => {
+                          putProduct(await api.updateVariant(row.variantId, { prep_loss_bps: bps }));
+                          setFlash(
+                            bps == null
+                              ? `«${row.caption}»: відходи прибрано.`
+                              : `«${row.caption}»: відходи ${lossPercentText(bps) || '0'} % — підставлятимуться в нові рядки рецептів.`
                           );
                         }}
                       />
@@ -695,6 +770,7 @@ export function TechCardsPage() {
           maxDepth={maxDepth}
           units={vertical.units}
           targetBps={target}
+          kitchen={dish}
           onProductChanged={putProduct}
           onSaved={() => {
             closeRecipe();

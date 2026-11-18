@@ -44,6 +44,7 @@ const VARIANT_FIELDS: Record<string, string> = {
   pack_qty: 'фасування',
   pack_label: 'фасування',
   bottle_ml: 'пляшка за маркою',
+  prep_loss_bps: 'відходи при обробці',
 };
 
 /** What a field holds when nobody set it — a new card's value. */
@@ -62,6 +63,7 @@ const DEFAULTS: Record<string, unknown> = {
   components: [],
   pack_qty: null,
   pack_label: null,
+  prep_loss_bps: null,
   bottle_ml: null,
 };
 

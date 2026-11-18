@@ -17,6 +17,7 @@ import type { AttributeValues, Product, ProductComponentInput, ProductVariant } 
 import { costMilliOf } from '../../../lib/costUnits';
 import { shapeOf, type ProductShape } from './productShape';
 import { baseMilliToHumanPrice, humanPriceToBaseMilli } from './recipeCost';
+import { recipeLineOf } from './recipeLoss';
 import { countToInput, numberInputToWire, strengthInputToWire, tenthsToInput } from './dishNumbers';
 
 export interface VariantDraft {
@@ -118,10 +119,7 @@ export function variantDraftOf(v: ProductVariant): VariantDraft {
     barcode: v.barcode ?? '',
     pack: { qty: v.pack_qty == null ? '' : String(v.pack_qty), label: v.pack_label ?? '' },
     bottleMl: v.bottle_ml == null ? '' : String(v.bottle_ml),
-    components: (v.components ?? []).map((c) => ({
-      component_variant_id: c.component_variant_id,
-      quantity: c.quantity,
-    })),
+    components: (v.components ?? []).map(recipeLineOf),
   };
 }
 
@@ -230,7 +228,10 @@ function sameAttributes(a: AttributeValues, b: AttributeValues): boolean {
 function sameComponents(a: ProductComponentInput[], b: ProductComponentInput[]): boolean {
   if (a.length !== b.length) return false;
   return a.every(
-    (row, i) => row.component_variant_id === b[i]!.component_variant_id && row.quantity === b[i]!.quantity
+    (row, i) =>
+      row.component_variant_id === b[i]!.component_variant_id &&
+      row.quantity === b[i]!.quantity &&
+      (row.loss_bps ?? 0) === (b[i]!.loss_bps ?? 0)
   );
 }
 

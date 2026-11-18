@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { uahInputToCents } from '@pos/platform';
+import { uahInputToCents, useAuthStore } from '@pos/platform';
 import type { Product, ProductComponentInput } from '@pos/platform';
 import { Plus, SectionHead, Segmented } from '@pos/platform/ui';
 import { RecipeEditor, type RecipeSource } from './RecipeEditor';
@@ -13,6 +13,9 @@ import { useFoodCostTarget } from '../lib/foodCostTarget';
 import { rowName, type ProductDraft, type VariantDraft } from '../lib/productDraft';
 import { compositionHint, type ProductShape } from '../lib/productShape';
 import { foodCostBps, recipeCost, type CostIndex } from '../lib/recipeCost';
+import { recipeLineOf } from '../lib/recipeLoss';
+import { buildTechCardSheet } from '../lib/techCardSheet';
+import { useTechCardPrint } from '../lib/useTechCardPrint';
 
 /** Every recipe of the store this card could copy, by name. */
 function otherRecipes(products: readonly Product[], productId: number): RecipeSource[] {
@@ -25,10 +28,7 @@ function otherRecipes(products: readonly Product[], productId: number): RecipeSo
         key: `v${variant.id}`,
         title: variant.label ? `${product.name} · ${variant.label}` : product.name,
         sibling: false,
-        components: variant.components.map((c) => ({
-          component_variant_id: c.component_variant_id,
-          quantity: c.quantity,
-        })),
+        components: variant.components.map(recipeLineOf),
       });
     }
   }
@@ -57,7 +57,7 @@ export function RecipeSection({
   onProductCreated,
   onSetCost,
 }: {
-  draft: Pick<ProductDraft, 'shape' | 'variants' | 'sellable'>;
+  draft: Pick<ProductDraft, 'name' | 'shape' | 'variants' | 'sellable'>;
   productId: number;
   products: readonly Product[];
   /** What may go into this card's recipes. */
@@ -71,10 +71,12 @@ export function RecipeSection({
   onPatchVariant: (variantId: number, patch: Partial<VariantDraft>) => void;
   /** An ingredient was made from the search: the catalogue grows by it. */
   onProductCreated: (product: Product) => void;
-  onSetCost: (variantId: number, baseCents: number) => Promise<void>;
+  onSetCost: (variantId: number, baseMilli: number) => Promise<void>;
 }) {
   const [tab, setTab] = useState<number | null>(null);
   const [target] = useFoodCostTarget();
+  const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
+  const { print, portal } = useTechCardPrint();
   const others = useMemo(() => otherRecipes(products, productId), [products, productId]);
   const title = dish ? 'Рецепт' : 'Склад';
   // «Додати рецепт» on «Техкарти» lands here: the card opens on this section.
@@ -180,12 +182,26 @@ export function RecipeSection({
         }}
         create={{ units, onCreated: onProductCreated }}
         sources={[...siblings, ...others]}
+        losses={dish}
+        // What is on screen is what is printed — saved or not.
+        onPrint={() =>
+          print(
+            buildTechCardSheet({
+              store: storeName,
+              title: draft.name.trim(),
+              size: active.label,
+              components: active.components,
+              index: costs,
+            })
+          )
+        }
         emptyText={
           dish
             ? 'Рецепт порожній. Додайте складники — без них страву не продати.'
             : 'Порожньо. Складений товар без складу продати не можна.'
         }
       />
+      {portal}
     </section>
   );
 }

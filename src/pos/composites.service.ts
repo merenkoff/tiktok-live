@@ -41,12 +41,40 @@ type DbClient = { query: typeof pool.query };
 /** One line of a composite's composition, as the admin edits it. */
 export interface ComponentInput {
   component_variant_id: number;
-  /** In the component variant's own unit. INTEGER, like every other quantity. */
+  /**
+   * In the component variant's own unit. INTEGER, like every other quantity —
+   * and the GROSS weight: what leaves the shelf, what stock and cost read.
+   */
   quantity: number;
+  /**
+   * The share of that quantity that does not reach the dish — peel, bones,
+   * what boils away — in basis points (2000 = 20 %; migration 104). The net
+   * weight is derived from the two (`netQuantity`), never stored. Left out by
+   * a client built before it: the line then KEEPS the loss it already has.
+   */
+  loss_bps?: number;
+}
+
+/** The largest loss a line may state: 99 %. */
+export const MAX_LOSS_BPS = 9900;
+
+/** What reaches the dish out of `quantity` taken from the shelf. */
+export function netQuantity(quantity: number, lossBps: number): number {
+  return Math.round((quantity * (10000 - lossBps)) / 10000);
+}
+
+/** A loss share from a request: an integer of basis points, 0…99 %. */
+export function normalizeLossBps(raw: unknown): number {
+  const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_LOSS_BPS) {
+    throw new CompositeError('Втрати — від 0 до 99 %');
+  }
+  return value;
 }
 
 /** One line of a composition, resolved for display. */
 export interface ComponentRow extends ComponentInput {
+  loss_bps: number;
   id: number;
   sort_order: number;
   product_name: string;
@@ -149,7 +177,7 @@ export async function listComponentsForStore(
   client: DbClient = pool
 ): Promise<Map<number, ComponentRow[]>> {
   const result = await client.query(
-    `SELECT c.id, c.variant_id, c.component_variant_id, c.quantity, c.sort_order,
+    `SELECT c.id, c.variant_id, c.component_variant_id, c.quantity, c.loss_bps, c.sort_order,
             p.name AS product_name, v.label, v.unit
      FROM pos_product_components c
      JOIN pos_variants v ON v.id = c.component_variant_id
@@ -166,6 +194,7 @@ export async function listComponentsForStore(
       id: Number(row.id),
       component_variant_id: Number(row.component_variant_id),
       quantity: Number(row.quantity),
+      loss_bps: Number(row.loss_bps ?? 0),
       sort_order: Number(row.sort_order),
       product_name: row.product_name,
       label: row.label ?? '',
@@ -215,7 +244,12 @@ export async function validateComponents(
       throw new CompositeError(`Component ${componentVariantId} listed twice`);
     }
     seen.add(componentVariantId);
-    rows.push({ component_variant_id: componentVariantId, quantity });
+    rows.push({
+      component_variant_id: componentVariantId,
+      quantity,
+      // Absent stays absent — `setComponents` reads that as «keep what the line has».
+      ...(raw?.loss_bps === undefined || raw.loss_bps === null ? {} : { loss_bps: normalizeLossBps(raw.loss_bps) }),
+    });
   }
 
   if (rows.length > 0) {
@@ -409,6 +443,18 @@ export async function setComponents(
   await lockRecipes(client, storeId);
   const rows = await validateComponents(client, storeId, variantId, components);
 
+  // The bag is replaced wholesale, and a client built before migration 104
+  // sends lines with no loss at all: a line it kept must not lose the loss
+  // the owner typed elsewhere, so an absent `loss_bps` reads the stored one.
+  const stored = await client.query(
+    `SELECT component_variant_id, loss_bps FROM pos_product_components
+     WHERE store_id = $1 AND variant_id = $2`,
+    [storeId, variantId]
+  );
+  const storedLoss = new Map<number, number>(
+    stored.rows.map((row: Record<string, unknown>) => [Number(row.component_variant_id), Number(row.loss_bps ?? 0)])
+  );
+
   await client.query(
     `DELETE FROM pos_product_components WHERE store_id = $1 AND variant_id = $2`,
     [storeId, variantId]
@@ -416,9 +462,16 @@ export async function setComponents(
   for (const [index, row] of rows.entries()) {
     await client.query(
       `INSERT INTO pos_product_components
-         (store_id, variant_id, component_variant_id, quantity, sort_order)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [storeId, variantId, row.component_variant_id, row.quantity, index]
+         (store_id, variant_id, component_variant_id, quantity, loss_bps, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        storeId,
+        variantId,
+        row.component_variant_id,
+        row.quantity,
+        row.loss_bps ?? storedLoss.get(row.component_variant_id) ?? 0,
+        index,
+      ]
     );
   }
   // A batch of recipes (the tech-card import) rebuilds once, after the last.
@@ -508,12 +561,17 @@ export async function replaceIngredient(
   try {
     await client.query('BEGIN');
     const found = await client.query(
-      `SELECT id, is_active FROM pos_variants WHERE store_id = $1 AND id = ANY($2::bigint[])`,
+      `SELECT id, is_active, prep_loss_bps FROM pos_variants WHERE store_id = $1 AND id = ANY($2::bigint[])`,
       [storeId, [from, to]]
     );
     const byId = new Map(found.rows.map((row: Record<string, unknown>) => [Number(row.id), Boolean(row.is_active)]));
     if (!byId.has(from)) throw new CompositeError('Інгредієнт, який замінюєте, не знайдено');
     if (!byId.get(to)) throw new CompositeError('Інгредієнт для заміни не знайдено');
+    // The replacement's own usual loss, when its card states one: peeled
+    // potato in place of unpeeled must not inherit the peel. Not stated — the
+    // line keeps the loss it had.
+    const toRow = found.rows.find((row: Record<string, unknown>) => Number(row.id) === to);
+    const toLoss = toRow?.prep_loss_bps == null ? null : Number(toRow.prep_loss_bps);
 
     await lockRecipes(client, storeId);
     const holders = await client.query(
@@ -531,19 +589,31 @@ export async function replaceIngredient(
 
     for (const variantId of variantIds) {
       const lines = await client.query(
-        `SELECT component_variant_id, quantity FROM pos_product_components
+        `SELECT component_variant_id, quantity, loss_bps FROM pos_product_components
          WHERE store_id = $1 AND variant_id = $2
          ORDER BY sort_order ASC, id ASC`,
         [storeId, variantId]
+      );
+      // Every line states its loss: the bag is rewritten, and `setComponents`
+      // would otherwise look the new ingredient's loss up under an id the
+      // recipe never held.
+      const twinLoss = (lines.rows as Array<Record<string, unknown>>).find(
+        (row) => Number(row.component_variant_id) === to
       );
       const next: ComponentInput[] = [];
       for (const row of lines.rows as Array<Record<string, unknown>>) {
         const id = Number(row.component_variant_id);
         const quantity = Number(row.quantity);
-        const line =
+        const loss = Number(row.loss_bps ?? 0);
+        const line: ComponentInput =
           id === from
-            ? { component_variant_id: to, quantity: Math.max(1, Math.round(quantity * factor)) }
-            : { component_variant_id: id, quantity };
+            ? {
+                component_variant_id: to,
+                quantity: Math.max(1, Math.round(quantity * factor)),
+                // A recipe that already holds the replacement keeps that line's loss.
+                loss_bps: twinLoss ? Number(twinLoss.loss_bps ?? 0) : (toLoss ?? loss),
+              }
+            : { component_variant_id: id, quantity, loss_bps: loss };
         const twin = next.find((n) => n.component_variant_id === line.component_variant_id);
         if (twin) twin.quantity += line.quantity;
         else next.push(line);

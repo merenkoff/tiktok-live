@@ -10,6 +10,7 @@ import { Dialog } from './Dialog';
 import { captionClass } from './formStyles';
 import { errorText } from './modifierInput';
 import { humanPriceToBaseMilli, pricingUnit } from '../lib/recipeCost';
+import { parseLossPercent } from '../lib/recipeLoss';
 
 /** How a unit is offered: what it is counted in, and what the price is asked per. */
 function unitChoice(unit: string): string {
@@ -45,6 +46,7 @@ export function NewIngredientDialog({
   const [name, setName] = useState(initialName);
   const [unit, setUnit] = useState(choices.includes('г') ? 'г' : choices[0]);
   const [price, setPrice] = useState('');
+  const [loss, setLoss] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,13 +61,27 @@ export function NewIngredientDialog({
       setError('Вкажіть назву');
       return;
     }
+    const lossBps = parseLossPercent(loss);
+    if (lossBps == null) {
+      setError('Відходи — від 0 до 99 %');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const created = await api.createProduct({
         name: name.trim(),
         sellable: false,
-        variants: [{ attributes: {}, unit, price_cents: 0, cost_milli: baseMilli }],
+        variants: [
+          {
+            attributes: {},
+            unit,
+            price_cents: 0,
+            cost_milli: baseMilli,
+            // Said only when it is: an empty box is «not said», not «0 %».
+            ...(loss.trim() === '' ? {} : { prep_loss_bps: lossBps }),
+          },
+        ],
       });
       onCreated(created);
     } catch (err) {
@@ -139,6 +155,20 @@ export function NewIngredientDialog({
           />
           <span className="text-[13px] text-sq-muted">
             Без ціни собівартість страви буде «невідома» — її перепише перший прихід з ціною.
+          </span>
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className={captionClass}>Відходи при обробці, %</span>
+          <input
+            className="sq-input tabular-nums"
+            inputMode="decimal"
+            placeholder="Якщо є: шкірка, кістки"
+            value={loss}
+            onChange={(e) => setLoss(e.target.value)}
+            data-testid="new-ingredient-loss"
+          />
+          <span className="text-[13px] text-sq-muted">
+            Підставиться в рецепт: впишете нетто — брутто порахується само.
           </span>
         </label>
       </div>
