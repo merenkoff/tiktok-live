@@ -320,11 +320,15 @@ export function variantPayload(
     pack_label: v.pack.label.trim(),
     // Always sent: an emptied box clears it (the server keeps it when absent).
     bottle_ml: bottleMlOf(v.bottleMl),
-    ...(components === 'keep'
-      ? { components: v.components }
-      : components === 'clear'
-        ? { components: [] }
-        : {}),
+    // The marketer reads a recipe as names without grams (МР5): what she holds
+    // is not a recipe, and the server would drop it — so it is not sent.
+    ...(menuOnly
+      ? {}
+      : components === 'keep'
+        ? { components: v.components }
+        : components === 'clear'
+          ? { components: [] }
+          : {}),
   };
 }
 

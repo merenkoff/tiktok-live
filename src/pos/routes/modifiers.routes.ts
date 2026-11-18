@@ -14,6 +14,41 @@ import { pool } from '../../db.js';
 import { diffGroup, recordMenuChange } from '../menu-changes.js';
 import { withMenuJournal } from './products.routes.js';
 import type { PosAuthContext } from '../types.js';
+import { MarketerFieldError, assertMarketerModifierWrite, type StoredWriteOff } from '../marketer.js';
+import { sendMarketerRefusal } from './products.routes.js';
+
+/** What these answers of the store write off now, by id — what a marketer's edit is held to. */
+async function storedWriteOffs(storeId: number, ids: number[]): Promise<Map<number, StoredWriteOff>> {
+  const out = new Map<number, StoredWriteOff>();
+  if (ids.length === 0) return out;
+  const result = await pool.query(
+    `SELECT id, component_variant_id, component_quantity FROM pos_modifiers WHERE store_id = $1 AND id = ANY($2::bigint[])`,
+    [storeId, ids]
+  );
+  for (const row of result.rows) {
+    out.set(Number(row.id), {
+      variantId: row.component_variant_id == null ? null : Number(row.component_variant_id),
+      quantity: row.component_quantity == null ? null : Number(row.component_quantity),
+    });
+  }
+  return out;
+}
+
+/**
+ * The marketer edits the menu's half of a question — its answers, prices and
+ * rule — never what an answer writes off the shelf (track МР, МР5).
+ */
+async function assertMarketerAnswers(auth: PosAuthContext, entries: unknown): Promise<void> {
+  if (auth.role !== 'marketer' || !Array.isArray(entries)) return;
+  const ids = entries
+    .map((entry) => Number((entry as { id?: unknown } | null)?.id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  const stored = await storedWriteOffs(auth.storeId, ids);
+  for (const entry of entries) {
+    const id = Number((entry as { id?: unknown } | null)?.id);
+    assertMarketerModifierWrite(entry, stored.get(id) ?? null);
+  }
+}
 
 /** A group as it stands, or null when it is gone (or cannot be read). */
 async function readGroup(storeId: number, groupId: number | null): Promise<modifiers.ModifierGroup | null> {
@@ -73,6 +108,7 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
       // A body that names its answers is the question saved whole — the
       // owner's editor creates it with them in one request.
       const body = (request.body ?? {}) as modifiers.ModifierGroupWholeInput;
+      await assertMarketerAnswers(auth, body.modifiers);
       const group = await withGroupJournal(
         auth,
         null,
@@ -84,6 +120,7 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
       );
       return reply.code(201).send(group);
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       return reply.code(400).send({ error: errorMessage(error) });
     }
   });
@@ -111,14 +148,11 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
-      return await withGroupJournal(auth, Number(id), () =>
-        modifiers.saveGroupWhole(
-          auth.storeId,
-          Number(id),
-          (request.body ?? {}) as modifiers.ModifierGroupWholeInput
-        )
-      );
+      const body = (request.body ?? {}) as modifiers.ModifierGroupWholeInput;
+      await assertMarketerAnswers(auth, body.modifiers);
+      return await withGroupJournal(auth, Number(id), () => modifiers.saveGroupWhole(auth.storeId, Number(id), body));
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       return reply.code(400).send({ error: errorMessage(error) });
     }
   });
@@ -162,11 +196,13 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
+      if (auth.role === 'marketer') assertMarketerModifierWrite(request.body, null);
       const group = await withGroupJournal(auth, Number(id), () =>
         modifiers.createModifier(auth.storeId, Number(id), (request.body ?? {}) as modifiers.ModifierInput)
       );
       return reply.code(201).send(group);
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       return reply.code(400).send({ error: errorMessage(error) });
     }
   });
@@ -176,10 +212,15 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
+      if (auth.role === 'marketer') {
+        const stored = await storedWriteOffs(auth.storeId, [Number(id)]);
+        assertMarketerModifierWrite(request.body, stored.get(Number(id)) ?? null);
+      }
       return await withGroupJournal(auth, await groupOfModifier(auth.storeId, Number(id)), () =>
         modifiers.updateModifier(auth.storeId, Number(id), (request.body ?? {}) as modifiers.ModifierInput)
       );
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       return reply.code(400).send({ error: errorMessage(error) });
     }
   });

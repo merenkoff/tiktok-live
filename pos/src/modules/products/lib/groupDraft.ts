@@ -218,9 +218,21 @@ export function namedAnswers(draft: GroupDraft): AnswerDraft[] {
   return draft.answers.filter((answer) => !isBlank(answer));
 }
 
-export function toWholeInput(draft: GroupDraft): WholeGroupInput {
+/**
+ * The question as one request. `writeOffs: false` leaves what each answer takes
+ * off the shelf out of the body altogether — the café's marketer edits the
+ * menu's half of a question (МР5), and an answer that does not mention it
+ * keeps what it had on the server.
+ */
+export function toWholeInput(draft: GroupDraft, { writeOffs = true }: { writeOffs?: boolean } = {}): WholeGroupInput {
   const modifiers: WholeAnswerInput[] = namedAnswers(draft).map((answer) => {
     const withComponent = answer.componentId != null;
+    const writeOff = writeOffs
+      ? {
+          component_variant_id: withComponent ? answer.componentId : null,
+          component_quantity: withComponent ? Number(answer.componentQty) || 0 : null,
+        }
+      : {};
     return {
       ...(answer.id !== undefined ? { id: answer.id } : {}),
       name: answer.name.trim(),
@@ -231,8 +243,7 @@ export function toWholeInput(draft: GroupDraft): WholeGroupInput {
         .map((column) => ({ label: column, price_delta_cents: signedUahInputToCents(answer.sizes[column]) })),
       is_default: answer.isDefault && answer.isActive,
       is_active: answer.isActive,
-      component_variant_id: withComponent ? answer.componentId : null,
-      component_quantity: withComponent ? Number(answer.componentQty) || 0 : null,
+      ...writeOff,
     };
   });
   return { name: draft.name.trim(), ...ruleOf(draft), is_active: draft.isActive, modifiers };

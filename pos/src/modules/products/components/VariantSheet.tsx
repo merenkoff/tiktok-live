@@ -145,12 +145,18 @@ export function VariantSheet({
             schema={otherSchema}
             value={local.attributes}
             onChange={(attributes) => set({ attributes })}
-            unit={{
-              value: local.unit,
-              options: vertical.units,
-              onChange: (unit) => set({ unit }),
-              labels: unitLabels(vertical),
-            }}
+            // What the stock counts it in is the kitchen's (МР5): the marketer
+            // names the size and prices it.
+            unit={
+              menuOnly
+                ? undefined
+                : {
+                    value: local.unit,
+                    options: vertical.units,
+                    onChange: (unit) => set({ unit }),
+                    labels: unitLabels(vertical),
+                  }
+            }
           />
         </div>
 
@@ -194,27 +200,30 @@ export function VariantSheet({
           onChange={(priceCents, compareAtCents) => set({ price: centsToInput(priceCents), compareAtCents })}
         />
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <SkuField
-            value={local.sku}
-            onChange={(sku) => set({ sku })}
-            tagIds={tagIds}
-            caption="Артикул (SKU)"
-            captionClass={captionClass}
-          />
-          <label className="flex flex-col gap-1.5">
-            <span className={captionClass}>Штрихкод</span>
-            <div className="flex gap-2">
-              <input
-                className="sq-input tabular-nums min-w-0"
-                inputMode="numeric"
-                value={local.barcode}
-                onChange={(e) => set({ barcode: e.target.value })}
-              />
-              <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
-            </div>
-          </label>
-        </div>
+        {/* The till's and the storeroom's codes (МР5) — not the menu's. */}
+        {!menuOnly && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SkuField
+              value={local.sku}
+              onChange={(sku) => set({ sku })}
+              tagIds={tagIds}
+              caption="Артикул (SKU)"
+              captionClass={captionClass}
+            />
+            <label className="flex flex-col gap-1.5">
+              <span className={captionClass}>Штрихкод</span>
+              <div className="flex gap-2">
+                <input
+                  className="sq-input tabular-nums min-w-0"
+                  inputMode="numeric"
+                  value={local.barcode}
+                  onChange={(e) => set({ barcode: e.target.value })}
+                />
+                <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
+              </div>
+            </label>
+          </div>
+        )}
 
         {!menuOnly && (
           <PackFields qty={local.pack.qty} label={local.pack.label} unit={local.unit} onChange={(pack) => set({ pack })} />
