@@ -60,6 +60,7 @@ import { registerChoices } from '../lib/registerChoices';
 import { batchErrorMessage, saveErrorMessage } from '../lib/saveErrors';
 import { useMenuOnly } from '../lib/menuOnly';
 import { recipeWords } from '../lib/guestComposition';
+import { allergenHints } from '../lib/allergenHints';
 import { guestDishUrl, readCorkageProductId, readGuestMenuUrl } from '../data/guestMenuApi';
 import { useLeaveGuard } from '../lib/useLeaveGuard';
 
@@ -476,6 +477,12 @@ function ProductCard({ id }: { id: string | undefined }) {
   }, [mode, scope.askDishFacts]);
 
   // Only the marketer gets the hint (МР5); the owner has the recipe itself.
+  // What the saved recipe suggests for the allergen chips — for the owner and
+  // the marketer alike; a hint under the chips, never a tick.
+  const allergenHintsOf = useMemo(
+    () => (mode === 'edit' ? allergenHints(products.find((p) => p.id === productId), products) : []),
+    [mode, products, productId]
+  );
   const recipeWordsOf = useMemo(
     () => (menuOnly ? recipeWords(products.find((p) => p.id === productId)) : []),
     [menuOnly, products, productId]
@@ -493,7 +500,7 @@ function ProductCard({ id }: { id: string | undefined }) {
   if (notFound) {
     return (
       <div className="animate-fade-up text-sq-text">
-        <PageHeader glyph={Package} title="Такого товару немає" back={{ to: backTo, label: 'Товари' }} />
+        <PageHeader glyph={Package} title="Такого товару немає" back={{ to: backTo, label: menuOnly ? 'Меню' : 'Товари' }} />
         <p className="text-[15px] text-sq-secondary">
           Картку могли архівувати, або посилання застаріло.{' '}
           <Link to={backTo} className="sq-link">
@@ -511,7 +518,7 @@ function ProductCard({ id }: { id: string | undefined }) {
       <PageHeader
         glyph={Package}
         title={title}
-        back={{ to: backTo, label: 'Товари' }}
+        back={{ to: backTo, label: menuOnly ? 'Меню' : 'Товари' }}
         actions={
           mode === 'edit' && menuUrl && draft && !draft.menuHidden ? (
             <a
@@ -556,6 +563,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                     // The marketer writes the guest's composition with the
                     // recipe's words at hand — names only (МР5).
                     recipeWords={menuOnly ? recipeWordsOf : undefined}
+                    allergenHints={allergenHintsOf}
                   />
                 </section>
                 {mode === 'create' ? (

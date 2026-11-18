@@ -112,11 +112,26 @@ describe('the product list for the marketer', () => {
     expect(screen.queryByText('Борщ')).toBeNull();
   });
 
-  it('the owner still sees every product', async () => {
+  it('the owner still sees every product, and in a café gets the same filters, counted over the dishes', async () => {
     role = 'owner';
+    const user = userEvent.setup();
     open();
     await screen.findByText('Борщ');
+    expect(screen.getAllByRole('heading', { level: 2 })[0]).toHaveTextContent('Товари');
     expect(screen.getByText('Бекон')).toBeInTheDocument();
-    expect(screen.queryByTestId('filter-no-composition')).toBeNull();
+    // Деруни only: the bacon is an ingredient and the cork fee is hidden from the menu.
+    expect(screen.getByTestId('filter-no-composition')).toHaveTextContent('1');
+    expect(screen.getByTestId('filter-no-description')).toHaveTextContent('1');
+    await user.click(screen.getByTestId('filter-no-composition'));
+    expect(screen.getByText('Деруни')).toBeInTheDocument();
+    expect(screen.queryByText('Бекон')).toBeNull();
+    // The rows stay plain for the owner.
+    expect(screen.queryByTestId('missing-composition')).toBeNull();
+  });
+
+  it('is called «Меню» for the marketer', async () => {
+    open();
+    await screen.findByText('Борщ');
+    expect(screen.getAllByRole('heading', { level: 2 })[0]).toHaveTextContent('Меню');
   });
 });

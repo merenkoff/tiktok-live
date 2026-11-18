@@ -274,7 +274,7 @@ export function ProductsPage() {
     <div className="animate-fade-up text-sq-text">
       <PageHeader
         glyph={Package}
-        title="Товари"
+        title={menuOnly ? 'Меню' : 'Товари'}
         subtitle={menuOnly ? 'Страви, ціни, порції й те, що бачить гість.' : 'Мітки, варіанти та залишки.'}
         actions={
           <>
@@ -357,7 +357,9 @@ export function ProductsPage() {
               label="Без фото"
               count={noPhotoCount}
             />
-            {menuOnly && (
+            {/* What the guest still misses — the marketer's to-do list, and the owner's
+                in a kitchen vertical, counted over the dishes only. */}
+            {(menuOnly || showLabelRows) && (
               <>
                 <FilterRow
                   active={filterTag === 'no_description'}

@@ -5,6 +5,7 @@
 import { AllergenPicker } from './AllergenPicker';
 import { COMPOSITION_MAX } from './allergens';
 import { MenuLabelPicker } from './MenuLabelPicker';
+import type { AllergenHint } from '../lib/allergenHints';
 import { appendAll, appendWord, mentions } from '../lib/guestComposition';
 
 /**
@@ -83,12 +84,15 @@ export function DishFactsFields({
   prepMinutes,
   onPrepMinutes,
   recipeWords = [],
+  allergenHints = [],
 }: {
   /**
    * The recipe's words, offered under «Склад для гостя» to pick from (МР5):
    * names only, never written in by themselves. Empty draws nothing.
    */
   recipeWords?: string[];
+  /** What the recipe suggests for the allergen chips — a hint, never a tick. */
+  allergenHints?: readonly AllergenHint[];
   composition: string;
   onComposition: (next: string) => void;
   allergens: string[];
@@ -123,7 +127,7 @@ export function DishFactsFields({
         </span>
       </label>
       <CompositionHint words={recipeWords} text={composition} onChange={onComposition} />
-      <AllergenPicker value={allergens} onChange={onAllergens} />
+      <AllergenPicker value={allergens} onChange={onAllergens} hints={allergenHints} />
       <MenuLabelPicker value={menuLabels} onChange={onMenuLabels} />
       <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1.5">

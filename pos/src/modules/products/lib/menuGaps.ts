@@ -28,12 +28,13 @@ export function menuProducts(products: readonly Product[]): Product[] {
 
 /**
  * What the guest would miss on this dish's card. A card hidden from the QR
- * menu misses nothing there, and a card made from a receiving document shows
+ * menu misses nothing there, nor does an ingredient or a prep the till does
+ * not sell (the owner's list holds those too), and a card made from a receiving document shows
  * the guest no description at all until it is edited — said once by its own
  * filter, «Нові — заповніть», rather than as three gaps.
  */
 export function menuGaps(product: Product): MenuGap[] {
-  if (product.menu_hidden) return [];
+  if (product.menu_hidden || product.sellable === false) return [];
   const gaps: MenuGap[] = [];
   if (!product.image_url) gaps.push('photo');
   if (!product.description?.trim()) gaps.push('description');

@@ -338,6 +338,7 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       const beets = await call('POST', '/products', store.ownerToken, {
         name: 'Буряк',
         sellable: false,
+        allergens: ['celery'],
         variants: [{ attributes: {}, unit: 'г', price_cents: 0, quantity: 0 }],
       });
       const beet = Number(beets.json().variants[0].id);
@@ -357,6 +358,9 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       ]);
       expect(seen.variants[0].components[0]).not.toHaveProperty('quantity');
       expect(seen.variants[0].components[0]).not.toHaveProperty('loss_bps');
+      // The ingredient's own allergens reach her list — the hint under the dish's chips reads them.
+      const list = (await call('GET', '/products', marketerToken)).json() as Array<{ name: string; allergens?: string[] }>;
+      expect(list.find((p) => p.name === 'Буряк')?.allergens).toEqual(['celery']);
 
       // A card opened before the change sends a recipe back; it is not hers to set, and nothing moves.
       const saved = await call('PATCH', `/variants/${dishVariant}`, marketerToken, {
