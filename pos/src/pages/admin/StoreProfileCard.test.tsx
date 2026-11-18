@@ -212,6 +212,43 @@ describe('StoreProfileCard', () => {
       await waitFor(() => expect(lastPatch()).toBeDefined());
       expect((lastPatch()![2] as { corkage: unknown }).corkage).toBeNull();
     });
+
+    it('names the product the waiter rings, its price, and links to its card', async () => {
+      const terms = { fee_cents: 10000, min_food_cents: 70000, note: null };
+      await open({
+        ...EMPTY,
+        corkage: terms,
+        corkage_on: true,
+        corkage_terms: terms,
+        corkage_product: { id: 77, name: 'Корковий збір', price_cents: 10000, active: true },
+      } as typeof EMPTY);
+      const line = screen.getByTestId('corkage-product');
+      expect(line).toHaveTextContent('У чек додається товар «Корковий збір» · 100 ₴');
+      expect(screen.getByRole('link', { name: '«Корковий збір»' })).toHaveAttribute('href', '/admin/products/77');
+      expect(screen.queryByText(/заведіть товар/)).not.toBeInTheDocument();
+    });
+
+    it('switched off, keeps the terms in the form and says the same product will come back', async () => {
+      const terms = { fee_cents: 12000, min_food_cents: null, note: 'Келихи наші.' };
+      await open({
+        ...EMPTY,
+        corkage: null,
+        corkage_on: false,
+        corkage_terms: terms,
+        corkage_product: { id: 77, name: 'Корковий збір', price_cents: 12000, active: false },
+      } as typeof EMPTY);
+      expect(toggle()).not.toBeChecked();
+      expect(screen.getByTestId('corkage-product')).toHaveTextContent('повернеться той самий товар');
+      await userEvent.click(toggle());
+      expect(screen.getByLabelText('Збір за пляшку, ₴')).toHaveValue('120');
+      expect(screen.getByLabelText('Умови своїми словами')).toHaveValue('Келихи наші.');
+    });
+
+    it('before the first save says a product will be made', async () => {
+      await open();
+      await userEvent.click(toggle());
+      expect(screen.getByTestId('corkage-product')).toHaveTextContent('Після збереження з’явиться товар «Корковий збір»');
+    });
   });
 
   it('turns a day on with a sensible default and sends the times as typed', async () => {

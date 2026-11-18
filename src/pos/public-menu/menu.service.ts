@@ -30,11 +30,21 @@
 
 import crypto from 'crypto';
 import { pool } from '../../db.js';
+
+type DbClient = { query: typeof pool.query };
 import { getCatalog } from '../products.service.js';
 import { listTagsFlat, type PosTag } from '../tags.service.js';
 import { storeClock } from '../core/storeClock.js';
 import { verticalOrDefault } from '../verticals/index.js';
 import { issuePrintLink } from './table-keys.js';
+import {
+  archiveCorkageProduct,
+  CORKAGE_PRICE_SQL,
+  effectiveCorkage,
+  ensureCorkageProduct,
+  readCorkageProduct,
+  type CorkageProduct,
+} from './corkage-product.js';
 import { COMPOSITION_MAX, allergenLabels, type Allergen } from '../allergens.js';
 import { menuLabelItems, type MenuLabel } from '../menu-labels.js';
 import {
@@ -619,8 +629,9 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
     `SELECT id, name, vertical, public_menu_enabled, public_menu_bill, public_menu_ordering,
             public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents, public_menu_feedback,
             public_logo_url, public_address, public_phone, public_hours,
-            public_email, public_instagram, public_facebook, public_tiktok, public_google_url, public_corkage
-     FROM pos_stores
+            public_email, public_instagram, public_facebook, public_tiktok, public_google_url, public_corkage,
+            public_corkage_on, ${CORKAGE_PRICE_SQL} AS corkage_price_cents
+     FROM pos_stores s
      WHERE public_menu_token = $1
         OR (public_menu_slug_enabled AND slug = lower($1))
      ORDER BY (public_menu_token IS NOT DISTINCT FROM $1) DESC
@@ -642,7 +653,13 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
     facebook: textOrNull(row.public_facebook),
     tiktok: textOrNull(row.public_tiktok),
     googleUrl: textOrNull(row.public_google_url),
-    corkage: readCorkage(row.public_corkage),
+    // The fee is the cork-fee product's price while it is on sale (migration
+    // 105): the page says exactly what the till will ring.
+    corkage: effectiveCorkage(
+      readCorkage(row.public_corkage),
+      row.public_corkage_on === true,
+      row.corkage_price_cents == null ? null : Number(row.corkage_price_cents)
+    ),
     feedbackEnabled: row.public_menu_feedback === true,
     billEnabled: row.public_menu_bill === true,
     orderingEnabled: row.public_menu_ordering === true,
@@ -1030,13 +1047,21 @@ export interface StoreProfile {
   facebook: string | null;
   tiktok: string | null;
   google_url: string | null;
+  /** The terms as the guest reads them — null while they are off (what a card built before 105 reads). */
   corkage: Corkage | null;
+  /** Whether the terms are shown (migration 105). */
+  corkage_on: boolean;
+  /** The terms as last saved, kept while they are off, the fee being the product's price when it has one. */
+  corkage_terms: Corkage | null;
+  /** The product the waiter rings for the fee, archived while the terms are off. */
+  corkage_product: CorkageProduct | null;
 }
 
-async function readProfile(storeId: number): Promise<StoreProfile> {
-  const result = await pool.query(
+async function readProfile(storeId: number, client: DbClient = pool): Promise<StoreProfile> {
+  const result = await client.query(
     `SELECT vertical, public_logo_url, public_address, public_phone, public_hours,
-            public_email, public_instagram, public_facebook, public_tiktok, public_google_url, public_corkage
+            public_email, public_instagram, public_facebook, public_tiktok, public_google_url, public_corkage,
+            public_corkage_on
        FROM pos_stores WHERE id = $1`,
     [storeId]
   );
@@ -1053,7 +1078,28 @@ async function readProfile(storeId: number): Promise<StoreProfile> {
     facebook: textOrNull(row.public_facebook),
     tiktok: textOrNull(row.public_tiktok),
     google_url: textOrNull(row.public_google_url),
-    corkage: readCorkage(row.public_corkage),
+    ...(await corkageView(client, storeId, readCorkage(row.public_corkage), row.public_corkage_on === true)),
+  };
+}
+
+/** The cork fee's three faces on the owner's card: what the guest reads, what was saved, the product. */
+async function corkageView(
+  client: DbClient,
+  storeId: number,
+  saved: Corkage | null,
+  on: boolean
+): Promise<Pick<StoreProfile, 'corkage' | 'corkage_on' | 'corkage_terms' | 'corkage_product'>> {
+  const product = await readCorkageProduct(client, storeId);
+  // While the product is on sale its price IS the fee (a waiter may have
+  // changed it on the card); in the archive the saved terms hold the last fee
+  // — switching off copies the price into them, a zero fee says zero.
+  const terms =
+    saved && product?.active && product.price_cents != null ? { ...saved, fee_cents: product.price_cents } : saved;
+  return {
+    corkage: effectiveCorkage(terms, on, null),
+    corkage_on: on,
+    corkage_terms: terms,
+    corkage_product: product,
   };
 }
 
@@ -1085,12 +1131,42 @@ export async function updateStoreProfile(storeId: number, patch: ProfilePatch): 
   if (patch.facebook !== undefined) set('public_facebook', patch.facebook);
   if (patch.tiktok !== undefined) set('public_tiktok', patch.tiktok);
   if (patch.google_url !== undefined) set('public_google_url', patch.google_url);
-  if (patch.corkage !== undefined) {
-    set('public_corkage', patch.corkage === null ? null : JSON.stringify(patch.corkage), '::jsonb');
+  if (patch.corkage !== undefined && patch.corkage !== null) {
+    // On: the terms as sent, the fee becoming the product's price below.
+    set('public_corkage', JSON.stringify(patch.corkage), '::jsonb');
+    set('public_corkage_on', true);
+  } else if (patch.corkage === null) {
+    // Off no longer throws the terms away (migration 105): the guest stops
+    // reading them, the owner finds them filled in next time.
+    set('public_corkage_on', false);
   }
-  if (sets.length > 0) {
-    await pool.query(`UPDATE pos_stores SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1`, values);
-    invalidatePublicMenu(storeId);
+  if (sets.length === 0) return current;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Under the store row's lock, so two saves cannot make two «Корковий збір».
+    await client.query(`SELECT id FROM pos_stores WHERE id = $1 FOR UPDATE`, [storeId]);
+    if (patch.corkage === null) {
+      // The price the owner last agreed to is kept with the terms while the
+      // product sits in the archive.
+      const product = await readCorkageProduct(client, storeId);
+      if (product?.active && product.price_cents != null && current.corkage_terms) {
+        set('public_corkage', JSON.stringify({ ...current.corkage_terms, fee_cents: product.price_cents }), '::jsonb');
+      }
+    }
+    await client.query(`UPDATE pos_stores SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1`, values);
+    if (patch.corkage !== undefined) {
+      if (patch.corkage && patch.corkage.fee_cents > 0) await ensureCorkageProduct(client, storeId, patch.corkage.fee_cents);
+      else await archiveCorkageProduct(client, storeId);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+  invalidatePublicMenu(storeId);
   return readProfile(storeId);
 }

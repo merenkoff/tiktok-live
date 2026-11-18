@@ -82,6 +82,7 @@ import { PROFILE_FIELDS, ProfileError, normalizeProfilePatch } from '../public-m
 import { MENU_PAGE_HEADERS } from '../public-menu/render.js';
 import { verifyTableKey } from '../public-menu/table-keys.js';
 import { MarketerFieldError, assertMarketerMenuPatch } from '../marketer.js';
+import { withMenuJournal } from './products.routes.js';
 import { saveProductImage } from '../uploads.service.js';
 import { errorMessage } from './_shared.js';
 
@@ -383,7 +384,18 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
       return reply.code(400).send({ error: 'Потрібне logo_url, address, phone або hours' });
     }
     try {
-      return await updateStoreProfile(auth.storeId, normalizeProfilePatch(body));
+      const patch = normalizeProfilePatch(body);
+      if (patch.corkage === undefined) return await updateStoreProfile(auth.storeId, patch);
+      // The cork fee moves its product (migration 105): its price, its archive,
+      // or a new «Корковий збір» — each a change to the menu, recorded under
+      // whoever saved it like an edit of the card itself.
+      const before = (await getStoreProfile(auth.storeId)).corkage_product;
+      return await withMenuJournal(
+        auth,
+        before ? [before.id] : [],
+        () => updateStoreProfile(auth.storeId, patch),
+        (saved) => (saved.corkage_product ? [saved.corkage_product.id] : [])
+      );
     } catch (error) {
       if (error instanceof ProfileError) return reply.code(400).send({ error: error.message });
       if (error instanceof PublicMenuError) return reply.code(409).send({ error: error.message });
