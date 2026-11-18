@@ -475,9 +475,10 @@ function ProductCard({ id }: { id: string | undefined }) {
     };
   }, [mode, scope.askDishFacts]);
 
+  // Only the marketer gets the hint (МР5); the owner has the recipe itself.
   const recipeWordsOf = useMemo(
-    () => recipeWords(products.find((p) => p.id === productId)),
-    [products, productId]
+    () => (menuOnly ? recipeWords(products.find((p) => p.id === productId)) : []),
+    [menuOnly, products, productId]
   );
   const showDishFacts =
     scope.askDishFacts ||

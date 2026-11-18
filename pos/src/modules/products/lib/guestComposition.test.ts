@@ -25,6 +25,11 @@ describe('«Склад для гостя» from the recipe’s words', () => {
     expect(guestWord({ product_name: 'BBQ соус' })).toBe('BBQ соус');
   });
 
+  it('gives no word for a line that names nothing, rather than failing the card', () => {
+    expect(guestWord({ product_name: undefined })).toBe('');
+    expect(recipeWords({ variants: [{ is_active: true, components: [{ component_variant_id: 1, quantity: 5 }] }] } as never)).toEqual([]);
+  });
+
   it('lists each word once, across every size, and skips an archived size', () => {
     const product = {
       variants: [

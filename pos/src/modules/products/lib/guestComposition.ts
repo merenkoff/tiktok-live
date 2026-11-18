@@ -16,7 +16,7 @@ import type { Product } from '@pos/platform';
 
 /** How a recipe line names what goes in: the product, and the variant when it has one. */
 export interface RecipeLineName {
-  product_name: string;
+  product_name?: string | null;
   label?: string | null;
 }
 
@@ -26,7 +26,9 @@ export interface RecipeLineName {
  * left out; the first letter is lowered unless the name is an abbreviation.
  */
 export function guestWord(line: RecipeLineName): string {
-  const name = line.product_name.split(',')[0].trim();
+  // A line the server named nothing (an older answer, a draft line still being picked) gives no word.
+  const name = String(line.product_name ?? '').split(',')[0].trim();
+  if (name === '') return '';
   const label = (line.label ?? '').trim();
   const text = label ? `${name} ${label}` : name;
   if (text.length > 1 && text[1] === text[1].toLocaleUpperCase('uk') && text[1] !== text[1].toLocaleLowerCase('uk')) {
