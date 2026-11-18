@@ -34,6 +34,7 @@ import { applyStockDelta } from './stock.service.js';
 import type { StockReason } from './types.js';
 import { loadStoreVertical } from './verticals/index.js';
 import { pourLine, type PourContext } from './bottles.service.js';
+import { foodCostBps, milliToCents } from './cost.js';
 
 type DbClient = { query: typeof pool.query };
 
@@ -967,8 +968,8 @@ export interface FlatLeaf {
   leafVariantId: number;
   /** Per ONE unit of the composite, in the leaf's own unit. */
   quantityPerUnit: number;
-  /** Last purchase price of the leaf, per its own unit. */
-  costCents: number;
+  /** Last purchase price of the leaf per its own unit, in thousandths of a kopeck. */
+  costMilli: number;
 }
 
 /**
@@ -982,7 +983,7 @@ async function loadFlatComposition(
   variantId: number
 ): Promise<FlatLeaf[]> {
   const result = await client.query(
-    `SELECT f.leaf_variant_id, f.quantity_per_unit, v.cost_cents
+    `SELECT f.leaf_variant_id, f.quantity_per_unit, v.cost_milli
      FROM pos_product_components_flat f
      JOIN pos_variants v ON v.id = f.leaf_variant_id
      WHERE f.store_id = $1 AND f.variant_id = $2
@@ -992,7 +993,7 @@ async function loadFlatComposition(
   return result.rows.map((row: Record<string, unknown>) => ({
     leafVariantId: Number(row.leaf_variant_id),
     quantityPerUnit: Number(row.quantity_per_unit),
-    costCents: Number(row.cost_cents),
+    costMilli: Number(row.cost_milli),
   }));
 }
 
@@ -1000,39 +1001,44 @@ async function loadFlatComposition(
  * What one unit of a composite costs to assemble, and whether that number can
  * be trusted.
  *
- * `hasUnpricedLeaf` is the whole point of returning a pair. A leaf whose
- * `cost_cents` is 0 has never been received with a price, and zero there means
+ * `hasUnpricedLeaf` is the whole point of returning it. A leaf whose
+ * `cost_milli` is 0 has never been received with a price, and zero there means
  * «we do not know», not «free» — a dish whose sum quietly omits its meat is a
  * food-cost figure the owner would make decisions on. The reader is expected
  * to show «—» rather than a percentage in that case.
  *
- * `cost_cents` itself is the LAST purchase price, not a weighted average: it
- * is written by posting a receipt and by production, and nothing here changes
+ * The cost itself is the LAST purchase price, not a weighted average: it is
+ * written by posting a receipt and by production, and nothing here changes
  * that.
+ *
+ * The sum is exact in thousandths of a kopeck (`cost.ts`) — 18 g of sugar at
+ * 35,50 ₴/кг is 63,9 kopecks, not 18 × «4 kopecks a gram» — and is rounded to
+ * whole kopecks once, at the end, never line by line.
  */
 export function sumUnitCost(leaves: FlatLeaf[]): {
+  unitCostMilli: number;
   unitCostCents: number;
   hasUnpricedLeaf: boolean;
 } {
-  let unitCostCents = 0;
+  let unitCostMilli = 0;
   let hasUnpricedLeaf = false;
   for (const leaf of leaves) {
-    unitCostCents += leaf.quantityPerUnit * leaf.costCents;
-    if (leaf.costCents <= 0) hasUnpricedLeaf = true;
+    unitCostMilli += leaf.quantityPerUnit * leaf.costMilli;
+    if (leaf.costMilli <= 0) hasUnpricedLeaf = true;
   }
-  return { unitCostCents, hasUnpricedLeaf };
+  return { unitCostMilli, unitCostCents: milliToCents(unitCostMilli), hasUnpricedLeaf };
 }
 
 /**
  * Read-only: what one unit of this composite costs today. The same sum
  * `produceComposite` writes onto a production document — the production
- * document stays the only WRITER of `cost_cents`, this only reads.
+ * document stays the only WRITER of a composite's cost, this only reads.
  */
 export async function unitCostOf(
   client: DbClient,
   storeId: number,
   variantId: number
-): Promise<{ unitCostCents: number; hasUnpricedLeaf: boolean; leafCount: number }> {
+): Promise<{ unitCostMilli: number; unitCostCents: number; hasUnpricedLeaf: boolean; leafCount: number }> {
   const leaves = await loadFlatComposition(client, storeId, variantId);
   return { ...sumUnitCost(leaves), leafCount: leaves.length };
 }
@@ -1059,7 +1065,7 @@ export async function produceComposite(
     note?: string | null;
     occurredAt?: Date | string;
   }
-): Promise<{ unitCostCents: number }> {
+): Promise<{ unitCostMilli: number }> {
   if (!Number.isInteger(params.quantity) || params.quantity <= 0) {
     throw new CompositeError('Production quantity must be a positive integer');
   }
@@ -1074,7 +1080,9 @@ export async function produceComposite(
 
   // The same sum the owner reads on «Техкарти» — one definition, so a tech
   // card and the document that assembles it can never disagree.
-  const { unitCostCents } = sumUnitCost(leaves);
+  // Exact, in thousandths: the assembled cost is a plain sum, so nothing is
+  // rounded on the way from the ingredients to the thing made of them.
+  const { unitCostMilli } = sumUnitCost(leaves);
   for (const leaf of leaves) {
     await applyStockDelta(client, {
       storeId: params.storeId,
@@ -1098,11 +1106,11 @@ export async function produceComposite(
     referenceType: params.referenceType,
     referenceId: params.referenceId,
     note: params.note ?? undefined,
-    unitCostCents,
+    unitCostMilli,
     occurredAt: params.occurredAt,
   });
 
-  return { unitCostCents };
+  return { unitCostMilli };
 }
 
 /** One row of the owner's «Техкарти» list. */
@@ -1116,8 +1124,10 @@ export interface TechCardRow {
   stock_mode: 'own' | 'derived';
   /** What it sells for. */
   price_cents: number;
-  /** What it costs to assemble, at the last purchase prices of its leaves. */
+  /** What it costs to assemble, at the last purchase prices of its leaves — whole kopecks. */
   cost_cents: number;
+  /** The same sum before rounding, in thousandths of a kopeck. */
+  cost_milli: number;
   /** How many shelves it takes from, expanded. Zero = a recipe that is empty. */
   leaf_count: number;
   /** At least one leaf has never been received with a price — see below. */
@@ -1154,9 +1164,9 @@ export async function listTechCards(
             v.unit,
             p.stock_mode,
             v.price_cents,
-            COALESCE(SUM(f.quantity_per_unit * lv.cost_cents), 0)::bigint AS cost_cents,
+            COALESCE(SUM(f.quantity_per_unit * lv.cost_milli), 0)::bigint AS cost_milli,
             COUNT(f.leaf_variant_id)::int                                 AS leaf_count,
-            COALESCE(BOOL_OR(lv.cost_cents <= 0), FALSE)                  AS has_unpriced_leaf
+            COALESCE(BOOL_OR(lv.cost_milli <= 0), FALSE)                  AS has_unpriced_leaf
      FROM pos_variants v
      JOIN pos_products p ON p.id = v.product_id
      LEFT JOIN pos_product_components_flat f
@@ -1173,7 +1183,7 @@ export async function listTechCards(
 
   return result.rows.map((row: Record<string, unknown>) => {
     const price = Number(row.price_cents);
-    const cost = Number(row.cost_cents);
+    const costMilli = Number(row.cost_milli);
     const leafCount = Number(row.leaf_count);
     const hasUnpricedLeaf = Boolean(row.has_unpriced_leaf);
     return {
@@ -1185,14 +1195,15 @@ export async function listTechCards(
       kind: 'composite' as const,
       stock_mode: row.stock_mode === 'derived' ? ('derived' as const) : ('own' as const),
       price_cents: price,
-      cost_cents: cost,
+      cost_cents: milliToCents(costMilli),
+      cost_milli: costMilli,
       leaf_count: leafCount,
       has_unpriced_leaf: hasUnpricedLeaf,
       // Null, never 0: «we cannot tell» and «this dish costs nothing» are
       // different facts, and only one of them is ever true.
       food_cost_bps:
         price > 0 && leafCount > 0 && !hasUnpricedLeaf
-          ? Math.round((cost * 10000) / price)
+          ? foodCostBps(costMilli, price)
           : null,
     };
   });

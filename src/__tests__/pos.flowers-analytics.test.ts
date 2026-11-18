@@ -52,7 +52,7 @@ describe.skipIf(!hasDb)('POS florist analytics', () => {
     type: 'writeoff' | 'receipt',
     variantId: number,
     quantity: number,
-    opts: { reason?: string; unitCostCents?: number } = {}
+    opts: { reason?: string; unitCostMilli?: number } = {}
   ): Promise<number> {
     const doc = await createDocument({
       storeId,
@@ -65,7 +65,7 @@ describe.skipIf(!hasDb)('POS florist analytics', () => {
       documentId: doc.id,
       variantId,
       quantity,
-      unitCostCents: opts.unitCostCents ?? null,
+      unitCostMilli: opts.unitCostMilli ?? null,
     });
     await postDocument({ storeId, documentId: doc.id, staffId });
     return doc.id;
@@ -177,7 +177,7 @@ describe.skipIf(!hasDb)('POS florist analytics', () => {
   it('reads the share of what came in, which is the number a florist buys on', async () => {
     // «З кожних десяти троянд дві в смітник» is a buying decision. «Списано 20
     // стебел» is not — it says nothing about whether that is a lot.
-    await post('receipt', roseId, 100, { unitCostCents: 4000 });
+    await post('receipt', roseId, 100, { unitCostMilli: 4000_000 });
     await post('writeoff', roseId, 20, { reason: 'damaged' });
 
     const row = (await read()).loss.top_variants.find((r) => r.variant_id === roseId);
@@ -200,7 +200,7 @@ describe.skipIf(!hasDb)('POS florist analytics', () => {
     // never carries one and there is no lot costing to fall back on. What the
     // bin cost is therefore what the card says the stem costs today — worth
     // pinning, because it is the assumption the whole loss half rests on.
-    await post('writeoff', roseId, 10, { reason: 'damaged', unitCostCents: 6000 });
+    await post('writeoff', roseId, 10, { reason: 'damaged', unitCostMilli: 6000_000 });
 
     expect((await read()).loss.total_cost_cents).toBe(10 * 4000);
   });

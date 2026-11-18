@@ -36,6 +36,7 @@ import type { ComponentInput } from './composites.service.js';
 import { activeRegisters, effectiveRegister } from './fiscal/routing.js';
 import { bottleSourcesOf, type BottleSource } from './bottles.service.js';
 import { normalizeUktzed } from './excise.js';
+import { costMilliFromInput } from './cost.js';
 
 export interface VariantInput {
   /**
@@ -50,7 +51,13 @@ export interface VariantInput {
   sku?: string | null;
   barcode?: string | null;
   price_cents: number;
+  /**
+   * The purchase price in whole kopecks per base unit — the ROUNDED figure,
+   * kept for clients built before migration 103. `cost_milli` wins over it.
+   */
   cost_cents?: number;
+  /** The purchase price in thousandths of a kopeck per base unit (`cost.ts`). */
+  cost_milli?: number;
   quantity?: number;
   compare_at_cents?: number | null;
   /**
@@ -373,6 +380,7 @@ export async function listProducts(storeId: number, onlyIds?: readonly number[])
       barcode: row.barcode,
       price_cents: Number(row.price_cents),
       cost_cents: Number(row.cost_cents),
+      cost_milli: Number(row.cost_milli),
       compare_at_cents:
         row.compare_at_cents == null ? null : Number(row.compare_at_cents),
       is_active: row.is_active,
@@ -467,7 +475,7 @@ async function insertVariantTx(
     (vertical.autoBarcode ? await generateInternalBarcode(storeId, client) : null);
   const variantResult = await client.query(
     `INSERT INTO pos_variants
-       (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
+       (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_milli, compare_at_cents,
         pack_qty, pack_label, price_per, bottle_ml)
      VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING id`,
@@ -480,7 +488,8 @@ async function insertVariantTx(
       emptyToNull(variant.sku),
       barcode,
       variant.price_cents,
-      variant.cost_cents ?? 0,
+      // The rounded `cost_cents` follows by the trigger of migration 103.
+      costMilliFromInput(variant) ?? 0,
       compareAt,
       pack.pack_qty,
       pack.pack_label,
@@ -1001,7 +1010,7 @@ export async function updateVariant(
          sku = $4,
          barcode = $5,
          price_cents = $6,
-         cost_cents = $7,
+         cost_milli = $7,
          is_active = $8,
          compare_at_cents = $9,
          pack_qty = $10,
@@ -1018,7 +1027,9 @@ export async function updateVariant(
         input.sku === undefined ? (row.sku ?? null) : emptyToNull(input.sku),
         input.barcode === undefined ? (row.barcode ?? null) : emptyToNull(input.barcode),
         price,
-        input.cost_cents === undefined ? Number(row.cost_cents) : input.cost_cents,
+        // An older client sends back the rounded figure it read: that is not
+        // a new price, and the precise one stays (`costMilliFromInput`).
+        costMilliFromInput(input, Number(row.cost_milli)) ?? Number(row.cost_milli),
         input.is_active === undefined ? row.is_active : input.is_active,
         compareAt,
         pack.pack_qty,

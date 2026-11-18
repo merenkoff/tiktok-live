@@ -20,7 +20,8 @@ import { matchesWords, plural, queryWords } from '../lib/modifierWords';
 import { centsToInput } from '../lib/productDraft';
 import {
   buildCostIndex,
-  humanPriceToBaseCents,
+  baseMilliToHumanPrice,
+  humanPriceToBaseMilli,
   moneyText,
   pricingUnit,
   type CostIndex,
@@ -162,9 +163,9 @@ function DishCard({
 }
 
 /** The purchase price of one ingredient, typed where it is read. */
-function PriceCell({ row, onSave }: { row: IngredientRow; onSave: (baseCents: number) => Promise<void> }) {
-  const { per, label } = pricingUnit(row.unit);
-  const stored = row.costCents > 0 ? centsToInput(row.costCents * per) : '';
+function PriceCell({ row, onSave }: { row: IngredientRow; onSave: (baseMilli: number) => Promise<void> }) {
+  const { label } = pricingUnit(row.unit);
+  const stored = row.costMilli > 0 ? centsToInput(baseMilliToHumanPrice(row.costMilli, row.unit)) : '';
   const [text, setText] = useState(stored);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,9 +173,9 @@ function PriceCell({ row, onSave }: { row: IngredientRow; onSave: (baseCents: nu
 
   async function commit() {
     if (busy || text.trim() === stored) return;
-    const base = text.trim() === '' ? 0 : humanPriceToBaseCents(uahInputToCents(text), row.unit);
+    const base = text.trim() === '' ? 0 : humanPriceToBaseMilli(uahInputToCents(text), row.unit);
     if (text.trim() !== '' && base <= 0) {
-      setError(per > 1 ? `крок 10 ₴ за ${label}` : 'вкажіть ціну');
+      setError('вкажіть ціну');
       return;
     }
     setBusy(true);
@@ -192,7 +193,7 @@ function PriceCell({ row, onSave }: { row: IngredientRow; onSave: (baseCents: nu
     <span className="inline-flex flex-col items-end">
       <span className="inline-flex items-center gap-1.5">
         <input
-          className={`sq-input !min-h-9 !w-24 text-right tabular-nums ${row.costCents <= 0 ? 'ring-1 ring-inset ring-amber-400' : ''}`}
+          className={`sq-input !min-h-9 !w-24 text-right tabular-nums ${row.costMilli <= 0 ? 'ring-1 ring-inset ring-amber-400' : ''}`}
           inputMode="decimal"
           placeholder="немає"
           aria-label={`Ціна закупівлі «${row.caption}» за ${label}, грн`}
@@ -600,7 +601,7 @@ export function TechCardsPage() {
             <p className="text-[14px] text-sq-muted leading-relaxed max-w-2xl">
               Усе, що списують рецепти й модифікатори. Постачальник підняв ціну — впишіть нову тут, і
               собівартість кожної {dish ? 'страви' : 'позиції'} з цим інгредієнтом перерахується одразу. Прихід з
-              ціною теж її оновлює. Ціна за грам і мілілітр зберігається з кроком 10 ₴ за кг чи літр.
+              ціною теж її оновлює.
             </p>
             <ul className="rounded-card bg-sq-surface shadow-card divide-y divide-sq-divider">
               {shownIngredients.map((row) => {
@@ -636,8 +637,8 @@ export function TechCardsPage() {
                       </button>
                       <PriceCell
                         row={row}
-                        onSave={async (baseCents) => {
-                          putProduct(await api.updateVariant(row.variantId, { cost_cents: baseCents }));
+                        onSave={async (baseMilli) => {
+                          putProduct(await api.updateVariant(row.variantId, { cost_milli: baseMilli }));
                           setFlash(
                             uses > 0
                               ? `«${row.caption}»: ціну збережено, собівартість перераховано в ${uses} ${plural(uses, ['рецепті', 'рецептах', 'рецептах'])}.`

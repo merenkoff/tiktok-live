@@ -14,6 +14,16 @@
 // never «free» — the total then has no honest food cost.
 
 import type { Product, ProductComponentInput } from '@pos/platform';
+import {
+  costMilliOf,
+  costShareBps,
+  milliToCents,
+  milliToPrice,
+  priceToMilli,
+  pricingUnit,
+} from '../../../lib/costUnits';
+
+export { pricingUnit };
 
 /** One variant as the cost walk needs it. */
 export interface CostNode {
@@ -22,9 +32,12 @@ export interface CostNode {
   /** «Молоко вівсяне», «Латте · M». */
   caption: string;
   unit: string;
-  /** Last purchase price per ONE base unit (a gram, a millilitre, a piece), kopecks. */
-  costCents: number;
-  /** Assembled when it sells: its cost is its recipe's, and its own `costCents` is not read. */
+  /**
+   * Last purchase price per ONE base unit (a gram, a millilitre, a piece), in
+   * THOUSANDTHS of a kopeck (`lib/costUnits.ts`) — 35,50 ₴/кг is 3550 a gram.
+   */
+  costMilli: number;
+  /** Assembled when it sells: its cost is its recipe's, and its own `costMilli` is not read. */
   derived: boolean;
   /** Any recipe at all (`derived` or made in advance). */
   recipe: boolean;
@@ -45,7 +58,7 @@ export function buildCostIndex(products: readonly Product[]): CostIndex {
         productId: product.id,
         caption: variant.label ? `${product.name} · ${variant.label}` : product.name,
         unit: variant.unit,
-        costCents: variant.cost_cents ?? 0,
+        costMilli: costMilliOf(variant),
         derived: composite && product.stock_mode === 'derived',
         recipe: composite,
         ingredient: product.sellable === false,
@@ -61,8 +74,9 @@ export function buildCostIndex(products: readonly Product[]): CostIndex {
 
 /** What ONE base unit of a variant costs when it goes into a recipe. */
 export interface UnitCost {
-  cents: number;
-  /** Some shelf under it has no purchase price: `cents` is then a floor, not a figure. */
+  /** Thousandths of a kopeck — exact, a plain sum of the shelves under it. */
+  milli: number;
+  /** Some shelf under it has no purchase price: `milli` is then a floor, not a figure. */
   unpriced: boolean;
 }
 
@@ -72,32 +86,36 @@ export interface UnitCost {
  */
 export function unitCostOf(index: CostIndex, variantId: number, seen: ReadonlySet<number> = new Set()): UnitCost {
   const node = index.get(variantId);
-  if (!node) return { cents: 0, unpriced: true };
-  if (!node.derived) return { cents: node.costCents, unpriced: node.costCents <= 0 };
-  if (seen.has(variantId)) return { cents: 0, unpriced: true };
+  if (!node) return { milli: 0, unpriced: true };
+  if (!node.derived) return { milli: node.costMilli, unpriced: node.costMilli <= 0 };
+  if (seen.has(variantId)) return { milli: 0, unpriced: true };
   const inner = new Set(seen).add(variantId);
-  let cents = 0;
+  let milli = 0;
   let unpriced = false;
   for (const part of node.components) {
     const one = unitCostOf(index, part.component_variant_id, inner);
-    cents += one.cents * part.quantity;
+    milli += one.milli * part.quantity;
     if (one.unpriced) unpriced = true;
   }
-  return { cents, unpriced };
+  return { milli, unpriced };
 }
 
 export interface RecipeLine {
   variantId: number;
   quantity: number;
-  /** Per one base unit of the component. */
-  unitCents: number;
+  /** Per one base unit of the component, thousandths of a kopeck. */
+  unitMilli: number;
+  lineMilli: number;
+  /** The line in whole kopecks, for display — the total is NOT the sum of these. */
   lineCents: number;
   unpriced: boolean;
 }
 
 export interface RecipeCost {
   lines: RecipeLine[];
-  /** Σ of the lines — a floor when `unpriced`. */
+  /** Σ of the lines in thousandths of a kopeck — a floor when `unpriced`. */
+  milli: number;
+  /** The same sum as money: rounded once, at the end, as the server rounds it. */
   cents: number;
   unpriced: boolean;
   /** The captions of the lines that have no price, for «не вистачає ціни: …». */
@@ -109,21 +127,22 @@ export function recipeCost(index: CostIndex, components: readonly ProductCompone
   const seen = selfId == null ? new Set<number>() : new Set([selfId]);
   const lines: RecipeLine[] = [];
   const missing: string[] = [];
-  let cents = 0;
+  let milli = 0;
   for (const part of components) {
     const one = unitCostOf(index, part.component_variant_id, seen);
-    const lineCents = one.cents * part.quantity;
-    cents += lineCents;
+    const lineMilli = one.milli * part.quantity;
+    milli += lineMilli;
     if (one.unpriced) missing.push(index.get(part.component_variant_id)?.caption ?? `Варіант ${part.component_variant_id}`);
     lines.push({
       variantId: part.component_variant_id,
       quantity: part.quantity,
-      unitCents: one.cents,
-      lineCents,
+      unitMilli: one.milli,
+      lineMilli,
+      lineCents: milliToCents(lineMilli),
       unpriced: one.unpriced,
     });
   }
-  return { lines, cents, unpriced: missing.length > 0, missing };
+  return { lines, milli, cents: milliToCents(milli), unpriced: missing.length > 0, missing };
 }
 
 /**
@@ -131,9 +150,10 @@ export function recipeCost(index: CostIndex, components: readonly ProductCompone
  * cannot be told honestly — no price, no recipe, or a shelf with no cost. The
  * server's rule to the letter, so the figure does not jump on save.
  */
-export function foodCostBps(cost: Pick<RecipeCost, 'cents' | 'unpriced' | 'lines'>, priceCents: number): number | null {
+export function foodCostBps(cost: Pick<RecipeCost, 'milli' | 'unpriced' | 'lines'>, priceCents: number): number | null {
   if (priceCents <= 0 || cost.lines.length === 0 || cost.unpriced) return null;
-  return Math.round((cost.cents * 10000) / priceCents);
+  // From the sum before it is rounded to kopecks, like the server's.
+  return costShareBps(cost.milli, priceCents);
 }
 
 /** The price at which this cost is exactly the target share — rounded UP to a whole hryvnia. */
@@ -142,17 +162,10 @@ export function priceForTarget(costCents: number, targetBps: number): number | n
   return Math.ceil((costCents * 10000) / targetBps / 100) * 100;
 }
 
-/** How a base unit is priced out loud: grams by the kilogram, millilitres by the litre. */
-export function pricingUnit(unit: string): { per: number; label: string } {
-  if (unit === 'г') return { per: 1000, label: 'кг' };
-  if (unit === 'мл') return { per: 1000, label: 'л' };
-  return { per: 1, label: unit || 'шт' };
-}
-
-/** «40 ₴/л», «189,90 ₴/кг» from a per-base-unit cost. */
-export function unitPriceText(costPerBaseCents: number, unit: string): string {
+/** «40 ₴/л», «35,50 ₴/кг» from a per-base-unit cost in thousandths of a kopeck. */
+export function unitPriceText(costMilli: number, unit: string): string {
   const { per, label } = pricingUnit(unit);
-  return `${moneyText(costPerBaseCents * per)}/${label}`;
+  return `${moneyText(milliToPrice(costMilli, per))}/${label}`;
 }
 
 /** «23,40 ₴» — and «23 ₴» for a whole sum; a recipe line reads better without «,00». */
@@ -165,18 +178,16 @@ export function moneyText(cents: number): string {
 }
 
 /**
- * A typed «₴ за кг» into the stored per-base-unit kopecks. The store keeps
- * whole kopecks per gram, so a kilogram price moves in steps of 10 ₴ — the
- * caller says so beside the field rather than pretending otherwise.
+ * A typed «₴ за кг» (in kopecks) into the stored cost per base unit, in
+ * thousandths of a kopeck — exact to the kopeck per kilogram or litre.
  */
-export function humanPriceToBaseCents(humanCents: number, unit: string): number {
-  return Math.round(humanCents / pricingUnit(unit).per);
+export function humanPriceToBaseMilli(humanCents: number, unit: string): number {
+  return priceToMilli(humanCents, pricingUnit(unit).per);
 }
 
-/** Does the stored price differ from what was typed — i.e. did the step round it. */
-export function roundedByStep(humanCents: number, unit: string): boolean {
-  const { per } = pricingUnit(unit);
-  return per > 1 && humanPriceToBaseCents(humanCents, unit) * per !== humanCents;
+/** The stored cost as the «₴ за кг» a price box shows, in kopecks. */
+export function baseMilliToHumanPrice(costMilli: number, unit: string): number {
+  return milliToPrice(costMilli, pricingUnit(unit).per);
 }
 
 /** A recipe scaled for another size: every quantity × factor, never below one unit. */

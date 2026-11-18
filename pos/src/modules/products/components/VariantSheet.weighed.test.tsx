@@ -11,7 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { VariantSheet } from './VariantSheet';
-import type { VariantDraft } from '../lib/productDraft';
+import { costMilliOfDraft, type VariantDraft } from '../lib/productDraft';
 
 const grocery: VerticalPublicConfig = {
   id: 'clothing',
@@ -30,8 +30,9 @@ const cheese: VariantDraft = {
   unit: 'г',
   price: '189.90',
   compareAtCents: null,
-  // 12 kopecks a gram — what 120 ₴ a kilogram is stored as.
-  cost: '0.12',
+  // Hryvnias per kilogram, the way the owner reads it on a delivery note.
+  cost: '120',
+  costMilli: 12_000,
   sku: '',
   barcode: '',
   pack: { qty: '', label: '' },
@@ -63,17 +64,19 @@ describe('VariantSheet for a weighed variant', () => {
     expect(screen.getByText('2,350 кг')).toBeInTheDocument();
   });
 
-  it('reads and writes the purchase price per kilogram, stored per gram with its step', async () => {
+  it('reads and writes the purchase price per kilogram, to the kopeck', async () => {
     const { user, onApply } = setup();
     const cost = screen.getByRole('textbox', { name: /^Закупівельна ціна за 1 кг, грн/ });
     expect(cost).toHaveValue('120');
 
     await user.clear(cost);
     await user.type(cost, '119,90');
-    // 119,90 ₴/кг is 11,99 коп/г, kept as 12 — the sheet says what will be written.
-    expect(screen.getByTestId('variant-cost-step')).toHaveTextContent('запишеться як 120 ₴ за 1 кг');
+    // No step any more: 119,90 ₴/кг is kept as 119,90, so there is nothing to warn about.
+    expect(screen.queryByTestId('variant-cost-step')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Готово' }));
-    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ cost: '0.12', price: '189.90' }));
+    const applied = onApply.mock.calls[0]![0] as VariantDraft;
+    expect(applied).toMatchObject({ cost: '119,90', price: '189.90' });
+    expect(costMilliOfDraft(applied)).toBe(11_990);
   });
 });

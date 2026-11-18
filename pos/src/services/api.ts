@@ -272,6 +272,8 @@ class PosApi {
       price_cents: number;
       /** What it cost to buy — the margin reports read it (0 when not said). */
       cost_cents?: number;
+      /** The same, in thousandths of a kopeck per base unit — wins over `cost_cents`. */
+      cost_milli?: number;
       quantity?: number;
       /** The purchase pack — both halves or neither (migration 054). */
       pack_qty?: number | null;
@@ -332,6 +334,8 @@ class PosApi {
       price_cents: number;
       /** What it cost to buy — the margin reports read it (0 when not said). */
       cost_cents?: number;
+      /** The same, in thousandths of a kopeck per base unit — wins over `cost_cents`. */
+      cost_milli?: number;
       quantity?: number;
       compare_at_cents?: number | null;
       /** The purchase pack — both halves or neither (migration 054). */
@@ -358,6 +362,7 @@ class PosApi {
       barcode?: string;
       price_cents: number;
       cost_cents?: number;
+      cost_milli?: number;
       quantity?: number;
     }>
   ): Promise<Product> {
@@ -377,6 +382,8 @@ class PosApi {
       compare_at_cents: number | null;
       /** The purchase price — «Техкарти» and the margin reports read it. Left out = unchanged. */
       cost_cents: number;
+      /** The purchase price in thousandths of a kopeck per base unit — wins over `cost_cents`. */
+      cost_milli: number;
       is_active: boolean;
       /**
        * The purchase pack. Leaving both out keeps whatever the row has; an
@@ -864,6 +871,8 @@ class PosApi {
       variant_id: number;
       quantity?: number;
       unit_cost_cents?: number | null;
+      /** Thousandths of a kopeck per base unit — wins over `unit_cost_cents`. */
+      unit_cost_milli?: number | null;
       counted_qty?: number | null;
       target_qty?: number;
       line_note?: string | null;
@@ -883,6 +892,8 @@ class PosApi {
       quantity: number;
       price_cents: number;
       unit_cost_cents?: number | null;
+      /** Thousandths of a kopeck per base unit — wins over `unit_cost_cents`. */
+      unit_cost_milli?: number | null;
       attributes?: AttributeValues;
       unit?: string;
       sku?: string | null;
@@ -904,6 +915,8 @@ class PosApi {
     payload: {
       quantity?: number;
       unit_cost_cents?: number | null;
+      /** Thousandths of a kopeck per base unit — wins over `unit_cost_cents`. */
+      unit_cost_milli?: number | null;
       counted_qty?: number | null;
       line_note?: string | null;
       placeholder_name?: string;

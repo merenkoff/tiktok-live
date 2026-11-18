@@ -32,6 +32,7 @@ import {
   type ComponentInput,
 } from './composites.service.js';
 import { applyStockDelta } from './stock.service.js';
+import { milliToCents } from './cost.js';
 import type { WriteoffReasonCode } from './types.js';
 
 type DbClient = { query: typeof pool.query };
@@ -272,7 +273,7 @@ export async function assembleForShowcase(input: ShowcaseInput): Promise<Showcas
     );
     const documentId = Number(doc.rows[0].id);
 
-    const { unitCostCents } = await produceComposite(client, {
+    const { unitCostMilli } = await produceComposite(client, {
       storeId: input.storeId,
       variantId,
       quantity: 1,
@@ -284,14 +285,14 @@ export async function assembleForShowcase(input: ShowcaseInput): Promise<Showcas
 
     await client.query(
       `INSERT INTO pos_stock_document_lines
-         (document_id, store_id, variant_id, quantity, unit_cost_cents)
+         (document_id, store_id, variant_id, quantity, unit_cost_milli)
        VALUES ($1, $2, $3, 1, $4)`,
-      [documentId, input.storeId, variantId, unitCostCents]
+      [documentId, input.storeId, variantId, unitCostMilli]
     );
     // What the bouquet cost the shop, so the window's realised margin is a real
     // number rather than a guess (this is what florist analytics will read).
-    await client.query(`UPDATE pos_variants SET cost_cents = $1 WHERE id = $2`, [
-      unitCostCents,
+    await client.query(`UPDATE pos_variants SET cost_milli = $1 WHERE id = $2`, [
+      unitCostMilli,
       variantId,
     ]);
 
@@ -308,7 +309,7 @@ export async function assembleForShowcase(input: ShowcaseInput): Promise<Showcas
       name,
       barcode,
       price_cents: priceCents,
-      cost_cents: unitCostCents,
+      cost_cents: milliToCents(unitCostMilli),
       document_id: documentId,
       doc_number: docNumber,
       created: true,

@@ -38,7 +38,10 @@ const FIELDS: Record<string, { label: string; kind: Kind }> = {
   'variant.unit': { label: 'Одиниця', kind: 'text' },
   'variant.price_cents': { label: 'Ціна', kind: 'money' },
   'variant.compare_at_cents': { label: 'Стара ціна', kind: 'money' },
+  // Rows written before migration 103: whole kopecks per base unit.
   'variant.cost_cents': { label: 'Закупівельна ціна', kind: 'money' },
+  // Since then the server writes the price as it is read — «35,50 ₴/кг».
+  'variant.cost': { label: 'Закупівельна ціна', kind: 'text' },
   'variant.sku': { label: 'Артикул', kind: 'text' },
   'variant.barcode': { label: 'Штрихкод', kind: 'text' },
   'variant.pack_qty': { label: 'Фасування, кількість', kind: 'number' },

@@ -63,7 +63,9 @@ function product(
         sku: null,
         barcode: null,
         price_cents: opts.price ?? 0,
-        cost_cents: opts.cost ?? 0,
+        // `cost`: thousandths of a kopeck per base unit, as the server keeps it.
+        cost_cents: Math.round((opts.cost ?? 0) / 1000),
+        cost_milli: opts.cost ?? 0,
         is_active: true,
         quantity: 5000,
         components: (opts.parts ?? []).map(([variantId, quantity, partName], index) => ({
@@ -83,9 +85,9 @@ function product(
 const dish = (id: number, name: string, price: number, parts: Part[]) =>
   product(id, name, { kind: 'composite', mode: 'derived', sellable: true, price, parts });
 
-const BEEF = product(1, 'Яловичина', { cost: 50 });
+const BEEF = product(1, 'Яловичина', { cost: 50_000 });
 const BACON = product(2, 'Бекон', { cost: 0 });
-const SALT = product(3, 'Сіль', { cost: 1 });
+const SALT = product(3, 'Сіль', { cost: 1000 });
 const BORSCH = dish(5, 'Борщ', 20000, [[10, 100, 'Яловичина'], [30, 20, 'Сіль']]); // 5 020 → 25,1 %
 const CARBONARA = dish(6, 'Карбонара', 26500, [[20, 60, 'Бекон']]);
 const STEAK = dish(7, 'Стейк', 10000, [[10, 300, 'Яловичина']]); // 15 000 → 150 %
@@ -220,7 +222,7 @@ describe('TechCardsPage', () => {
 
   it('lists what is bought — unpriced first — with where it goes, and takes a new price where it is read', async () => {
     const user = userEvent.setup();
-    updateVariant.mockResolvedValue({ ...BACON, variants: [{ ...BACON.variants[0], cost_cents: 55 }] });
+    updateVariant.mockResolvedValue({ ...BACON, variants: [{ ...BACON.variants[0], cost_cents: 55, cost_milli: 55_000 }] });
     open('/admin/tech-cards?tab=ingredients');
     await screen.findByTestId('ingredient-row-20');
     const rows = screen.getAllByTestId(/^ingredient-row-\d+$/).map((r) => r.getAttribute('data-testid'));
@@ -237,7 +239,7 @@ describe('TechCardsPage', () => {
     const price = screen.getByTestId('ingredient-price-20');
     expect(price).toHaveValue('');
     await user.type(price, '550{Enter}');
-    await waitFor(() => expect(updateVariant).toHaveBeenCalledWith(20, { cost_cents: 55 }));
+    await waitFor(() => expect(updateVariant).toHaveBeenCalledWith(20, { cost_milli: 55_000 }));
     expect(await screen.findByTestId('tech-cards-flash')).toHaveTextContent(
       '«Бекон»: ціну збережено, собівартість перераховано в 1 рецепті.'
     );

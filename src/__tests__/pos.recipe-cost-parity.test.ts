@@ -8,10 +8,15 @@
 // saved. The same case is built here in a real database and read back from
 // `listTechCards`; `recipeCost.test.ts` on the client pins the same numbers.
 //
-//   A 7 коп/г, B 3 коп/г
-//   prep  (derived) = 10 A + 5 B                → 85, folded into what holds it
-//   stock (own, made ahead, costs 40 a piece)   → a shelf of its own
-//   dish  (derived) = 2 prep + 3 stock + 4 A    → 170 + 120 + 28 = 318
+// Costs are thousandths of a kopeck per base unit (migration 103), so the case
+// uses prices no whole kopeck per gram could hold:
+//
+//   A 35,50 ₴/кг = 3550, B 12,73 ₴/кг = 1273
+//   prep  (derived) = 10 A + 5 B                → 41 865, folded into what holds it
+//   stock (own, made ahead, 40 коп a piece)     → a shelf of its own, 40 000
+//   dish  (derived) = 2 prep + 3 stock + 4 A    → 83 730 + 120 000 + 14 200 = 217 930
+//                                                → 2,18 ₴, and 21,79 % of a 10 ₴ price:
+//                                                  the share is taken BEFORE the rounding.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
@@ -29,7 +34,16 @@ import {
   type TestStore,
 } from './helpers/pos-fixtures.js';
 
-const PARITY = { a: 7, b: 3, stock: 40, price: 1000, cost: 318, bps: 3180, costWithoutB: 288 };
+const PARITY = {
+  a: 3550,
+  b: 1273,
+  stock: 40_000,
+  price: 1000,
+  costMilli: 217_930,
+  cost: 218,
+  bps: 2179,
+  costWithoutB: 205,
+};
 
 describe.skipIf(!hasDb)('POS recipes: the live cost on the client is this server’s sum', () => {
   let app: FastifyInstance;
@@ -73,15 +87,15 @@ describe.skipIf(!hasDb)('POS recipes: the live cost on the client is this server
     await pool.query(`UPDATE pos_stores SET vertical = 'cafe' WHERE id = $1`, [store.storeId]);
     const a = (await seedProduct(store.storeId, { name: 'A', priceCents: 0, quantity: 100000 })).variantId;
     b = (await seedProduct(store.storeId, { name: 'B', priceCents: 0, quantity: 100000 })).variantId;
-    await pool.query(`UPDATE pos_variants SET cost_cents = $2 WHERE id = $1`, [a, PARITY.a]);
-    await pool.query(`UPDATE pos_variants SET cost_cents = $2 WHERE id = $1`, [b, PARITY.b]);
+    await pool.query(`UPDATE pos_variants SET cost_milli = $2 WHERE id = $1`, [a, PARITY.a]);
+    await pool.query(`UPDATE pos_variants SET cost_milli = $2 WHERE id = $1`, [b, PARITY.b]);
     const prep = await composite('Заготовка', 'derived', false, 0, [
       [a, 10],
       [b, 5],
     ]);
     // Made ahead: whatever its recipe holds, it is a shelf with its own price.
     const stock = await composite('Бульйон', 'own', false, 0, [[a, 999]]);
-    await pool.query(`UPDATE pos_variants SET cost_cents = $2 WHERE id = $1`, [stock, PARITY.stock]);
+    await pool.query(`UPDATE pos_variants SET cost_milli = $2 WHERE id = $1`, [stock, PARITY.stock]);
     dish = await composite('Страва', 'derived', true, PARITY.price, [
       [prep, 2],
       [stock, 3],
@@ -98,6 +112,7 @@ describe.skipIf(!hasDb)('POS recipes: the live cost on the client is this server
     const row = (await listTechCards(pool, store.storeId)).find((r) => r.variant_id === dish);
     expect(row).toMatchObject({
       cost_cents: PARITY.cost,
+      cost_milli: PARITY.costMilli,
       food_cost_bps: PARITY.bps,
       has_unpriced_leaf: false,
       leaf_count: 3,
@@ -105,7 +120,7 @@ describe.skipIf(!hasDb)('POS recipes: the live cost on the client is this server
   });
 
   it('an unpriced shelf makes the cost a floor and the food cost unknown — on both sides', async () => {
-    await pool.query(`UPDATE pos_variants SET cost_cents = 0 WHERE id = $1`, [b]);
+    await pool.query(`UPDATE pos_variants SET cost_milli = 0 WHERE id = $1`, [b]);
     const row = (await listTechCards(pool, store.storeId)).find((r) => r.variant_id === dish);
     expect(row).toMatchObject({ cost_cents: PARITY.costWithoutB, food_cost_bps: null, has_unpriced_leaf: true });
   });

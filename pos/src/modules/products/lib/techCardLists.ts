@@ -9,6 +9,7 @@
 // moves. Pure: the page, its filters and the sidebar's count all read these.
 
 import type { ModifierGroup, Product } from '@pos/platform';
+import { costMilliOf } from '../../../lib/costUnits';
 import { foodCostBps, recipeCost, type CostIndex, type RecipeCost } from './recipeCost';
 
 /** Why a dish's cost cannot be acted on — or that it loses money. */
@@ -122,8 +123,8 @@ export interface IngredientRow {
   productId: number;
   caption: string;
   unit: string;
-  /** Per one base unit, kopecks; 0 = never received with a price. */
-  costCents: number;
+  /** Per one base unit, thousandths of a kopeck (`lib/costUnits.ts`); 0 = never received with a price. */
+  costMilli: number;
   /** On the shelf, in base units. */
   quantity: number;
   /** The dishes and preps whose recipes take it — directly or through a prep. */
@@ -195,7 +196,7 @@ export function ingredientRows(
         productId: product.id,
         caption: node.caption,
         unit: variant.unit,
-        costCents: variant.cost_cents ?? 0,
+        costMilli: costMilliOf(variant),
         quantity: variant.quantity,
         usedIn: [...(where ?? new Map<number, string>()).entries()]
           .map(([productId, name]) => ({ productId, name }))
@@ -205,7 +206,7 @@ export function ingredientRows(
     }
   }
   return rows.sort(
-    (a, b) => Number(a.costCents > 0) - Number(b.costCents > 0) || a.caption.localeCompare(b.caption, 'uk')
+    (a, b) => Number(a.costMilli > 0) - Number(b.costMilli > 0) || a.caption.localeCompare(b.caption, 'uk')
   );
 }
 

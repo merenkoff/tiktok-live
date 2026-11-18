@@ -23,7 +23,8 @@ const { RecipeEditor } = await import('./RecipeEditor');
 const { buildCostIndex } = await import('../lib/recipeCost');
 const { ingredientOptions } = await import('../lib/ingredientOptions');
 
-function ingredient(id: number, name: string, unit: string, cost: number): Product {
+/** `costMilli`: thousandths of a kopeck per base unit — 600 ₴/кг is 60 000 a gram. */
+function ingredient(id: number, name: string, unit: string, costMilli: number): Product {
   return {
     id,
     name,
@@ -35,13 +36,13 @@ function ingredient(id: number, name: string, unit: string, cost: number): Produ
     sellable: false,
     tag_ids: [],
     variants: [
-      { id: id * 10, product_id: id, attributes: {}, label: '', unit, sku: null, barcode: null, price_cents: 0, cost_cents: cost, is_active: true, quantity: 1000 },
+      { id: id * 10, product_id: id, attributes: {}, label: '', unit, sku: null, barcode: null, price_cents: 0, cost_cents: Math.round(costMilli / 1000), cost_milli: costMilli, is_active: true, quantity: 1000 },
     ],
   } as Product;
 }
 
-const BEANS = ingredient(1, 'Зерно арабіка', 'г', 60);
-const MILK = ingredient(2, 'Молоко', 'мл', 4);
+const BEANS = ingredient(1, 'Зерно арабіка', 'г', 60_000);
+const MILK = ingredient(2, 'Молоко', 'мл', 4_000);
 const BACON = ingredient(3, 'Бекон', 'г', 0);
 
 function Harness({
@@ -54,7 +55,7 @@ function Harness({
   initial?: ProductComponentInput[];
   price?: number;
   target?: number | null;
-  onSetCost?: (variantId: number, baseCents: number) => Promise<void>;
+  onSetCost?: (variantId: number, baseMilli: number) => Promise<void>;
   sources?: Parameters<typeof RecipeEditor>[0]['sources'];
 }) {
   const [products, setProducts] = useState<Product[]>([BEANS, MILK, BACON]);
@@ -71,11 +72,11 @@ function Harness({
           priceCents: price,
           targetBps: target,
           onSetCost: onSetCost
-            ? async (variantId, baseCents) => {
-                await onSetCost(variantId, baseCents);
+            ? async (variantId, baseMilli) => {
+                await onSetCost(variantId, baseMilli);
                 setProducts((prev) =>
                   prev.map((p) =>
-                    p.variants[0].id === variantId ? { ...p, variants: [{ ...p.variants[0], cost_cents: baseCents }] } : p
+                    p.variants[0].id === variantId ? { ...p, variants: [{ ...p.variants[0], cost_milli: baseMilli }] } : p
                   )
                 );
               }
@@ -173,26 +174,41 @@ describe('RecipeEditor', () => {
     expect(screen.queryByTestId('recipe-food-cost')).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId('recipe-set-cost'));
-    // 550 ₴ за кг → 55 коп за грам.
+    // 550 ₴ за кг → 55 коп за грам, kept in thousandths of a kopeck.
     await user.type(screen.getByTestId('recipe-cost-input'), '550{Enter}');
-    await waitFor(() => expect(onSetCost).toHaveBeenCalledWith(30, 55));
+    await waitFor(() => expect(onSetCost).toHaveBeenCalledWith(30, 55_000));
     await waitFor(() => expect(screen.getByTestId('recipe-totals')).toHaveTextContent('Собівартість 43,80 ₴'));
     expect(screen.getByTestId('recipe-food-cost')).toHaveTextContent('67,4 %');
   });
 
-  it('refuses a price too small for the step instead of storing nothing', async () => {
+  it('keeps a price per kilogram to the kopeck — no step of 10 ₴', async () => {
+    const user = userEvent.setup();
+    const onSetCost = vi.fn().mockResolvedValue(undefined);
+    render(<Harness initial={[{ component_variant_id: 30, quantity: 60 }]} onSetCost={onSetCost} />);
+    await user.click(screen.getByTestId('recipe-set-cost'));
+    // 4 ₴ a kilogram used to be «too small»; 35,50 used to become 40.
+    await user.type(screen.getByTestId('recipe-cost-input'), '35,50{Enter}');
+    await waitFor(() => expect(onSetCost).toHaveBeenCalledWith(30, 3550));
+    const row = await screen.findByTestId('composition-row');
+    await waitFor(() => expect(within(row).getByTestId('recipe-unit-price')).toHaveTextContent('35,50 ₴/кг'));
+    // 60 г × 3,55 коп = 2,13 ₴.
+    expect(within(row).getByTestId('recipe-line-sum')).toHaveTextContent('2,13 ₴');
+    expect(screen.getByTestId('recipe-totals')).toHaveTextContent('Собівартість 2,13 ₴');
+  });
+
+  it('asks for a price rather than storing «nothing»', async () => {
     const user = userEvent.setup();
     const onSetCost = vi.fn();
     render(<Harness initial={[{ component_variant_id: 30, quantity: 60 }]} onSetCost={onSetCost} />);
     await user.click(screen.getByTestId('recipe-set-cost'));
-    await user.type(screen.getByTestId('recipe-cost-input'), '4{Enter}');
-    expect(screen.getByText('Замало: крок 10 ₴ за кг')).toBeInTheDocument();
+    await user.type(screen.getByTestId('recipe-cost-input'), '0{Enter}');
+    expect(screen.getByText('Вкажіть ціну')).toBeInTheDocument();
     expect(onSetCost).not.toHaveBeenCalled();
   });
 
   it('makes a missing ingredient from the search, and it is in the recipe at once', async () => {
     const user = userEvent.setup();
-    const cream = ingredient(9, 'Вершки 33', 'мл', 12);
+    const cream = ingredient(9, 'Вершки 33', 'мл', 12_000);
     createProduct.mockResolvedValue(cream);
     render(<Harness />);
     await user.type(screen.getByRole('combobox', { name: 'Додати складник' }), 'Вершки 33');
@@ -209,7 +225,7 @@ describe('RecipeEditor', () => {
     expect(createProduct).toHaveBeenCalledWith({
       name: 'Вершки 33',
       sellable: false,
-      variants: [{ attributes: {}, unit: 'мл', price_cents: 0, cost_cents: 12 }],
+      variants: [{ attributes: {}, unit: 'мл', price_cents: 0, cost_milli: 12_000 }],
     });
     await waitFor(() => expect(valueOf()).toEqual([{ component_variant_id: 90, quantity: 1 }]));
     expect(screen.getByTestId('composition-row')).toHaveTextContent('Вершки 33');

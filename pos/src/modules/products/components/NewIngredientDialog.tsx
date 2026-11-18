@@ -9,7 +9,7 @@ import { Segmented } from '@pos/platform/ui';
 import { Dialog } from './Dialog';
 import { captionClass } from './formStyles';
 import { errorText } from './modifierInput';
-import { humanPriceToBaseCents, pricingUnit, roundedByStep, unitPriceText } from '../lib/recipeCost';
+import { humanPriceToBaseMilli, pricingUnit } from '../lib/recipeCost';
 
 /** How a unit is offered: what it is counted in, and what the price is asked per. */
 function unitChoice(unit: string): string {
@@ -50,17 +50,13 @@ export function NewIngredientDialog({
 
   const { label } = pricingUnit(unit);
   const humanCents = uahInputToCents(price);
-  const baseCents = humanPriceToBaseCents(humanCents, unit);
-  const stepRounded = humanCents > 0 && roundedByStep(humanCents, unit);
+  // To the kopeck per kilogram or litre: thousandths of a kopeck per base unit.
+  const baseMilli = humanPriceToBaseMilli(humanCents, unit);
 
   async function submit() {
     if (busy) return;
     if (name.trim() === '') {
       setError('Вкажіть назву');
-      return;
-    }
-    if (humanCents > 0 && baseCents <= 0) {
-      setError(`Ціна замала: зберігається з кроком 10 ₴ за ${label}`);
       return;
     }
     setBusy(true);
@@ -69,7 +65,7 @@ export function NewIngredientDialog({
       const created = await api.createProduct({
         name: name.trim(),
         sellable: false,
-        variants: [{ attributes: {}, unit, price_cents: 0, cost_cents: baseCents }],
+        variants: [{ attributes: {}, unit, price_cents: 0, cost_milli: baseMilli }],
       });
       onCreated(created);
     } catch (err) {
@@ -143,7 +139,6 @@ export function NewIngredientDialog({
           />
           <span className="text-[13px] text-sq-muted">
             Без ціни собівартість страви буде «невідома» — її перепише перший прихід з ціною.
-            {stepRounded && baseCents > 0 && ` Запишеться як ${unitPriceText(baseCents, unit)} — крок 10 ₴ за ${label}.`}
           </span>
         </label>
       </div>

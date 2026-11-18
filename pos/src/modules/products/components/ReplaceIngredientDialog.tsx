@@ -121,7 +121,7 @@ export function ReplaceIngredientDialog({
             ariaLabel="На що замінити"
             noteOf={(option) => {
               const one = costs.get(option.variant_id);
-              return one && one.costCents > 0 ? unitPriceText(one.costCents, option.unit) : option.unit;
+              return one && one.costMilli > 0 ? unitPriceText(one.costMilli, option.unit) : option.unit;
             }}
             surface="page"
             testId="replace-to"

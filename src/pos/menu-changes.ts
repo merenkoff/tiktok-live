@@ -21,6 +21,7 @@ import { logger } from '../logger.js';
 import type { PosAuthContext } from './types.js';
 import type { ProductView } from './products.service.js';
 import type { ModifierGroup } from './modifiers.service.js';
+import { purchasePriceText } from './cost.js';
 
 export type MenuEntity = 'product' | 'modifier_group';
 export type MenuAction = 'create' | 'update' | 'archive' | 'restore' | 'delete';
@@ -73,7 +74,6 @@ export const VARIANT_FIELDS = [
   'unit',
   'price_cents',
   'compare_at_cents',
-  'cost_cents',
   'sku',
   'barcode',
   'pack_qty',
@@ -107,6 +107,11 @@ function recipeText(variant: VariantView): string[] {
     const what = [c.product_name, c.label].filter(Boolean).join(' · ');
     return `${what} — ${c.quantity}${c.unit ? ` ${c.unit}` : ''}`;
   });
+}
+
+function costText(variant: VariantView): string | null {
+  const row = variant as unknown as { cost_milli?: number; unit?: string };
+  return purchasePriceText(Number(row.cost_milli ?? 0), String(row.unit ?? ''));
 }
 
 function variantName(variant: VariantView): string {
@@ -166,6 +171,15 @@ export function diffProduct(
       const from = valueOf((old as Record<string, unknown>)[field]);
       const to = valueOf((variant as Record<string, unknown>)[field]);
       if (!same(from, to)) changes.push({ field: `variant.${field}`, variant: variantName(variant), from, to });
+    }
+    // The purchase price is journalled the way the owner reads it — «35,50 ₴/кг»
+    // — because the stored figure (thousandths of a kopeck a gram, migration
+    // 103) means nothing without the unit. Rows written before it are
+    // `variant.cost_cents`, whole kopecks per base unit; the reader knows both.
+    const costFrom = costText(old);
+    const costTo = costText(variant);
+    if (costFrom !== costTo) {
+      changes.push({ field: 'variant.cost', variant: variantName(variant), from: costFrom, to: costTo });
     }
     const recipeFrom = recipeText(old);
     const recipeTo = recipeText(variant);

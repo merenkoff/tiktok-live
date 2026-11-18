@@ -4,13 +4,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, unitPriceLabel, useAuthStore, useVertical, WEIGHED_PRICE_PER } from '@pos/platform';
+import { api, formatUah, unitPriceLabel, useAuthStore, useVertical, WEIGHED_PRICE_PER } from '@pos/platform';
 import type { StockDocument, StockDocumentLine } from '@pos/platform';
 import { ArrowLeft, FileText, PageHeader, Printer, SectionHead } from '@pos/platform/ui';
 import { STATUS_LABEL, TYPE_GLYPH, TYPE_LABEL, statusChipClass } from '../lib/documents';
 import { receivedTagSources } from '../lib/receivedTags';
 import { confirmStubsMessage, summarizeStubs } from '../lib/stubs';
-import { countScale, signedStockCell, stockCell, type StockUnitRow } from '../lib/stockUnits';
+import { costPer, costUnit, shownCost, signedStockCell, stockCell, type StockUnitRow } from '../lib/stockUnits';
+import { unitCostMilliOf } from '../../../lib/costUnits';
 import { isWeighedUnit } from '../../products/lib/weighedUnit';
 // Rendered from another module on purpose (clothing L4): the one dialog the
 // product list prints with, so a tag from a receipt and a tag from the catalogue
@@ -145,8 +146,17 @@ export function StockDocumentDetailPage() {
             const isStub = Boolean(line.is_placeholder);
             const fromStub = Boolean(line.placeholder_name) && !isStub;
             const units = unitsOf(line);
-            // Prices per kilogram for a weighed line: the cost is stored per gram.
+            // Prices per kilogram for a weighed line.
             const price = (cents: number) => unitPriceLabel(cents, units.unit ?? '', units.price_per ?? 1);
+            // The purchase price as it was typed: per kilogram or litre for
+            // anything counted in grams or millilitres, to the kopeck.
+            const costMilli = unitCostMilliOf(line);
+            const costText =
+              costMilli == null
+                ? null
+                : costPer(units, 'base') > 1
+                  ? `${formatUah(shownCost(units, 'base', costMilli))}/${costUnit(units, 'base')}`
+                  : formatUah(shownCost(units, 'base', costMilli));
             return (
               <li key={line.id} className="sq-row min-h-12 py-2 flex justify-between gap-3">
                 <div className="min-w-0">
@@ -174,13 +184,13 @@ export function StockDocumentDetailPage() {
                       {line.counted_qty == null ? '—' : stockCell(line.counted_qty, units)}
                     </p>
                   )}
-                  {line.unit_cost_cents != null && (
-                    <p className="text-[13px] text-sq-muted tabular-nums">
-                      Закупка {price(line.unit_cost_cents * countScale(units))}
+                  {costText != null && (
+                    <p className="text-[13px] text-sq-muted tabular-nums" data-testid="stock-line-cost">
+                      Закупка {costText}
                       {!isStub && line.price_cents != null && ` · Ціна ${price(line.price_cents)}`}
                     </p>
                   )}
-                  {line.unit_cost_cents == null && !isStub && line.price_cents != null && (
+                  {costText == null && !isStub && line.price_cents != null && (
                     <p className="text-[13px] text-sq-muted tabular-nums">Ціна {price(line.price_cents)}</p>
                   )}
                   {isStub && line.placeholder_price_cents != null && (

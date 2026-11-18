@@ -271,8 +271,8 @@ export function RecipeDialog({
             priceCents: uahInputToCents(active.price),
             targetBps,
             selfId: active.id,
-            onSetCost: async (variantId, baseCents) => {
-              onProductChanged(await api.updateVariant(variantId, { cost_cents: baseCents }));
+            onSetCost: async (variantId, baseMilli) => {
+              onProductChanged(await api.updateVariant(variantId, { cost_milli: baseMilli }));
             },
           }}
           create={{ units, onCreated: onProductChanged }}

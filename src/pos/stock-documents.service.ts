@@ -18,7 +18,10 @@ export interface StockDocumentLine {
   store_id: number;
   variant_id: number | null;
   quantity: number;
+  /** Rounded copy of `unit_cost_milli`, whole kopecks per base unit — for older clients. */
   unit_cost_cents: number | null;
+  /** The line's price in thousandths of a kopeck per base unit (migration 103). */
+  unit_cost_milli: number | null;
   system_qty: number | null;
   counted_qty: number | null;
   line_note: string | null;
@@ -133,6 +136,7 @@ function mapLine(row: Record<string, unknown>): StockDocumentLine {
     variant_id: row.variant_id == null ? null : Number(row.variant_id),
     quantity: Number(row.quantity),
     unit_cost_cents: row.unit_cost_cents == null ? null : Number(row.unit_cost_cents),
+    unit_cost_milli: row.unit_cost_milli == null ? null : Number(row.unit_cost_milli),
     system_qty: row.system_qty == null ? null : Number(row.system_qty),
     counted_qty: row.counted_qty == null ? null : Number(row.counted_qty),
     line_note: row.line_note == null ? null : String(row.line_note),
@@ -397,7 +401,7 @@ export async function addLine(params: {
   documentId: number;
   variantId: number;
   quantity?: number;
-  unitCostCents?: number | null;
+  unitCostMilli?: number | null;
   countedQty?: number | null;
   lineNote?: string | null;
 }): Promise<StockDocumentLine> {
@@ -416,7 +420,7 @@ export async function addLine(params: {
     let quantity = params.quantity ?? 0;
     let systemQty: number | null = null;
     let countedQty: number | null = params.countedQty ?? null;
-    let unitCost: number | null = params.unitCostCents ?? null;
+    let unitCost: number | null = params.unitCostMilli ?? null;
 
     if (doc.type === 'receipt' || doc.type === 'writeoff' || doc.type === 'production') {
       if (!params.quantity || params.quantity <= 0) {
@@ -453,7 +457,7 @@ export async function addLine(params: {
 
     const result = await client.query(
       `INSERT INTO pos_stock_document_lines
-         (document_id, store_id, variant_id, quantity, unit_cost_cents, system_qty, counted_qty, line_note)
+         (document_id, store_id, variant_id, quantity, unit_cost_milli, system_qty, counted_qty, line_note)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
@@ -487,7 +491,7 @@ export async function addPlaceholderLine(params: {
   name: string;
   quantity: number;
   priceCents: number;
-  unitCostCents?: number | null;
+  unitCostMilli?: number | null;
   /** Vertical-defined attributes, validated against the store's schema. */
   attributes?: unknown;
   unit?: string;
@@ -557,7 +561,7 @@ export async function addPlaceholderLine(params: {
 
     const result = await client.query(
       `INSERT INTO pos_stock_document_lines
-         (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note,
+         (document_id, store_id, variant_id, quantity, unit_cost_milli, line_note,
           is_placeholder, placeholder_name, placeholder_attributes, placeholder_label,
           placeholder_unit, placeholder_sku, placeholder_barcode, placeholder_price_cents,
           placeholder_product_id)
@@ -567,7 +571,7 @@ export async function addPlaceholderLine(params: {
         params.documentId,
         params.storeId,
         params.quantity,
-        params.unitCostCents ?? null,
+        params.unitCostMilli ?? null,
         params.lineNote ?? null,
         name,
         JSON.stringify(derived.attributes),
@@ -660,7 +664,7 @@ export async function updateLine(params: {
   documentId: number;
   lineId: number;
   quantity?: number;
-  unitCostCents?: number | null;
+  unitCostMilli?: number | null;
   countedQty?: number | null;
   lineNote?: string | null;
   placeholderName?: string;
@@ -686,7 +690,7 @@ export async function updateLine(params: {
     if (row.status !== 'draft') throw new Error('Only draft documents can be edited');
 
     let quantity = Number(row.quantity);
-    let unitCost = row.unit_cost_cents == null ? null : Number(row.unit_cost_cents);
+    let unitCost = row.unit_cost_milli == null ? null : Number(row.unit_cost_milli);
     let systemQty = row.system_qty == null ? null : Number(row.system_qty);
     let countedQty = row.counted_qty == null ? null : Number(row.counted_qty);
     let placeholderName = row.placeholder_name == null ? null : String(row.placeholder_name);
@@ -704,7 +708,7 @@ export async function updateLine(params: {
         if (params.quantity <= 0) throw new Error('quantity must be positive');
         quantity = params.quantity;
       }
-      if (params.unitCostCents !== undefined) unitCost = params.unitCostCents;
+      if (params.unitCostMilli !== undefined) unitCost = params.unitCostMilli;
       if (params.placeholderName !== undefined) {
         const n = params.placeholderName.trim();
         if (!n) throw new Error('placeholder name required');
@@ -739,8 +743,8 @@ export async function updateLine(params: {
         if (params.quantity <= 0) throw new Error('quantity must be positive');
         quantity = params.quantity;
       }
-      if (row.type === 'receipt' && params.unitCostCents !== undefined) {
-        unitCost = params.unitCostCents;
+      if (row.type === 'receipt' && params.unitCostMilli !== undefined) {
+        unitCost = params.unitCostMilli;
       }
     } else if (row.type === 'adjustment') {
       if (params.quantity !== undefined) {
@@ -762,7 +766,7 @@ export async function updateLine(params: {
     await client.query(
       `UPDATE pos_stock_document_lines
        SET quantity = $1,
-           unit_cost_cents = $2,
+           unit_cost_milli = $2,
            system_qty = $3,
            counted_qty = $4,
            line_note = COALESCE($5, line_note),
@@ -999,7 +1003,7 @@ async function materializePlaceholders(
         sku: line.placeholder_sku ? String(line.placeholder_sku).trim() : null,
         barcode: line.placeholder_barcode ? String(line.placeholder_barcode).trim() : null,
         price_cents: priceCents,
-        cost_cents: line.unit_cost_cents == null ? 0 : Number(line.unit_cost_cents),
+        cost_milli: line.unit_cost_milli == null ? 0 : Number(line.unit_cost_milli),
         quantity: 0,
       },
     };
@@ -1169,7 +1173,7 @@ export async function postDocument(params: {
         // The one type that moves two sets of variants: the components leave
         // the shelf and an assembled composite lands on it. `produceComposite`
         // owns both halves so the arithmetic stays in one place.
-        const { unitCostCents } = await produceComposite(client, {
+        const { unitCostMilli } = await produceComposite(client, {
           storeId: params.storeId,
           variantId,
           quantity: Number(line.quantity),
@@ -1181,13 +1185,13 @@ export async function postDocument(params: {
         });
         // Cost is the components', summed — nobody types a bouquet's cost in.
         await client.query(
-          `UPDATE pos_stock_document_lines SET unit_cost_cents = $1 WHERE id = $2`,
-          [unitCostCents, line.id]
+          `UPDATE pos_stock_document_lines SET unit_cost_milli = $1 WHERE id = $2`,
+          [unitCostMilli, line.id]
         );
         await client.query(
-          `UPDATE pos_variants SET cost_cents = $1, updated_at = NOW()
+          `UPDATE pos_variants SET cost_milli = $1, updated_at = NOW()
            WHERE id = $2 AND store_id = $3`,
-          [unitCostCents, variantId, params.storeId]
+          [unitCostMilli, variantId, params.storeId]
         );
         continue;
       }
@@ -1231,15 +1235,15 @@ export async function postDocument(params: {
         referenceType: 'stock_document',
         referenceId: params.documentId,
         note: docRow.note ?? line.line_note ?? null,
-        unitCostCents: line.unit_cost_cents == null ? null : Number(line.unit_cost_cents),
+        unitCostMilli: line.unit_cost_milli == null ? null : Number(line.unit_cost_milli),
         occurredAt,
       });
 
-      if (type === 'receipt' && line.unit_cost_cents != null) {
+      if (type === 'receipt' && line.unit_cost_milli != null) {
         await client.query(
-          `UPDATE pos_variants SET cost_cents = $1, updated_at = NOW()
+          `UPDATE pos_variants SET cost_milli = $1, updated_at = NOW()
            WHERE id = $2 AND store_id = $3`,
-          [Number(line.unit_cost_cents), variantId, params.storeId]
+          [Number(line.unit_cost_milli), variantId, params.storeId]
         );
       }
     }
@@ -1325,14 +1329,14 @@ export async function reverseDocument(params: {
       for (const line of lines.rows) {
         await client.query(
           `INSERT INTO pos_stock_document_lines
-             (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note)
+             (document_id, store_id, variant_id, quantity, unit_cost_milli, line_note)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             reverseId,
             params.storeId,
             line.variant_id,
             Number(line.quantity),
-            line.unit_cost_cents,
+            line.unit_cost_milli,
             line.line_note,
           ]
         );
@@ -1370,14 +1374,14 @@ export async function reverseDocument(params: {
 
         await client.query(
           `INSERT INTO pos_stock_document_lines
-             (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note)
+             (document_id, store_id, variant_id, quantity, unit_cost_milli, line_note)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             reverseId,
             params.storeId,
             line.variant_id,
             original.type === 'adjustment' ? -Number(line.quantity) : Number(line.quantity),
-            line.unit_cost_cents,
+            line.unit_cost_milli,
             line.line_note,
           ]
         );

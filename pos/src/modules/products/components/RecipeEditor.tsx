@@ -15,7 +15,7 @@ import { foodCostPercent } from '../data/techCards';
 import { matchesWords, queryWords } from '../lib/modifierWords';
 import {
   foodCostBps,
-  humanPriceToBaseCents,
+  humanPriceToBaseMilli,
   moneyText,
   priceForTarget,
   pricingUnit,
@@ -49,17 +49,17 @@ export interface RecipeSource {
 }
 
 /** «Вказати ціну»: an unpriced ingredient gets its purchase price without leaving the recipe. */
-function SetCost({ unit, onSave }: { unit: string; onSave: (baseCents: number) => Promise<void> }) {
+function SetCost({ unit, onSave }: { unit: string; onSave: (baseMilli: number) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { per, label } = pricingUnit(unit);
+  const { label } = pricingUnit(unit);
 
   async function save() {
-    const base = humanPriceToBaseCents(uahInputToCents(text), unit);
+    const base = humanPriceToBaseMilli(uahInputToCents(text), unit);
     if (base <= 0) {
-      setError(per > 1 ? `Замало: крок 10 ₴ за ${label}` : 'Вкажіть ціну');
+      setError('Вкажіть ціну');
       return;
     }
     setBusy(true);
@@ -353,7 +353,7 @@ export function RecipeEditor({
                       <span className="text-amber-700">немає ціни</span>
                     )
                   ) : (
-                    unitPriceText(line?.unitCents ?? 0, unit)
+                    unitPriceText(line?.unitMilli ?? 0, unit)
                   )}
                 </span>
               )}
@@ -391,7 +391,7 @@ export function RecipeEditor({
               money
                 ? (option) => {
                     const one = money.index.get(option.variant_id);
-                    return one && !one.derived && one.costCents > 0 ? unitPriceText(one.costCents, option.unit) : option.unit;
+                    return one && !one.derived && one.costMilli > 0 ? unitPriceText(one.costMilli, option.unit) : option.unit;
                   }
                 : undefined
             }
@@ -464,8 +464,7 @@ export function RecipeEditor({
             </>
           )}
           <span className="basis-full text-[12px] text-sq-muted">
-            За останніми цінами закупівлі. Ціна за грам і мілілітр зберігається з кроком 1 коп — тобто 10 ₴ за кг чи
-            літр.
+            За останніми цінами закупівлі.
           </span>
         </div>
       )}

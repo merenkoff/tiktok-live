@@ -134,7 +134,7 @@ describe.skipIf(!hasDb)('POS tech cards', () => {
 
     // The same number `unitCostOf` gives on its own.
     expect(await unitCostOf(pool, store.storeId, soup)).toMatchObject({
-      unitCostCents: 6100,
+      unitCostMilli: 6100_000,
       hasUnpricedLeaf: false,
       leafCount: 2,
     });
@@ -192,7 +192,7 @@ describe.skipIf(!hasDb)('POS tech cards', () => {
       { component_variant_id: cream, quantity: 20 },
       { component_variant_id: beef, quantity: 2 },
     ]);
-    const expected = (await unitCostOf(pool, store.storeId, cream20)).unitCostCents;
+    const expected = (await unitCostOf(pool, store.storeId, cream20)).unitCostMilli;
 
     const client = await pool.connect();
     try {
@@ -205,14 +205,15 @@ describe.skipIf(!hasDb)('POS tech cards', () => {
         referenceType: 'test',
         referenceId: 1,
       });
-      expect(produced.unitCostCents).toBe(expected);
+      expect(produced.unitCostMilli).toBe(expected);
       await client.query('ROLLBACK');
     } finally {
       client.release();
     }
 
-    // 20 × 30 + 2 × 50 = 700.
-    expect(expected).toBe(700);
+    // 20 × 30 + 2 × 50 = 700 kopecks — kept in thousandths, so nothing is
+    // rounded between the ingredients and what production writes.
+    expect(expected).toBe(700_000);
   });
 
   describe('the route', () => {
