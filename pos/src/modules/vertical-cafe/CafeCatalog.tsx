@@ -103,9 +103,9 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
       return;
     }
     // A scanned bottle is one variant and rings at once; a drink with sizes
-    // asks, exactly as a tap on its tile would.
+    // asks, exactly as a tap on its tile would. The folder, the tiles and the
+    // search stay as they were: a scan rings, it does not browse.
     ring(items);
-    catalog.setQuery('');
   }
 
   return (

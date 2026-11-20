@@ -15,12 +15,14 @@
  *     of its tile, on a variety picked in the picker, or on a scan of the
  *     shop's own `29…` price tag. Each weighing is its own line.
  *
- * Two things differ from the bundled catalog this falls back to. A scan does
- * not replace the grid: the cashier alternates scanning packs and tapping
- * loose vegetables, so the tiles they tap stay where they were — the lookup
- * goes through `cashierApi.getCatalog`, not the hook's `lookupBarcode`, which
- * shows the scanned product alone. And a weighed tile keeps its markdown
- * («229,90 → 189,90 ₴/кг», `groceryTile`).
+ * A scan does not replace the grid: the cashier alternates scanning packs and
+ * tapping loose vegetables, so the tiles they tap stay where they were. This
+ * catalog was the first to do that — the lookup goes through
+ * `cashierApi.getCatalog` directly, at a time when the hook's `lookupBarcode`
+ * showed the scanned product alone; since 2026-11-20 `lookupBarcode` is the
+ * same pure lookup and every catalog behaves this way. What still differs from
+ * the bundled catalog: a weighed tile keeps its markdown («229,90 → 189,90
+ * ₴/кг», `groceryTile`).
  *
  * The weight pad, the cart and the arithmetic are the host's (`WeightPad`,
  * `addWeighed`, `lineAmountCents` — platform 21); nothing here prices a line.

@@ -97,10 +97,11 @@ export function MenuCatalog({
     onAdd({ item: variants[0], modifiers: defaultModifierIds(groups), note: '' });
   }
 
+  // A scan only rings: the menu's folder, tiles and search stay as the waiter
+  // had them (and so does `onRows`, which reads the grid).
   async function handleBarcode(code: string): Promise<void> {
     const items = await catalog.lookupBarcode(code);
     if (items.length > 0) ring(items);
-    catalog.setQuery('');
   }
 
   const empty = !catalog.loading && catalog.folderTiles.length === 0 && catalog.grouped.length === 0;
