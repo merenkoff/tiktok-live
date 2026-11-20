@@ -12,6 +12,7 @@
 // the thumbnail made beside every raster photo, and the boot-time backfill.
 
 import { afterAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'crypto';
 import { readdir, readFile, rm, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
@@ -61,6 +62,26 @@ afterAll(async () => {
 /** A real picture, so `sharp` has something to shrink: a flat 600×400. */
 const realPng = () =>
   sharp({ create: { width: 600, height: 400, channels: 3, background: { r: 200, g: 40, b: 40 } } }).png().toBuffer();
+
+/** What the oversize upload of the «no partial file» test is made of. */
+const OVERSIZE_BYTE = 0x41;
+
+/**
+ * Files that appeared in the uploads folder since `before` and carry the bytes
+ * of a rejected upload — all `OVERSIZE_BYTE`, or the start of `marker`. Every
+ * other new file belongs to a test file running beside this one (it may be gone
+ * again by the time it is read, or still empty) and is passed by.
+ */
+async function rejectedLeftovers(before: Set<string>, marker: Buffer): Promise<string[]> {
+  const found: string[] = [];
+  for (const name of await readdir(POS_UPLOADS_DIR)) {
+    if (before.has(name)) continue;
+    const head = (await readFile(path.join(POS_UPLOADS_DIR, name)).catch(() => null))?.subarray(0, marker.length);
+    if (!head?.length) continue;
+    if (head.every((byte) => byte === OVERSIZE_BYTE) || marker.subarray(0, head.length).equals(head)) found.push(name);
+  }
+  return found.sort();
+}
 
 describe('POS uploads service', () => {
   it('creates the uploads directory idempotently', async () => {
@@ -132,17 +153,40 @@ describe('POS uploads service', () => {
   });
 
   it('leaves no partial file behind when an upload is rejected', async () => {
-    const before = await readdir(POS_UPLOADS_DIR);
+    // The folder is shared: eight other test files upload into it and vitest
+    // runs them beside this one, so a listing taken before and after is not
+    // this test's alone — in CI on 2026-11-20 a neighbour's photo landed
+    // between the two and failed a pull request that touched no upload code.
+    // So the test looks for what ITS two rejected uploads would have left,
+    // by their own bytes, among the files that are new (`rejectedLeftovers`).
+    const oversize = Buffer.alloc(5 * 1024 * 1024 + 1, OVERSIZE_BYTE);
+    const marker = Buffer.from(`rejected-upload-${randomUUID()}`);
+    const before = new Set(await readdir(POS_UPLOADS_DIR));
+
+    await expect(saveProductImage(fakeFile({ mimetype: 'image/jpeg', body: oversize }))).rejects.toThrow();
     await expect(
-      saveProductImage(
-        fakeFile({ mimetype: 'image/jpeg', body: Buffer.alloc(5 * 1024 * 1024 + 1, 0x41) })
-      )
-    ).rejects.toThrow();
-    await expect(
-      saveProductImage(fakeFile({ mimetype: 'image/jpeg', truncated: true }))
+      saveProductImage(fakeFile({ mimetype: 'image/jpeg', body: marker, truncated: true }))
     ).rejects.toThrow();
 
-    expect((await readdir(POS_UPLOADS_DIR)).sort()).toEqual(before.sort());
+    expect(await rejectedLeftovers(before, marker)).toEqual([]);
+  });
+
+  it('would notice such a file: the leftover check finds the rejected bytes and passes a neighbour\u2019s photo by', async () => {
+    // The assertion above is worth something only if it can fail.
+    const marker = Buffer.from(`rejected-upload-${randomUUID()}`);
+    const before = new Set(await readdir(POS_UPLOADS_DIR));
+    const plant = async (body: Buffer) => {
+      const name = `${randomUUID()}.jpg`;
+      written.push(name);
+      await writeFile(path.join(POS_UPLOADS_DIR, name), body);
+      return name;
+    };
+    const truncated = await plant(marker);
+    const partialOversize = await plant(Buffer.alloc(4096, OVERSIZE_BYTE));
+    await plant(Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('a neighbour\u2019s photo')]));
+    await plant(Buffer.alloc(0));
+
+    expect(await rejectedLeftovers(before, marker)).toEqual([truncated, partialOversize].sort());
   });
 });
 

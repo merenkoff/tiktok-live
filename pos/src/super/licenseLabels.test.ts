@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { licenseTitle, originLabel, originNote } from './licenseLabels';
+import { devLabel, licenseTitle, originLabel, originNote } from './licenseLabels';
 
 describe('licenseTitle', () => {
   it('shows the licensee for a verified token', () => {
@@ -21,6 +21,22 @@ describe('licenseTitle', () => {
   it('does not trust a licensee name when the token did not verify', () => {
     // A forged token could carry any licensee string; without verification it is not shown as licensed.
     expect(licenseTitle({ fingerprint: 'deadbeef', verified: false, licensee: 'Pirate' })).toBe('Ключ не підтверджено');
+  });
+});
+
+describe('devLabel', () => {
+  it('says «розробка» when every copy of the group is a development run', () => {
+    expect(devLabel({ installs: 1, dev_installs: 1 })).toBe('розробка');
+    expect(devLabel({ installs: 3, dev_installs: 3 })).toBe('розробка');
+  });
+
+  it('counts them when only some are, so a real copy beside them is not hidden', () => {
+    expect(devLabel({ installs: 5, dev_installs: 2 })).toBe('розробка: 2 з 5');
+  });
+
+  it('says nothing for none, and for a server older than the mark', () => {
+    expect(devLabel({ installs: 4, dev_installs: 0 })).toBe('');
+    expect(devLabel({ installs: 4 })).toBe('');
   });
 });
 

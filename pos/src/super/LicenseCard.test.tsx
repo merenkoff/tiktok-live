@@ -5,7 +5,7 @@
 // The licence card (TechDocs/POS_LICENSING.md, phase 2F): «Видалити записи»
 // asks once, then forgets the pings and hands the list its cue to re-read.
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SuperLicenseDetail } from './superApi';
@@ -73,6 +73,36 @@ describe('LicenseCard', () => {
     await user.click(screen.getByRole('button', { name: 'Так, видалити' }));
     await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
     expect(deleteLicense).toHaveBeenCalledWith('none');
+  });
+
+  it('marks a development run on its own copy and on the group, and leaves a real copy unmarked', async () => {
+    const base = detail().instances[0];
+    getLicense.mockResolvedValue(
+      detail({
+        installs: 2,
+        dev_installs: 1,
+        instances: [
+          { ...base, instance_id: 'b58b7bcb-e505-473c-8b5e-bde7781262eb', dev: true, origins: [{ ...base.origins[0], url: '', ip: '34.44.29.51' }] },
+          { ...base, dev: false },
+        ],
+      }),
+    );
+    render(<LicenseCard fingerprint="none" onClose={() => {}} />);
+
+    expect(await screen.findByText('розробка: 1 з 2')).toBeInTheDocument();
+    const devCopy = screen.getByText('b58b7bcb-e505-473c-8b5e-bde7781262eb').closest('div.rounded-sq') as HTMLElement;
+    expect(within(devCopy).getByText('розробка')).toBeInTheDocument();
+    expect(within(devCopy).getByText('IP 34.44.29.51')).toBeInTheDocument();
+    const realCopy = screen.getByText('36ec4ed9-1dbc-4e81-9af1-6f1afbb9e283').closest('div.rounded-sq') as HTMLElement;
+    expect(within(realCopy).queryByText('розробка')).not.toBeInTheDocument();
+  });
+
+  it('draws no mark at all for a server older than it', async () => {
+    getLicense.mockResolvedValue(detail());
+    render(<LicenseCard fingerprint="none" onClose={() => {}} />);
+    expect(await screen.findByRole('heading', { name: 'Без ключа' })).toBeInTheDocument();
+    // The footnote names the word; no pill (the group's or a copy's) starts with it.
+    expect(screen.queryByText(/^розробка/)).not.toBeInTheDocument();
   });
 
   it('shows the server’s refusal and keeps the card when the delete fails', async () => {

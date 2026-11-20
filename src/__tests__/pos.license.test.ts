@@ -24,7 +24,7 @@ import {
   signLicenseToken,
   type LicenseClaim,
 } from '../pos/license/token.js';
-import { computeStatus, reportedOrigin, runBootHeartbeat, type HeartbeatResult } from '../pos/license/service.js';
+import { computeStatus, reportedOrigin, runBootHeartbeat, runsInDev, type HeartbeatResult } from '../pos/license/service.js';
 
 /** Mint an ephemeral Ed25519 keypair and return the raw-pubkey map + private key. */
 function ephemeralKey(): { kid: string; keys: Record<string, string>; privateKeyPkcs8B64: string } {
@@ -189,6 +189,17 @@ describe('runBootHeartbeat', () => {
     await runBootHeartbeat({ attempts: 1, run, sleep });
     expect(run).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
+  });
+});
+
+describe('runsInDev', () => {
+  it('is a development run unless NODE_ENV says production — what the published image sets', () => {
+    expect(runsInDev({ NODE_ENV: 'production' })).toBe(false);
+    // `npm run dev`, a developer's machine, a cloud coding session: nothing sets it.
+    expect(runsInDev({})).toBe(true);
+    expect(runsInDev({ NODE_ENV: 'development' })).toBe(true);
+    expect(runsInDev({ NODE_ENV: 'test' })).toBe(true);
+    expect(runsInDev({ NODE_ENV: '' })).toBe(true);
   });
 });
 

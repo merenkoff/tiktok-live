@@ -202,6 +202,11 @@ export const POS_MIGRATIONS = [
   // product's price is the fee the guest reads, and switching the terms off
   // archives it instead of losing it (TechDocs/POS_QR_MENU_FEEDBACK.md).
   '105_pos_corkage_product.sql',
+  // A licence ping says whether it comes from a development run: `dev` on the
+  // author-side activation rows, so a developer's `npm run dev` or a cloud
+  // coding session is marked instead of reading like a stranger's copy
+  // (TechDocs/POS_LICENSING.md, phase 2F).
+  '106_pos_license_activations_dev.sql',
 ] as const;
 
 export function readMigration(file: string): string {

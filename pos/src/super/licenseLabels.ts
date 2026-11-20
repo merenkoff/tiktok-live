@@ -18,6 +18,24 @@ export function licenseTitle(lic: Pick<SuperLicenseSummary, 'fingerprint' | 'ver
 }
 
 /**
+ * The development mark of a licence group: «розробка» when every copy of it is
+ * a development run, «розробка: 2 з 5» when some are, nothing when none is —
+ * or when the server is older than the mark. A development run is a copy that
+ * said so itself (it does not run in production mode): `npm run dev`, a
+ * developer's machine, a cloud coding session. Without the mark such a row
+ * under «Без ключа» reads like a stranger's copy.
+ */
+export function devLabel(lic: Pick<SuperLicenseSummary, 'installs' | 'dev_installs'>): string {
+  const dev = lic.dev_installs ?? 0;
+  if (dev <= 0) return '';
+  return dev >= lic.installs ? 'розробка' : `розробка: ${dev} з ${lic.installs}`;
+}
+
+/** What the mark means, for the reader who hovers it. */
+export const DEV_HINT =
+  'Копія сама повідомила, що запущена не в робочому режимі: npm run dev, машина розробника чи хмарна сесія.';
+
+/**
  * The origin a copy ran on. A copy that named none is shown by the address its
  * ping came from, and only a ping the server kept no address for (an older
  * server) is «(невідомо)».

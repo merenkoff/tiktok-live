@@ -121,6 +121,8 @@ export interface SuperLicenseSummary {
   plan: string | null;
   instance_limit: number | null;
   installs: number;
+  /** How many of the installs are development runs (migration 106); an older server sends none. */
+  dev_installs?: number;
   origins: number;
   over_limit: boolean;
   cloned: boolean;
@@ -141,6 +143,8 @@ export interface SuperLicenseOrigin {
 export interface SuperLicenseInstance {
   instance_id: string;
   verified: boolean;
+  /** The copy said it is a development run — `npm run dev`, a developer's machine, a cloud session. */
+  dev?: boolean;
   last_seen: string;
   origins: SuperLicenseOrigin[];
   cloned: boolean;

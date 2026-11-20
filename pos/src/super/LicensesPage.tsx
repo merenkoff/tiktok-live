@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { superApi, superErrorText, type SuperLicenseSummary } from './superApi';
 import { formatWhen } from './leadLabels';
 import { LicenseCard } from './LicenseCard';
-import { licenseTitle } from './licenseLabels';
+import { DEV_HINT, devLabel, licenseTitle } from './licenseLabels';
 
 /**
  * «Ліцензії» — the copies that phoned home (TechDocs/POS_LICENSING.md, phase
@@ -98,6 +98,11 @@ export function LicensesPage() {
                     )}
                     {!lic.verified && (
                       <span className="rounded-full bg-sq-empty px-2 py-0.5 text-xs text-sq-secondary">не підтверджено</span>
+                    )}
+                    {devLabel(lic) && (
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800" title={DEV_HINT}>
+                        {devLabel(lic)}
+                      </span>
                     )}
                   </div>
                 </td>
