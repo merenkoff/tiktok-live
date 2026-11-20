@@ -20,6 +20,7 @@ import { getVertical, publicConfigOf, verticalOffersRole } from './verticals/ind
 import { ROLE_UNAVAILABLE } from './core/roles.js';
 import { clearPinMisses, reservePinAttempt, type PinLock } from './pin-attempts.js';
 import { moduleRemotesForTill } from './license/moduleToken.js';
+import { noteClientLaunch, type LicenseNotice } from './license/notice.js';
 import type { VerticalPublicConfig } from './verticals/types.js';
 import type {
   FiscalPublicConfig,
@@ -106,6 +107,16 @@ export interface AuthResponse {
      * rail and in the owner's sidebar; read at login and at `/auth/me`.
      */
     bottles: boolean;
+    /**
+     * What this COPY tells every user of the POS when it runs without a valid
+     * licence key and has served more client launches than its threshold
+     * (TechDocs/POS_LICENSING.md, phase 2G) — a strip that cannot be closed and
+     * blocks nothing. Null for a copy with a valid key, and until the
+     * threshold. It is about the installation, not the store; it travels here
+     * because the till rebuilds its whole session from the cached answer when
+     * it starts without a network.
+     */
+    license_notice: LicenseNotice | null;
   };
 }
 
@@ -133,7 +144,14 @@ async function createSession(storeId: number, staffId: number): Promise<AuthResp
     throw new Error('Failed to create session');
   }
 
-  return toAuthResponse(auth, expiresAt, await storeHasBottles(storeId), await moduleRemotesForTill(auth.moduleRemotes));
+  return toAuthResponse(
+    auth,
+    expiresAt,
+    await storeHasBottles(storeId),
+    await moduleRemotesForTill(auth.moduleRemotes),
+    // A sign-in is a client launch: counted while the copy has no valid key.
+    await noteClientLaunch()
+  );
 }
 
 /**
@@ -145,7 +163,8 @@ function toAuthResponse(
   auth: PosAuthContext,
   expiresAt: Date,
   bottles: boolean,
-  moduleRemotes: AuthResponse['store']['module_remotes']
+  moduleRemotes: AuthResponse['store']['module_remotes'],
+  licenseNotice: LicenseNotice | null
 ): AuthResponse {
   return {
     token: auth.token,
@@ -172,6 +191,7 @@ function toAuthResponse(
       module_remotes: moduleRemotes,
       nav_overrides: auth.navOverrides,
       bottles,
+      license_notice: licenseNotice,
     },
   };
 }
@@ -311,7 +331,9 @@ export async function me(auth: PosAuthContext): Promise<AuthResponse> {
     auth,
     expiresAt,
     await storeHasBottles(auth.storeId),
-    await moduleRemotesForTill(auth.moduleRemotes)
+    await moduleRemotesForTill(auth.moduleRemotes),
+    // The app restoring its session when it opens is a client launch too.
+    await noteClientLaunch()
   );
 }
 

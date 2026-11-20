@@ -31,6 +31,20 @@ export function devLabel(lic: Pick<SuperLicenseSummary, 'installs' | 'dev_instal
   return dev >= lic.installs ? 'розробка' : `розробка: ${dev} з ${lic.installs}`;
 }
 
+/**
+ * How close a copy without a key is to its notice: «запусків клієнтів: 24 з 30»,
+ * and once it is past the threshold — that the notice is being shown. `launches`
+ * is the copy's own count as it last reported it; a copy that has not said
+ * (an older one, or a licensed one) gets no line. A threshold of 0 is «off».
+ */
+export function launchesLabel(launches: number | null | undefined, warnAfter: number): string {
+  if (launches === null || launches === undefined) return '';
+  if (warnAfter <= 0) return `запусків клієнтів: ${launches} · попередження вимкнено`;
+  return launches > warnAfter
+    ? `запусків клієнтів: ${launches} з ${warnAfter} · попередження показується`
+    : `запусків клієнтів: ${launches} з ${warnAfter}`;
+}
+
 /** What the mark means, for the reader who hovers it. */
 export const DEV_HINT =
   'Копія сама повідомила, що запущена не в робочому режимі: npm run dev, машина розробника чи хмарна сесія.';

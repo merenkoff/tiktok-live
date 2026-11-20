@@ -9,6 +9,7 @@ import { useUpdateStore } from './hooks/useUpdateCheck';
 import { renderModuleRoutes } from './modules/renderRoutes';
 import { useModuleRemoteUpdates } from './modules/desktopRemotes';
 import { ModuleRemotesReloadBanner } from './components/ModuleRemotesReloadBanner';
+import { LicenseNoticeStrip } from './components/LicenseNoticeStrip';
 
 export function CashierApp() {
   const bootstrap = useAuthStore((s) => s.bootstrap);
@@ -68,6 +69,7 @@ export function CashierApp() {
 
   return (
     <>
+      <LicenseNoticeStrip />
       {renderModuleRoutes({ shell, role, enabled, isAuthenticated })}
       {isAuthenticated && banner && <ModuleRemotesReloadBanner {...banner} />}
     </>

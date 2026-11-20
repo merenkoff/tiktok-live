@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { superApi, superErrorText, type SuperLicenseSummary } from './superApi';
 import { formatWhen } from './leadLabels';
 import { LicenseCard } from './LicenseCard';
+import { LicenseNoticeSettings } from './LicenseNoticeSettings';
 import { DEV_HINT, devLabel, licenseTitle } from './licenseLabels';
 
 /**
@@ -53,6 +54,8 @@ export function LicensesPage() {
       </div>
 
       {error && <p className="text-sm text-rose-600">{error}</p>}
+
+      <LicenseNoticeSettings />
 
       <div className="overflow-x-auto rounded-sq border border-sq-divider bg-sq-surface">
         <table className="w-full min-w-[820px] text-sm">

@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useAuthStore, usePosShell, useEnabledModules } from '@pos/platform';
 import { renderModuleRoutes } from './modules/renderRoutes';
 import { ModuleRemotesReloadBanner } from './components/ModuleRemotesReloadBanner';
+import { LicenseNoticeStrip } from './components/LicenseNoticeStrip';
 
 export function App() {
   const bootstrap = useAuthStore((s) => s.bootstrap);
@@ -31,6 +32,7 @@ export function App() {
 
   return (
     <>
+      <LicenseNoticeStrip />
       {renderModuleRoutes({ shell, role, enabled, isAuthenticated })}
       {moduleRemotesStale && (
         <ModuleRemotesReloadBanner

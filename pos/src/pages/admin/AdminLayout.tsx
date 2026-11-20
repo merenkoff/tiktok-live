@@ -37,7 +37,7 @@ export function AdminLayout() {
     <div className="min-h-screen md:grid md:grid-cols-[256px_1fr] bg-sq-surface font-sans text-sq-text">
       {/* Things' sidebar: grey, the app's icon and the store on top, the
           sections as glyph rows in groups, the system ones at the bottom. */}
-      <aside className="bg-sq-sidebar md:border-r border-sq-divider/70 flex flex-col md:sticky md:top-0 md:h-screen">
+      <aside className="bg-sq-sidebar md:border-r border-sq-divider/70 flex flex-col md:sticky md:top-[var(--lic-h,0px)] md:h-[calc(100vh-var(--lic-h,0px))]">
         <div className="px-4 pt-4 pb-2 flex items-center gap-2.5">
           <AppIcon size={32} className="shrink-0" />
           <div className="min-w-0">

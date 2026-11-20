@@ -21,7 +21,10 @@ export function CashierLayout({ children }: { children: ReactNode }) {
   const logout = useAuthStore((s) => s.logout);
 
   return (
-    <div className="h-[100dvh] flex bg-sq-bg font-sans overflow-hidden">
+    // `--lic-h` is the height of the licence notice strip, when a copy without a
+    // key shows one (`LicenseNoticeStrip`): the frame starts under it and ends
+    // at the bottom of the screen, so «Оплатити» is never pushed out of sight.
+    <div className="h-[calc(100dvh-var(--lic-h,0px))] flex bg-sq-bg font-sans overflow-hidden">
       <AppRail onLogout={() => void logout()} />
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <OfflineStatusBanner />

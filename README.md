@@ -46,16 +46,31 @@ On boot and once a day the backend sends a **licence-compliance** ping to
 `LICENSE_KEY`**. It carries only: the licence token when one is set, a random
 per-install id, the POS API version, the origin the copy is served from
 (Railway's public domain, else the first origin of `CORS_ORIGINS`; nothing when
-neither is set) and whether it is a development run (`NODE_ENV` is not
-`production`). The receiving server also keeps the network address the ping came
-from. **No user activity, catalogue or personal data.** When `LICENSE_KEY` is
-set, the backend also verifies that signed token locally. The ping is
-best-effort and never disables anything: a missing, invalid or expired key, or
-an unreachable server, only changes what the owner-only
-`GET /api/pos/license/status` reports. This is a licence-compliance check,
-explicitly **not** a remote kill switch or undisclosed tracking (OwnNet 1.1
-§1.150). Without `LICENSE_KEY` the POS runs exactly as before, with status
-`unlicensed`. Details: [`TechDocs/POS_LICENSING.md`](TechDocs/POS_LICENSING.md).
+neither is set), whether it is a development run (`NODE_ENV` is not
+`production`) and — only from a copy without a valid key — how many client
+launches that copy has counted (see the notice below). The receiving server also
+keeps the network address the ping came from. **No sales, catalogue or personal
+data, and nothing about who used the copy.** When `LICENSE_KEY` is set, the
+backend also verifies that signed token locally. The ping is best-effort and
+never disables anything. This is a licence-compliance check, explicitly **not**
+a remote kill switch or undisclosed tracking (OwnNet 1.1 §1.150). Details:
+[`TechDocs/POS_LICENSING.md`](TechDocs/POS_LICENSING.md).
+
+**The notice of a copy without a valid key.** A copy that runs without a valid
+`LICENSE_KEY` counts, in its own database, how many times a client has started
+against it (a sign-in, or a session restored when the app opens). Past a
+threshold — 30 unless the licence server's answer to the ping says otherwise —
+it shows every user of the POS a strip of text saying that the copy runs
+without a licence key; the strip cannot be closed. The answer to the ping may
+carry three settings for the copy and nothing else: the threshold (0 switches
+the notice off), the text, and whether the same line is shown to the guests of
+the copy's QR menu under each dish (off unless the author switches it on). A
+copy that cannot reach the licence server uses the built-in threshold and text.
+**The notice is text only: it never blocks, limits or slows anything, and no
+answer from the licence server can switch a copy off.** A copy with a valid key
+verifies it locally, counts nothing and shows no notice — with or without the
+licence server. Running without a key is not by itself a breach: the licence
+above lets a non-commercial user and a small business do so.
 
 The official desktop cashier (POS 2.8.1+), only when the user presses «Встановити
 оновлення» (in-place update on macOS and Linux AppImage), adds one header to its

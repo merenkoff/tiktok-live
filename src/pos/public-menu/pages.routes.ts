@@ -32,6 +32,7 @@ import { findMenuStore, findMenuTable, listMenuTables, loadPublicMenu, menuOgIma
 import { menuOgImage } from './og-image.js';
 import { logger } from '../../logger.js';
 import { recordMenuOpen } from '../menu-opens.service.js';
+import { guestNoticeText } from '../license/notice.js';
 import { getTableKeys, verifyPrintLink, verifyTableKey } from './table-keys.js';
 import {
   MENU_PAGE_HEADERS,
@@ -109,6 +110,7 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
             ? null
             : { mode: found.store.autoKitchen, limitCents: found.store.autoLimitCents },
         ogImage: await ogImageFor(found.store, token),
+        licenceNote: await guestNoticeText(),
       })
     );
   });
@@ -159,6 +161,7 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
             : { mode: found.store.autoKitchen, limitCents: found.store.autoLimitCents },
         openDish: dish,
         ogImage: await ogImageFor(found.store, token),
+        licenceNote: await guestNoticeText(),
       })
     );
   });

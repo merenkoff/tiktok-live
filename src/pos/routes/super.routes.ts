@@ -31,6 +31,7 @@ import * as menuImport from '../import/menu-import.service.js';
 import { MenuImportError } from '../import/choiceqr.js';
 import * as leads from '../../crm/leads.service.js';
 import * as licenses from '../license/activations.service.js';
+import * as licenseNotice from '../license/notice.js';
 import { errorMessage } from './_shared.js';
 
 export function registerSuperRoutes(fastify: FastifyInstance): void {
@@ -230,6 +231,57 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
     if (deleted === 0) return reply.code(404).send({ error: 'Ліцензію не знайдено' });
     logger.info('super: licence activations deleted', { fingerprint: fp, deleted });
     return { deleted };
+  });
+
+  // The notice a copy without a valid key shows its users (phase 2G): the
+  // settings for every such copy, and one copy's own. Settings only — a
+  // threshold, a text, whether guests see it — that a copy picks up with its
+  // next ping; nothing here can switch a copy off.
+  fastify.get('/super/license-notice', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    return {
+      policy: await licenseNotice.getNoticePolicy(),
+      defaults: {
+        warn_after: licenseNotice.DEFAULT_WARN_AFTER,
+        text: licenseNotice.DEFAULT_NOTICE_TEXT,
+        text_max: licenseNotice.NOTICE_TEXT_MAX,
+      },
+    };
+  });
+
+  fastify.put('/super/license-notice', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    try {
+      const policy = await licenseNotice.setNoticePolicy((request.body ?? {}) as Record<string, unknown>);
+      logger.info('super: licence notice settings saved', {
+        warn_after: policy.warn_after,
+        guests: policy.guests,
+        own_text: policy.text !== null,
+      });
+      return { policy };
+    } catch (error) {
+      if (error instanceof licenseNotice.NoticePolicyError) return reply.code(400).send({ error: error.message });
+      throw error;
+    }
+  });
+
+  fastify.put('/super/license-copies/:instanceId/notice', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const instanceId = String((request.params as { instanceId: string }).instanceId);
+    try {
+      const notice = await licenseNotice.setCopyNotice(instanceId, (request.body ?? {}) as Record<string, unknown>);
+      const none = notice.warn_after === null && notice.text === null && notice.guests === null;
+      logger.info('super: licence notice settings saved for one copy', {
+        instance_id: instanceId,
+        warn_after: notice.warn_after,
+        guests: notice.guests,
+        own_text: notice.text !== null,
+      });
+      return { notice: none ? null : notice };
+    } catch (error) {
+      if (error instanceof licenseNotice.NoticePolicyError) return reply.code(400).send({ error: error.message });
+      throw error;
+    }
   });
 
   fastify.patch('/super/leads/:id', async (request, reply) => {

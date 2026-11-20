@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { devLabel, licenseTitle, originLabel, originNote } from './licenseLabels';
+import { devLabel, launchesLabel, licenseTitle, originLabel, originNote } from './licenseLabels';
 
 describe('licenseTitle', () => {
   it('shows the licensee for a verified token', () => {
@@ -37,6 +37,21 @@ describe('devLabel', () => {
   it('says nothing for none, and for a server older than the mark', () => {
     expect(devLabel({ installs: 4, dev_installs: 0 })).toBe('');
     expect(devLabel({ installs: 4 })).toBe('');
+  });
+});
+
+describe('launchesLabel', () => {
+  it('counts a copy up to its threshold, and says so once the notice is being shown', () => {
+    expect(launchesLabel(24, 30)).toBe('запусків клієнтів: 24 з 30');
+    expect(launchesLabel(30, 30)).toBe('запусків клієнтів: 30 з 30');
+    expect(launchesLabel(31, 30)).toBe('запусків клієнтів: 31 з 30 · попередження показується');
+  });
+
+  it('says the notice is off for a threshold of 0, and nothing for a copy that never reported', () => {
+    expect(launchesLabel(500, 0)).toBe('запусків клієнтів: 500 · попередження вимкнено');
+    expect(launchesLabel(null, 30)).toBe('');
+    expect(launchesLabel(undefined, 30)).toBe('');
+    expect(launchesLabel(0, 30)).toBe('запусків клієнтів: 0 з 30');
   });
 });
 
