@@ -18,11 +18,22 @@ user tracking), as defined in the LICENSE.
 Disclosed licence activation: on boot and once a day this software sends a
 licence-compliance ping to LICENSE_SERVER_URL, with or without a LICENSE_KEY:
 the licence token when one is set, a random per-install id, the POS API
-version, the origin the copy is served from and whether it is a development
-run — no user activity, catalogue or personal data. The receiving server also
-keeps the network address the ping came from. It is best-effort and never
-disables the software — a licence-compliance check, not a Closed System,
-consistent with the LICENSE. See README.md and TechDocs/POS_LICENSING.md.
+version, the origin the copy is served from, whether it is a development run
+and, only from a copy without a valid key, how many client launches it has
+counted — no sales, catalogue or personal data, and nothing about who used the
+copy. The receiving server also keeps the network address the ping came from.
+It is best-effort and never disables the software — a licence-compliance check,
+not a Closed System, consistent with the LICENSE. See README.md and
+TechDocs/POS_LICENSING.md.
+
+Disclosed notice: a copy without a valid LICENSE_KEY counts client launches in
+its own database and, past a threshold (30 by default), shows every user of the
+POS a strip of text saying that it runs without a licence key. The licence
+server's answer to the ping may set that threshold, the text, and whether the
+same line is shown to the guests of the copy's QR menu — settings only. The
+notice is text: it never blocks, limits or slows the software, and nothing the
+licence server answers can switch a copy off. A copy with a valid key counts
+nothing and shows no notice.
 
 Disclosed update check: when the user presses "install update", the official
 desktop cashier adds an X-Delivery-Token header (a licence fingerprint, a scope

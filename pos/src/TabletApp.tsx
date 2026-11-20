@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useAuthStore, usePosShell, useEnabledModules, startOfflineRuntime } from '@pos/platform';
 import { renderModuleRoutes } from './modules/renderRoutes';
 import { ModuleRemotesReloadBanner } from './components/ModuleRemotesReloadBanner';
+import { LicenseNoticeStrip } from './components/LicenseNoticeStrip';
 import { registerTabletServiceWorker, useAppUpdate } from './hooks/useAppUpdate';
 
 export function TabletApp() {
@@ -64,6 +65,7 @@ export function TabletApp() {
 
   return (
     <>
+      <LicenseNoticeStrip />
       {renderModuleRoutes({ shell, role, enabled, isAuthenticated })}
       {isAuthenticated && banner && <ModuleRemotesReloadBanner {...banner} />}
     </>

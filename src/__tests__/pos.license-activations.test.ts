@@ -82,7 +82,7 @@ describe.skipIf(!hasDb)('licence activations (095)', () => {
     const id = uuid();
     const res = await ping({ instance_id: id, pos_api_version: 2, public_base_url: 'https://shop.example.com' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true });
+    expect(res.json()).toMatchObject({ ok: true });
 
     const rows = await rowFor(id);
     expect(rows).toHaveLength(1);

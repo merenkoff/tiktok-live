@@ -207,6 +207,12 @@ export const POS_MIGRATIONS = [
   // coding session is marked instead of reading like a stranger's copy
   // (TechDocs/POS_LICENSING.md, phase 2F).
   '106_pos_license_activations_dev.sql',
+  // The notice a copy without a valid licence key shows its users: the copy's
+  // counter of client launches and the policy it was last sent
+  // (`pos_license_state`), the author's settings for every copy and for one
+  // (`pos_license_notice_policy`, `pos_license_copy_notices`), and the counter
+  // as reported (TechDocs/POS_LICENSING.md, phase 2G).
+  '107_pos_license_notice.sql',
 ] as const;
 
 export function readMigration(file: string): string {

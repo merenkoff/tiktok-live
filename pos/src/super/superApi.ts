@@ -145,6 +145,10 @@ export interface SuperLicenseInstance {
   verified: boolean;
   /** The copy said it is a development run — `npm run dev`, a developer's machine, a cloud session. */
   dev?: boolean;
+  /** Client launches the copy last reported; only a copy without a valid key counts them. */
+  client_launches?: number | null;
+  /** The copy's own notice settings; null or absent = it follows the settings for everyone. */
+  notice?: SuperCopyNotice | null;
   last_seen: string;
   origins: SuperLicenseOrigin[];
   cloned: boolean;
@@ -428,6 +432,48 @@ export class SuperApi {
     const { data } = await this.client.delete<{ deleted: number }>(`/licenses/${fingerprint || 'none'}`);
     return data;
   }
+
+  /** The notice settings for every copy without a valid key, and the built-in ones (phase 2G). */
+  async getLicenseNotice(): Promise<SuperNoticeSettings> {
+    const { data } = await this.client.get<SuperNoticeSettings>('/license-notice');
+    return data;
+  }
+
+  async setLicenseNotice(policy: SuperNoticePolicy): Promise<SuperNoticePolicy> {
+    const { data } = await this.client.put<{ policy: SuperNoticePolicy }>('/license-notice', policy);
+    return data.policy;
+  }
+
+  /** One copy's own settings; a null field follows the settings for everyone, all null removes them. */
+  async setCopyNotice(instanceId: string, notice: SuperCopyNotice): Promise<SuperCopyNotice | null> {
+    const { data } = await this.client.put<{ notice: SuperCopyNotice | null }>(
+      `/license-copies/${instanceId}/notice`,
+      notice
+    );
+    return data.notice;
+  }
+}
+
+/** What a copy without a valid key is told with the answer to its ping (TechDocs/POS_LICENSING.md, 2G). */
+export interface SuperNoticePolicy {
+  /** Client launches after which the copy shows its notice; 0 switches the notice off. */
+  warn_after: number;
+  /** The text; null = the built-in one. */
+  text: string | null;
+  /** Also under each dish of the copy's guest QR menu. */
+  guests: boolean;
+}
+
+/** The same three settings for one copy; null = «as for everyone». */
+export interface SuperCopyNotice {
+  warn_after: number | null;
+  text: string | null;
+  guests: boolean | null;
+}
+
+export interface SuperNoticeSettings {
+  policy: SuperNoticePolicy;
+  defaults: { warn_after: number; text: string; text_max: number };
 }
 
 

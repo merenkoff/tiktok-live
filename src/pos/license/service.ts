@@ -13,9 +13,11 @@
 // not disable software the user already lawfully runs") and what keeps us out
 // of §1.12(a) (kill switch) and §1.12(d) (undisclosed tracking): the ping
 // carries ONLY licence-compliance data — the token, a per-install id, the API
-// version, the origin the copy is served from and whether it is a development
-// run — never user activity, catalogue or PII. Every field of it is named in
-// README.md and NOTICE; a field added here is added there in the same commit.
+// version, the origin the copy is served from, whether it is a development
+// run and, from a copy without a valid key, how many client launches it has
+// counted (the number its notice depends on, phase 2G) — never who used it,
+// what was sold, the catalogue or PII. Every field of it is named in README.md
+// and NOTICE; a field added here is added there in the same commit.
 //
 // Best-effort throughout, like `qr.service.ts`'s reconcile path: fetch with a
 // hard timeout, and any failure is a `logger.warn` and a no-op, never a throw.
@@ -24,6 +26,7 @@ import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
 import { POS_API_VERSION } from '../version.js';
 import { verifyLicenseToken, type LicenseClaim, type LicenseVerdict } from './token.js';
+import { cleanPolicy, storeNoticePolicy } from './notice.js';
 
 const REQUEST_TIMEOUT_MS = 5000;
 
@@ -76,12 +79,14 @@ interface LicenseRow {
   claim: LicenseClaim | null;
   last_ok_at: string | null;
   last_checked_at: string | null;
+  /** Client launches counted while the copy had no valid key (migration 107). */
+  client_launches: number;
 }
 
 /** Read the singleton row (migration 094 seeds it, so it always exists). */
 async function readRow(): Promise<LicenseRow | null> {
   const r = await pool.query(
-    `SELECT instance_id, status, claim, last_ok_at, last_checked_at
+    `SELECT instance_id, status, claim, last_ok_at, last_checked_at, client_launches
        FROM pos_license_state WHERE id = 1`
   );
   return (r.rows[0] as LicenseRow | undefined) ?? null;
@@ -167,12 +172,23 @@ export async function runLicenseHeartbeat(): Promise<HeartbeatResult> {
         pos_api_version: POS_API_VERSION,
         public_base_url: reportedOrigin(),
         dev: runsInDev(),
+        // Only a copy without a valid key counts launches, and only it says so.
+        client_launches: verdict.ok ? null : Number(row.client_launches ?? 0),
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     serverOk = res.ok;
     if (!res.ok) {
       logger.warn('licence: activation server non-2xx', { status: res.status });
+    } else {
+      // The answer may carry the notice settings for this copy (phase 2G): a
+      // threshold, a text, whether guests see it. Settings only — the copy
+      // decides by its own counter, and nothing in them can switch anything
+      // off. A server older than the field, or an answer that is not one, is
+      // simply not kept.
+      const body = (await res.json().catch(() => null)) as { policy?: unknown } | null;
+      const policy = cleanPolicy(body?.policy);
+      if (policy) await storeNoticePolicy(policy, now);
     }
   } catch (error) {
     logger.warn('licence: activation server unreachable', {

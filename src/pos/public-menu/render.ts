@@ -351,6 +351,12 @@ function renderContacts(store: PublicMenuStore): string {
 
 export interface MenuPageOptions {
   /**
+   * The line a copy without a valid licence key shows its guests under each
+   * dish — only when the author switched that on for it (phase 2G,
+   * `guestNoticeText`). Plain text, escaped here; null for every other copy.
+   */
+  licenceNote?: string | null;
+  /**
    * The QR carried this table's key and the owner lets guests read the bill:
    * the page gets a «Рахунок» bar and a sheet the script fills from `/bill`.
    * Never true without a table — the bill is a table's.
@@ -478,11 +484,14 @@ export function renderMenuPage(
     menu.categories
       .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
       .join('');
+  // A list item of its own after each dish, so the cards — and the script,
+  // which finds them as `.item[data-product]` — are exactly what they were.
+  const licenceNote = options.licenceNote ? `<li class="lic-note">${escapeHtml(options.licenceNote)}</li>` : '';
   const sections = menu.categories
     .map(
       (c) =>
         `<section class="cat" id="c-${c.id ?? 'other'}"><h2>${escapeHtml(c.name)}</h2>` +
-        `<ul class="items">${c.products.map((p) => renderProduct(p, ordering)).join('')}</ul></section>`
+        `<ul class="items">${c.products.map((p) => renderProduct(p, ordering) + licenceNote).join('')}</ul></section>`
     )
     .join('\n');
   const empty = menu.categories.length === 0 ? '<p class="empty">Меню поки порожнє.</p>' : '';

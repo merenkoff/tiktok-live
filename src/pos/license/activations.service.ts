@@ -17,6 +17,7 @@
 import crypto from 'crypto';
 import { pool } from '../../db.js';
 import { verifyLicenseToken } from './token.js';
+import { getCopyNotices, type CopyNotice } from './notice.js';
 
 /** The ping body a client install POSTs. All fields are client-reported. */
 export interface ActivationPing {
@@ -26,6 +27,15 @@ export interface ActivationPing {
   public_base_url?: unknown;
   /** `true` from a development run (migration 106); a copy older than the field sends none. */
   dev?: unknown;
+  /** Client launches a copy WITHOUT a valid key has counted (migration 107); null from any other. */
+  client_launches?: unknown;
+}
+
+/** What the route needs to know to answer the ping. */
+export interface RecordedPing {
+  instance_id: string;
+  /** The ping's token verified — such a copy is sent no notice settings. */
+  verified: boolean;
 }
 
 export class ActivationError extends Error {
@@ -103,7 +113,7 @@ export function remoteIpOf(request: { ip: string; headers: Record<string, unknow
  * reported, because an unknown/invalid token pinging in is exactly what we want
  * to count.
  */
-export async function recordActivation(ping: ActivationPing, options: RecordOptions = {}): Promise<void> {
+export async function recordActivation(ping: ActivationPing, options: RecordOptions = {}): Promise<RecordedPing> {
   const now = options.now ?? new Date();
   const instanceId = typeof ping.instance_id === 'string' ? ping.instance_id.trim() : '';
   if (!UUID_RE.test(instanceId)) throw new ActivationError('bad instance_id');
@@ -122,12 +132,19 @@ export async function recordActivation(ping: ActivationPing, options: RecordOpti
   // Only the literal `true` marks a development run: anything else — absent
   // from an older copy, or junk — leaves the row unmarked.
   const dev = ping.dev === true;
+  // The copy's own count, kept as reported and only from a copy whose key did
+  // not verify: it is what its notice depends on, and what lets the author see
+  // a copy coming up to its threshold. Anything but a sane integer is «not said».
+  const launches =
+    !verdict.ok && Number.isInteger(ping.client_launches) && (ping.client_launches as number) >= 0
+      ? Math.min(ping.client_launches as number, 2147483647)
+      : null;
 
   await pool.query(
     `INSERT INTO pos_license_activations
        (license_fingerprint, instance_id, public_base_url, verified, licensee, plan,
-        instance_limit, pos_api_version, first_seen, last_seen, seen_count, remote_ip, dev)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, 1, $10, $11)
+        instance_limit, pos_api_version, first_seen, last_seen, seen_count, remote_ip, dev, client_launches)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, 1, $10, $11, $12)
      ON CONFLICT (license_fingerprint, instance_id, public_base_url) DO UPDATE SET
        verified        = EXCLUDED.verified,
        licensee        = EXCLUDED.licensee,
@@ -137,9 +154,11 @@ export async function recordActivation(ping: ActivationPing, options: RecordOpti
        last_seen       = EXCLUDED.last_seen,
        seen_count      = pos_license_activations.seen_count + 1,
        remote_ip       = COALESCE(EXCLUDED.remote_ip, pos_license_activations.remote_ip),
-       dev             = EXCLUDED.dev`,
-    [fp, instanceId, baseUrl, verdict.ok, licensee, plan, instanceLimit, apiVersion, now.toISOString(), remoteIp, dev]
+       dev             = EXCLUDED.dev,
+       client_launches = COALESCE(EXCLUDED.client_launches, pos_license_activations.client_launches)`,
+    [fp, instanceId, baseUrl, verdict.ok, licensee, plan, instanceLimit, apiVersion, now.toISOString(), remoteIp, dev, launches]
   );
+  return { instance_id: instanceId, verified: verdict.ok };
 }
 
 export interface LicenseSummary {
@@ -183,6 +202,10 @@ export interface LicenseInstance {
   verified: boolean;
   /** A development run: every row of this install was last pinged with `dev`. */
   dev: boolean;
+  /** Client launches the copy last reported, when it runs without a valid key (migration 107). */
+  client_launches: number | null;
+  /** This copy's own notice settings; null when it follows the settings for everyone. */
+  notice: CopyNotice | null;
   last_seen: string;
   /** '' origin is reported as the literal "(невідомо)" to the reader. */
   origins: LicenseOrigin[];
@@ -254,7 +277,7 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
   if (!summary) return null;
 
   const r = await pool.query(
-    `SELECT instance_id, public_base_url, verified, first_seen, last_seen, seen_count, remote_ip, dev
+    `SELECT instance_id, public_base_url, verified, first_seen, last_seen, seen_count, remote_ip, dev, client_launches
        FROM pos_license_activations
       WHERE license_fingerprint = $1
       ORDER BY instance_id, last_seen DESC`,
@@ -266,11 +289,24 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
     const id = String(row.instance_id);
     let inst = byInstance.get(id);
     if (!inst) {
-      inst = { instance_id: id, verified: false, dev: true, last_seen: '', origins: [], cloned: false };
+      inst = {
+        instance_id: id,
+        verified: false,
+        dev: true,
+        client_launches: null,
+        notice: null,
+        last_seen: '',
+        origins: [],
+        cloned: false,
+      };
       byInstance.set(id, inst);
     }
     if (row.verified) inst.verified = true;
     if (!row.dev) inst.dev = false;
+    // Rows come newest first per install: the first count seen is the latest said.
+    if (inst.client_launches === null && row.client_launches !== null) {
+      inst.client_launches = Number(row.client_launches);
+    }
     const lastSeen = new Date(row.last_seen as string).toISOString();
     if (!inst.last_seen || lastSeen > inst.last_seen) inst.last_seen = lastSeen;
     inst.origins.push({
@@ -281,8 +317,10 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
       seen_count: Number(row.seen_count),
     });
   }
+  const notices = await getCopyNotices([...byInstance.keys()]);
   const instances = [...byInstance.values()].map((inst) => ({
     ...inst,
+    notice: notices.get(inst.instance_id) ?? null,
     cloned: inst.origins.filter((o) => o.url !== '').length > 1,
   }));
   instances.sort((a, b) => (a.last_seen < b.last_seen ? 1 : -1));

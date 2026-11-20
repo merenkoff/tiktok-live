@@ -3,7 +3,8 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useState } from 'react';
-import { superApi, superErrorText, type SuperLicenseDetail } from './superApi';
+import { superApi, superErrorText, type SuperLicenseDetail, type SuperNoticeSettings } from './superApi';
+import { CopyNoticeEditor } from './CopyNoticeEditor';
 import { formatWhen } from './leadLabels';
 import { DEV_HINT, devLabel, licenseTitle, originLabel, originNote } from './licenseLabels';
 
@@ -27,6 +28,10 @@ export function LicenseCard({
   onDeleted?: () => void;
 }) {
   const [lic, setLic] = useState<SuperLicenseDetail | null>(null);
+  // The notice settings for every copy (phase 2G): what a copy of this group
+  // follows where it has none of its own. Null on a server older than the
+  // notice — the card then draws no notice editor at all.
+  const [notice, setNotice] = useState<SuperNoticeSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -51,6 +56,10 @@ export function LicenseCard({
       .getLicense(fingerprint)
       .then((d) => alive && setLic(d))
       .catch((err) => alive && setError(superErrorText(err)));
+    superApi
+      .getLicenseNotice()
+      .then((settings) => alive && setNotice(settings))
+      .catch(() => alive && setNotice(null));
     return () => {
       alive = false;
     };
@@ -141,6 +150,15 @@ export function LicenseCard({
                         </li>
                       ))}
                     </ul>
+                    {/* Only a copy whose key did not verify counts launches and can be warned. */}
+                    {notice && !inst.verified && (
+                      <CopyNoticeEditor
+                        instanceId={inst.instance_id}
+                        launches={inst.client_launches}
+                        notice={inst.notice}
+                        settings={notice}
+                      />
+                    )}
                   </div>
                 ))}
               </div>

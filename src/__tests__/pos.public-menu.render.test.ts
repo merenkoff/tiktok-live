@@ -282,6 +282,38 @@ describe('«Обрані» on the guest’s phone (F12)', () => {
   });
 });
 
+describe('the line of a copy without a licence key (phase 2G)', () => {
+  const store = { name: 'Кав’ярня', logo_url: null, address: null, phone: null, hours_today: null, hours: [], email: null, instagram: null, facebook: null, tiktok: null, google_url: null, corkage: null, feedback_enabled: false };
+  const menu: PublicMenu = {
+    store,
+    rev: 'a1b2c3d4e5f6',
+    store_day: '2026-11-20',
+    generated_at: '2026-11-20T08:00:00.000Z',
+    categories: [
+      { id: 1, name: 'Кава', products: [product({ id: 7, name: 'Латте' }), product({ id: 8, name: 'Чай' })] },
+      { id: 2, name: 'Десерти', products: [product({ id: 9, name: 'Сирник' })] },
+    ],
+  };
+
+  it('is a list item of its own after EVERY dish, as text — and the cards are exactly what they were', () => {
+    const plain = renderMenuPage(menu, 'shablya');
+    const html = renderMenuPage(menu, 'shablya', null, { licenceNote: 'Копія без ключа <b>&</b> "лапки"' });
+    const note = '<li class="lic-note">Копія без ключа &lt;b&gt;&amp;&lt;/b&gt; &quot;лапки&quot;</li>';
+    expect(html.split(note)).toHaveLength(4); // three dishes, three lines
+    // Each line follows its dish's card, and taking the lines out gives the page without them.
+    expect(html).toMatch(/data-product="7"[\s\S]*?<\/li><li class="lic-note">[\s\S]*?data-product="8"[\s\S]*?<\/li><li class="lic-note">/);
+    expect(html.split(note).join('')).toBe(plain);
+    // Still one script: the line is drawn by the server, nothing of it is code.
+    expect(html.match(/<script/g)).toHaveLength(1);
+  });
+
+  it('is absent from every other copy’s menu', () => {
+    for (const licenceNote of [null, undefined, '']) {
+      expect(renderMenuPage(menu, 'shablya', null, { licenceNote })).not.toContain('lic-note');
+    }
+  });
+});
+
 const MENU: PublicMenu = {
   store: { name: 'Кав\'ярня "<Зерно>"', logo_url: null, address: null, phone: null, hours_today: null, hours: [], email: null, instagram: null, facebook: null, tiktok: null, google_url: null, corkage: null, feedback_enabled: false },
   rev: 'a1b2c3d4e5f6',

@@ -304,6 +304,13 @@ export interface AuthResponse {
     feedback_url?: string | null;
     /** Pours from stamped bottles (ДК5): draws «Пляшки». Absent on older cached auth → no screen. */
     bottles?: boolean;
+    /**
+     * What this COPY tells every user when it runs without a valid licence key
+     * and has served more client launches than its threshold (phase 2G): the
+     * text of a strip that cannot be closed and blocks nothing. Null — or
+     * absent on an older backend or cached auth — draws nothing.
+     */
+    license_notice?: { text: string } | null;
     /** Toggleable module ids the store has enabled. Absent on older cached auth → treat as "all defaults on". */
     enabled_modules?: string[];
     /** Module-remote map (roadmap #9 string form / #13 Part C object form). Absent on older cached auth. */

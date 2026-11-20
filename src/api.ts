@@ -18,6 +18,7 @@ import {
   recordActivation,
   type ActivationPing,
 } from './pos/license/activations.service.js';
+import { policyForCopy } from './pos/license/notice.js';
 import { checkEntitlement, licenseTokenFromRequest } from './pos/license/entitlement.js';
 import { requireUpdateEntitlement } from './pos/license/updateGate.js';
 import { leadAllowed } from './crm/limits.js';
@@ -308,8 +309,13 @@ export async function createServer(): Promise<FastifyInstance> {
       return { ok: false };
     }
     try {
-      await recordActivation((request.body ?? {}) as ActivationPing, { remoteIp: remoteIpOf(request) });
-      return { ok: true };
+      const ping = await recordActivation((request.body ?? {}) as ActivationPing, { remoteIp: remoteIpOf(request) });
+      // A copy whose key did not verify is told the notice settings that apply
+      // to it (phase 2G): a threshold, a text, whether guests see it. Settings,
+      // not a command — the copy decides by its own counter, and a copy with a
+      // valid key is sent none. If they cannot be read the ping still counts.
+      const policy = ping.verified ? null : await policyForCopy(ping.instance_id).catch(() => null);
+      return { ok: true, policy };
     } catch (error) {
       if (error instanceof ActivationError) {
         reply.status(400);
