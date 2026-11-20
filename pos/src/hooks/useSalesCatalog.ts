@@ -15,7 +15,7 @@
  * Reads through `cashierApi`, so it works unchanged on the offline till.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cashierApi } from '../platform/sales';
 import { useVertical } from './useVertical';
 import type { CatalogItem, PosTag } from '../types';
@@ -52,7 +52,12 @@ export interface SalesCatalog {
   enterTag: (tag: PosTag) => void;
   selectCatalogBarTag: (tag: PosTag | null) => void;
   goBackOne: () => void;
-  /** Rows matching a scanned code — one means "add it", several mean "ask". */
+  /**
+   * Rows matching a scanned code — one means "add it", several mean "ask".
+   * A pure lookup: it never touches the grid, the folder or the search. A
+   * scan adds to the receipt, it does not browse — the cashier may be in a
+   * folder for another job and must find it as they left it (2026-11-20).
+   */
   lookupBarcode: (code: string) => Promise<CatalogItem[]>;
   /** Re-read the current view (after a sale changed stock, say). */
   refresh: () => Promise<void>;
@@ -81,15 +86,22 @@ export function useSalesCatalog(): SalesCatalog {
     [flatTags]
   );
 
+  // Only the newest request may fill the grid. Keys typed into the search box
+  // fire a fetch each (a scanner's burst into a focused box included, before
+  // the wedge gives the box its text back), and the answers are not ordered:
+  // a late one for a half-typed code used to land after the restore and leave
+  // the grid filtered by it.
+  const requestSeq = useRef(0);
   const loadCatalog = useCallback(
-    async (opts?: { q?: string; barcode?: string; tag_id?: number }) => {
+    async (opts?: { q?: string; tag_id?: number }) => {
+      const seq = ++requestSeq.current;
       setLoading(true);
       try {
         const items = await cashierApi.getCatalog({ ...opts, searchKeys });
-        setCatalog(items);
+        if (seq === requestSeq.current) setCatalog(items);
         return items;
       } finally {
-        setLoading(false);
+        if (seq === requestSeq.current) setLoading(false);
       }
     },
     [searchKeys]
@@ -157,9 +169,13 @@ export function useSalesCatalog(): SalesCatalog {
     setTagPath((prev) => prev.slice(0, -1));
   }, []);
 
+  // Not `loadCatalog`: that fills the grid, and a scan must leave the grid
+  // (and the folder tiles over it, and the search) exactly as the cashier
+  // had them. Until 2026-11-20 the grid became the scanned product alone and
+  // came back only when a folder was entered again.
   const lookupBarcode = useCallback(
-    (code: string) => loadCatalog({ barcode: code.trim() }),
-    [loadCatalog]
+    (code: string) => cashierApi.getCatalog({ barcode: code.trim(), searchKeys }),
+    [searchKeys]
   );
 
   const showBack = needsBackNav(tagPath);

@@ -90,11 +90,11 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stockEpoch]);
 
+  // A scan only rings: the folder, the tiles and the search stay as they were.
   async function handleBarcode(code: string): Promise<void> {
     const items = await catalog.lookupBarcode(code);
     if (items.length === 1) {
       addItem(items[0]);
-      catalog.setQuery('');
       return;
     }
     if (items.length === 0) {

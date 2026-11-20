@@ -57,11 +57,11 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
     else addItem(item);
   }
 
+  // A scan only rings: the folder, the tiles and the search stay as they were.
   async function handleBarcode(code: string): Promise<void> {
     const items = await catalog.lookupBarcode(code);
     if (items.length === 1) {
       ring(items[0]);
-      catalog.setQuery('');
       return;
     }
     if (items.length === 0) {
