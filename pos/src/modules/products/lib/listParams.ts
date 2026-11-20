@@ -15,7 +15,16 @@
  * and — for a kitchen — the cards labelled «Новинка» or «Хіт» on the guest
  * menu (F13), so the owner takes a stale label off in a minute a month.
  */
-export type TagFilter = 'all' | 'needs_review' | 'no_photo' | 'archived' | 'label_new' | 'label_hit' | number;
+export type TagFilter =
+  | 'all'
+  | 'needs_review'
+  | 'no_photo'
+  | 'no_description'
+  | 'no_composition'
+  | 'archived'
+  | 'label_new'
+  | 'label_hit'
+  | number;
 
 export interface ListParams {
   q: string;
@@ -26,6 +35,9 @@ const Q = 'q';
 const TAG = 'tag';
 const NEEDS_REVIEW = 'review';
 const NO_PHOTO = 'no-photo';
+// The marketer's to-do list (track МР, МР5): what a dish lacks on the guest's page.
+const NO_DESCRIPTION = 'no-description';
+const NO_COMPOSITION = 'no-composition';
 const ARCHIVED = 'archived';
 const LABEL_NEW = 'label:new';
 const LABEL_HIT = 'label:hit';
@@ -36,6 +48,8 @@ export function readListParams(sp: URLSearchParams): ListParams {
   let tag: TagFilter = 'all';
   if (raw === NEEDS_REVIEW) tag = 'needs_review';
   else if (raw === NO_PHOTO) tag = 'no_photo';
+  else if (raw === NO_DESCRIPTION) tag = 'no_description';
+  else if (raw === NO_COMPOSITION) tag = 'no_composition';
   else if (raw === ARCHIVED) tag = 'archived';
   else if (raw === LABEL_NEW) tag = 'label_new';
   else if (raw === LABEL_HIT) tag = 'label_hit';
@@ -60,6 +74,8 @@ export function writeListParams(prev: URLSearchParams, next: Partial<ListParams>
 function tagParam(tag: Exclude<TagFilter, 'all'>): string {
   if (tag === 'needs_review') return NEEDS_REVIEW;
   if (tag === 'no_photo') return NO_PHOTO;
+  if (tag === 'no_description') return NO_DESCRIPTION;
+  if (tag === 'no_composition') return NO_COMPOSITION;
   if (tag === 'archived') return ARCHIVED;
   if (tag === 'label_new') return LABEL_NEW;
   if (tag === 'label_hit') return LABEL_HIT;

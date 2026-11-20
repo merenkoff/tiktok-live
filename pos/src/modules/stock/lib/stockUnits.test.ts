@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  costStepNote,
+  costPer,
   costUnit,
   countPack,
   formatDecimal,
@@ -22,7 +22,7 @@ import {
   signedStockCell,
   stockCell,
   stockText,
-  typedCostToBase,
+  typedCostToMilli,
   typedToBase,
 } from './stockUnits';
 
@@ -81,29 +81,36 @@ describe('quantities', () => {
 });
 
 describe('purchase prices', () => {
-  it('shows a per-gram cost per kilogram and keeps a typed one unrounded', () => {
-    expect(shownCost(cheese, 'base', 12)).toBe(12000);
-    expect(typedCostToBase(cheese, 'base', 1450)).toBeCloseTo(1.45, 10);
+  it('keeps a price per kilogram to the kopeck', () => {
+    // 14,50 ₴/кг is 1450 thousandths of a kopeck a gram — and reads back as typed.
+    expect(typedCostToMilli(cheese, 'base', 1450)).toBe(1450);
+    expect(shownCost(cheese, 'base', 1450)).toBe(1450);
+    expect(shownCost(cheese, 'base', 12_000)).toBe(12_000);
     expect(costUnit(cheese, 'base')).toBe('кг');
     expect(costUnit(cheeseHead, 'pack')).toBe('голова');
     expect(costUnit(milkForCoffee, 'pack')).toBe('пляшка');
     expect(costUnit(tee, 'base')).toBe('шт');
   });
 
-  it('says what will be stored when a price per kilogram is off the 10 ₴ step', () => {
-    expect(costStepNote(cheese, 'base', typedCostToBase(cheese, 'base', 1450))).toBe(
-      'Закупка зберігається цілими копійками за 1 г: запишеться 10,00 ₴ за кг'
-    );
-    // 120,00 ₴ a kilogram is exactly 12 kopecks a gram: nothing to say.
-    expect(costStepNote(cheese, 'base', typedCostToBase(cheese, 'base', 12000))).toBeNull();
-    expect(costStepNote(milkForCoffee, 'pack', typedCostToBase(milkForCoffee, 'pack', 1500))).toBe(
-      'Закупка зберігається цілими копійками за 1 мл: запишеться 20,00 ₴ за пляшка'
-    );
+  it('prices a pack and gives its price back as it was typed', () => {
+    // 15 ₴ for a 1000 ml bottle: 1,5 kopecks a millilitre, exactly.
+    expect(costPer(milkForCoffee, 'pack')).toBe(1000);
+    expect(typedCostToMilli(milkForCoffee, 'pack', 1500)).toBe(1500);
+    expect(shownCost(milkForCoffee, 'pack', 1500)).toBe(1500);
+    // A 5 kg head for 1 299,90 ₴.
+    const milli = typedCostToMilli(cheeseHead, 'pack', 129_990);
+    expect(shownCost(cheeseHead, 'pack', milli)).toBe(129_990);
+    expect(shownCost(cheeseHead, 'base', milli)).toBe(25_998);
   });
 
-  it('has nothing to say about a price per piece or an empty one', () => {
-    expect(costStepNote(tee, 'base', 4990)).toBeNull();
-    expect(costStepNote(cheese, 'base', undefined)).toBeNull();
+  it('prices a café ingredient counted in grams by the kilogram, and a piece by the piece', () => {
+    // Not sold by weight (`price_per` 1), still bought by the litre.
+    expect(costPer(milkForCoffee, 'base')).toBe(1000);
+    expect(costUnit(milkForCoffee, 'base')).toBe('л');
+    expect(typedCostToMilli(milkForCoffee, 'base', 4250)).toBe(4250);
+    expect(costPer(tee, 'base')).toBe(1);
+    expect(typedCostToMilli(tee, 'base', 4990)).toBe(4_990_000);
+    expect(shownCost(tee, 'base', 4_990_000)).toBe(4990);
   });
 });
 

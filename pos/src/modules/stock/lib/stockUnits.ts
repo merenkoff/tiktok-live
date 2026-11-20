@@ -10,15 +10,17 @@
 // and prices it per kilogram — so a weighed row (`price_per` 1000) shows and
 // takes kilograms on every stock screen and turns them into grams on the way
 // out, the way the purchase pack (`pack.ts`) turns bottles into millilitres.
-// The server sees grams and a cost per gram, exactly as before.
+// The server sees grams, and a cost per gram in thousandths of a kopeck
+// (`lib/costUnits.ts`) — a price per kilogram is kept to the kopeck.
 //
 // A weighed row may have a pack too (a 5 kg head of cheese): then the box
 // switches between the pack and kilograms, and grams never show at all.
 //
 // Pure, no I/O: `stockUnits.test.ts` pins it.
 
-import { displayUnit, formatQuantity, formatUah, isWeighed, packOf } from '@pos/platform';
+import { displayUnit, formatQuantity, isWeighed, packOf } from '@pos/platform';
 import type { Pack, PackMode, VariantPack } from '@pos/platform';
+import { milliToPrice, priceToMilli, pricingUnit } from '../../../lib/costUnits';
 
 /** What a row must say about itself: its base unit, its pricing basis and its pack. */
 export interface StockUnitRow extends VariantPack {
@@ -80,44 +82,40 @@ export function typedToBase(row: StockUnitRow, mode: PackMode, typed: number): n
   return Math.round(typed * per * 1e6) / 1e6;
 }
 
-/** A purchase price in cents per BASE unit → the price in the box: per kilogram, per pack or per unit. */
-export function shownCost(row: StockUnitRow, mode: PackMode, centsPerBase: number): number {
-  return centsPerBase * perBox(row, mode);
+/**
+ * Base units in whatever the PRICE box is per. A pack in pack mode; otherwise
+ * a kilogram or a litre for anything counted in grams or millilitres — whether
+ * it is sold by weight or is a café's ingredient counted in grams: flour is
+ * bought by the kilogram either way, and «за 1 г» is a price nobody can type.
+ */
+export function costPer(row: StockUnitRow, mode: PackMode): number {
+  const pack = packOf(row);
+  if (mode === 'pack' && pack) return pack.qty;
+  return Math.max(countScale(row), pricingUnit(row.unit).per);
 }
 
 /**
- * The price typed in the box → cents per base unit, deliberately UNROUNDED:
- * 14,50 ₴ a kilogram is 1.45 kopecks a gram, and rounding that on every
- * keystroke would redraw the box as «10,00» mid-typing. The one rounding
- * happens on the way out, where the integer `unit_cost_cents` column needs it.
+ * A purchase price in THOUSANDTHS of a kopeck per base unit (`costUnits.ts`,
+ * migration 103) → the kopecks the box shows: per kilogram, per pack, per piece.
  */
-export function typedCostToBase(row: StockUnitRow, mode: PackMode, cents: number): number {
-  return cents / perBox(row, mode);
+export function shownCost(row: StockUnitRow, mode: PackMode, milliPerBase: number): number {
+  return milliToPrice(milliPerBase, costPer(row, mode));
 }
 
-/** What the price box is per: «кг», «пляшка», «шт». */
+/**
+ * The kopecks typed in the box → thousandths of a kopeck per base unit. A
+ * price per kilogram or litre is kept to the kopeck (14,50 ₴/кг is exactly
+ * 1450 thousandths a gram), and a pack's price reads back as it was typed.
+ */
+export function typedCostToMilli(row: StockUnitRow, mode: PackMode, cents: number): number {
+  return priceToMilli(cents, costPer(row, mode));
+}
+
+/** What the price box is per: «кг», «л», «пляшка», «шт». */
 export function costUnit(row: StockUnitRow, mode: PackMode): string {
   const pack = packOf(row);
-  return mode === 'pack' && pack ? pack.label : countUnit(row);
-}
-
-/**
- * The sentence under a price box when what will be stored differs from what
- * was typed; null when it does not. `unit_cost_cents` is whole kopecks per
- * base unit, so a price per kilogram keeps a step of 10 ₴ (14,50 ₴/кг is
- * stored as 1 коп/г = 10,00 ₴/кг), and a price per 1000 ml bottle a step of
- * 10 ₴ per bottle — the limit TechDocs/grocery/G4_WEIGHED.md records, said
- * out loud here as the product card does, instead of a document that quietly
- * holds a different figure than the delivery note.
- */
-export function costStepNote(row: StockUnitRow, mode: PackMode, centsPerBase: number | undefined): string | null {
-  if (centsPerBase == null || !Number.isFinite(centsPerBase)) return null;
-  const per = perBox(row, mode);
-  if (per === 1) return null;
-  const stored = Math.round(centsPerBase);
-  if (Math.abs(stored - centsPerBase) < 1e-9) return null;
-  const base = (row.unit ?? '').trim() || 'одиницю';
-  return `Закупка зберігається цілими копійками за 1 ${base}: запишеться ${formatUah(stored * per)} за ${costUnit(row, mode)}`;
+  if (mode === 'pack' && pack) return pack.label;
+  return isWeighedRow(row) ? countUnit(row) : pricingUnit(row.unit).label;
 }
 
 /**

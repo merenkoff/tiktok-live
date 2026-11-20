@@ -21,6 +21,7 @@ import { logger } from '../logger.js';
 import type { PosAuthContext } from './types.js';
 import type { ProductView } from './products.service.js';
 import type { ModifierGroup } from './modifiers.service.js';
+import { purchasePriceText } from './cost.js';
 
 export type MenuEntity = 'product' | 'modifier_group';
 export type MenuAction = 'create' | 'update' | 'archive' | 'restore' | 'delete';
@@ -73,7 +74,6 @@ export const VARIANT_FIELDS = [
   'unit',
   'price_cents',
   'compare_at_cents',
-  'cost_cents',
   'sku',
   'barcode',
   'pack_qty',
@@ -99,14 +99,38 @@ type VariantView = ProductView['variants'][number] & {
   id: number;
   label: string;
   price_cents: number;
-  components?: Array<{ component_variant_id: number; quantity: number; product_name: string; label: string; unit: string }>;
+  components?: Array<{
+    component_variant_id: number;
+    quantity: number;
+    loss_bps?: number;
+    product_name: string;
+    label: string;
+    unit: string;
+  }>;
 };
 
 function recipeText(variant: VariantView): string[] {
   return (variant.components ?? []).map((c) => {
     const what = [c.product_name, c.label].filter(Boolean).join(' · ');
-    return `${what} — ${c.quantity}${c.unit ? ` ${c.unit}` : ''}`;
+    // The gross weight, and the loss when the line states one: «Картопля — 125 г (втрати 20 %)».
+    const loss = c.loss_bps ? ` (втрати ${lossText(c.loss_bps)})` : '';
+    return `${what} — ${c.quantity}${c.unit ? ` ${c.unit}` : ''}${loss}`;
   });
+}
+
+/** «20 %», «12,5 %» from basis points. */
+function lossText(bps: number): string {
+  return `${String(bps / 100).replace('.', ',')} %`;
+}
+
+function prepLossText(variant: VariantView): string | null {
+  const bps = (variant as unknown as { prep_loss_bps?: number | null }).prep_loss_bps;
+  return bps == null ? null : lossText(bps);
+}
+
+function costText(variant: VariantView): string | null {
+  const row = variant as unknown as { cost_milli?: number; unit?: string };
+  return purchasePriceText(Number(row.cost_milli ?? 0), String(row.unit ?? ''));
 }
 
 function variantName(variant: VariantView): string {
@@ -166,6 +190,20 @@ export function diffProduct(
       const from = valueOf((old as Record<string, unknown>)[field]);
       const to = valueOf((variant as Record<string, unknown>)[field]);
       if (!same(from, to)) changes.push({ field: `variant.${field}`, variant: variantName(variant), from, to });
+    }
+    // The purchase price is journalled the way the owner reads it — «35,50 ₴/кг»
+    // — because the stored figure (thousandths of a kopeck a gram, migration
+    // 103) means nothing without the unit. Rows written before it are
+    // `variant.cost_cents`, whole kopecks per base unit; the reader knows both.
+    const costFrom = costText(old);
+    const costTo = costText(variant);
+    if (costFrom !== costTo) {
+      changes.push({ field: 'variant.cost', variant: variantName(variant), from: costFrom, to: costTo });
+    }
+    const lossFrom = prepLossText(old);
+    const lossTo = prepLossText(variant);
+    if (lossFrom !== lossTo) {
+      changes.push({ field: 'variant.prep_loss', variant: variantName(variant), from: lossFrom, to: lossTo });
     }
     const recipeFrom = recipeText(old);
     const recipeTo = recipeText(variant);

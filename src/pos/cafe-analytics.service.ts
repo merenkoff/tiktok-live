@@ -16,7 +16,7 @@
 //   1. **Cost is TODAY's purchase price, not the price of that month's
 //      batch.** `pos_sale_item_components` snapshots what a line consumed but
 //      not what it cost, so every figure below multiplies the snapshot by the
-//      variant's current `cost_cents`. The screen says so out loud, exactly as
+//      variant's current purchase price. The screen says so out loud, exactly as
 //      `/admin/tech-cards` does. (A per-line cost snapshot is its own phase.)
 //   2. **A dish whose cost we cannot tell is EXCLUDED, never a «dog».** Zero
 //      cost would make it the most profitable thing on the menu; zero margin
@@ -27,6 +27,7 @@
 //      classify noise. Below the floor the answer is «замало даних».
 
 import { pool } from '../db.js';
+import { sqlMilliToCents } from './cost.js';
 
 /** Where a dish lands on the Kasavana–Smith grid. */
 export type MenuQuadrant = 'star' | 'plowhorse' | 'puzzle' | 'dog';
@@ -181,13 +182,17 @@ const NET_QTY = `(si.quantity - COALESCE((
  * whose production took the ingredients days earlier. Only a line with no
  * snapshot at all falls back to the variant's own cost card, which is what a
  * simple product is.
+ *
+ * In THOUSANDTHS of a kopeck (migration 103, `cost.ts`): a gram of sugar costs
+ * 3,55 kopecks, not «4». Every sum below adds these up exactly and becomes
+ * whole kopecks once, through `sqlMilliToCents`.
  */
-const UNIT_COST = `COALESCE((
-  SELECT SUM(c.quantity_per_unit * COALESCE(cv.cost_cents, 0))
+const UNIT_COST_MILLI = `COALESCE((
+  SELECT SUM(c.quantity_per_unit * COALESCE(cv.cost_milli, 0))
   FROM pos_sale_item_components c
   JOIN pos_variants cv ON cv.id = c.component_variant_id
   WHERE c.sale_item_id = si.id
-), v.cost_cents, 0)`;
+), v.cost_milli, 0)`;
 
 /**
  * Whether that number can be trusted. Zero cost is «ми не знаємо», not «free»
@@ -199,9 +204,9 @@ const COST_IS_KNOWN = `(
        THEN NOT EXISTS (
          SELECT 1 FROM pos_sale_item_components c
          JOIN pos_variants cv ON cv.id = c.component_variant_id
-         WHERE c.sale_item_id = si.id AND COALESCE(cv.cost_cents, 0) <= 0
+         WHERE c.sale_item_id = si.id AND COALESCE(cv.cost_milli, 0) <= 0
        )
-       ELSE COALESCE(v.cost_cents, 0) > 0
+       ELSE COALESCE(v.cost_milli, 0) > 0
   END
 )`;
 
@@ -232,7 +237,7 @@ async function foodCost(params: unknown[]): Promise<CafeAnalytics['food_cost']> 
                   THEN si.line_total_cents::numeric / si.quantity * ${NET_QTY}
                   ELSE 0 END
            ELSE 0 END)::bigint AS revenue_cents,
-       SUM(CASE WHEN ${COST_IS_KNOWN} THEN ${UNIT_COST} * ${NET_QTY} ELSE 0 END)::bigint
+       ${sqlMilliToCents(`SUM(CASE WHEN ${COST_IS_KNOWN} THEN ${UNIT_COST_MILLI} * ${NET_QTY} ELSE 0 END)`)}
          AS cost_cents,
        COUNT(*) FILTER (WHERE NOT ${COST_IS_KNOWN})::int AS unpriced_lines
      ${SALE_SCOPE}`,
@@ -350,7 +355,7 @@ async function menu(params: unknown[]): Promise<CafeAnalytics['menu']> {
             SUM(CASE WHEN si.quantity > 0
                      THEN si.line_total_cents::numeric / si.quantity * ${NET_QTY}
                      ELSE 0 END)::bigint AS revenue_cents,
-            SUM(${UNIT_COST} * ${NET_QTY})::bigint AS cost_cents,
+            ${sqlMilliToCents(`SUM(${UNIT_COST_MILLI} * ${NET_QTY})`)} AS cost_cents,
             bool_and(${COST_IS_KNOWN}) AS cost_known
      ${SALE_SCOPE}
      GROUP BY si.variant_id
@@ -427,7 +432,7 @@ async function writeoffs(params: unknown[]): Promise<CafeAnalytics['writeoffs']>
   const result = await pool.query(
     `SELECT COALESCE(NULLIF(d.reason_code, ''), 'other') AS reason,
             SUM(l.quantity)::int AS quantity,
-            SUM(l.quantity * COALESCE(l.unit_cost_cents, v.cost_cents, 0))::bigint AS cost_cents
+            ${sqlMilliToCents('SUM(l.quantity * COALESCE(l.unit_cost_milli, v.cost_milli, 0))')} AS cost_cents
      ${WRITEOFF_SCOPE}
      GROUP BY 1
      ORDER BY 3 DESC`,

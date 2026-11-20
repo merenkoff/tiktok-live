@@ -22,22 +22,25 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
 import type { ModifierGroup, PosTag, Product } from '@pos/platform';
-import { Package, PageHeader, SectionHead } from '@pos/platform/ui';
+import { Package, PageHeader, QrCode, SectionHead } from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { AddVariantsDialog } from '../components/AddVariantsDialog';
 import { NewVariantFields } from '../components/NewVariantFields';
 import { ProductFields } from '../components/ProductFields';
+import { ProductModifiers } from '../components/ProductModifiers';
+import { RecipeSection } from '../components/RecipeSection';
 import { ProductSide } from '../components/ProductSide';
 import { ProductHistory } from '../components/ProductHistory';
 import { VariantMatrix, type MatrixResult } from '../components/VariantMatrix';
 import { VariantSheet } from '../components/VariantSheet';
 import { VariantsSection } from '../components/VariantsSection';
-import { componentOptions } from '../components/componentOptions';
 import { productFormScope } from '../components/productFormScope';
 import { flattenTags } from '../components/tagLabels';
 import { colourVocabulary, supportsMatrix } from '../lib/variantMatrix';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { emptyVariant, newVariantInput, singleTyped, type NewVariantValues } from '../lib/newVariant';
+import { ingredientOptions } from '../lib/ingredientOptions';
+import { buildCostIndex } from '../lib/recipeCost';
 import { isWeighedUnit } from '../lib/weighedUnit';
 import {
   createDirty,
@@ -56,6 +59,9 @@ import {
 import { registerChoices } from '../lib/registerChoices';
 import { batchErrorMessage, saveErrorMessage } from '../lib/saveErrors';
 import { useMenuOnly } from '../lib/menuOnly';
+import { recipeWords } from '../lib/guestComposition';
+import { allergenHints } from '../lib/allergenHints';
+import { guestDishUrl, readCorkageProductId, readGuestMenuUrl } from '../data/guestMenuApi';
 import { useLeaveGuard } from '../lib/useLeaveGuard';
 
 /** What the list hands over so «← Товари» lands on the same search and tag. */
@@ -135,10 +141,31 @@ function ProductCard({ id }: { id: string | undefined }) {
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
   const colours = useMemo(() => colourVocabulary(products), [products]);
   const maxDepth = vertical.maxCompositionDepth ?? 1;
+  // What may go into this card's recipes: never itself, a recipe inside only
+  // where the vertical allows it — and the ingredients first.
   const partOptions = useMemo(
-    () => componentOptions(products, { excludeProductId: productId, maxDepth }),
+    () => ingredientOptions(products, { excludeProductId: productId, maxDepth }),
     [products, productId, maxDepth]
   );
+  const costs = useMemo(() => buildCostIndex(products), [products]);
+  /** A product changed or made beside the card (an ingredient's price, a new ingredient). */
+  const putProduct = useCallback((next: Product) => {
+    setProducts((prev) => (prev.some((p) => p.id === next.id) ? prev.map((p) => (p.id === next.id ? next : p)) : [...prev, next]));
+  }, []);
+  const setIngredientCost = useCallback(
+    async (variantId: number, baseMilli: number) => {
+      putProduct(await api.updateVariant(variantId, { cost_milli: baseMilli }));
+    },
+    [putProduct]
+  );
+
+  // What a modifier's answer may take off the shelf: any variant, a recipe
+  // included — the server expands it at checkout, so no depth cap here.
+  const modifierOptions = useMemo(() => ingredientOptions(products), [products]);
+  /** A question created or changed from this card: the list of them follows the server. */
+  const onGroupSaved = useCallback((group: ModifierGroup) => {
+    setGroups((prev) => (prev.some((g) => g.id === group.id) ? prev.map((g) => (g.id === group.id ? group : g)) : [...prev, group]));
+  }, []);
 
   const diff = useMemo(() => (snapshot && draft ? diffProduct(snapshot, draft) : null), [snapshot, draft]);
   const useMatrix = draft ? supportsMatrix(vertical.attributes) && draft.shape === '' : false;
@@ -435,6 +462,31 @@ function ProductCard({ id }: { id: string | undefined }) {
   // vertical, a florist's bouquet): hiding existing data is not cleaning up.
   const scope = productFormScope(vertical);
   const showShape = !menuOnly && (scope.canComposite || (snapshot?.shape ?? '') !== '');
+  // The published menu (for «Як бачить гість») and the store's cork fee (for
+  // its note): asked once, only where the store has a guest menu at all.
+  const [menuUrl, setMenuUrl] = useState<string | null>(null);
+  const [corkageId, setCorkageId] = useState<number | null>(null);
+  useEffect(() => {
+    if (mode !== 'edit' || !scope.askDishFacts) return;
+    let live = true;
+    void readGuestMenuUrl().then((url) => live && setMenuUrl(url));
+    void readCorkageProductId().then((id) => live && setCorkageId(id));
+    return () => {
+      live = false;
+    };
+  }, [mode, scope.askDishFacts]);
+
+  // Only the marketer gets the hint (МР5); the owner has the recipe itself.
+  // What the saved recipe suggests for the allergen chips — for the owner and
+  // the marketer alike; a hint under the chips, never a tick.
+  const allergenHintsOf = useMemo(
+    () => (mode === 'edit' ? allergenHints(products.find((p) => p.id === productId), products) : []),
+    [mode, products, productId]
+  );
+  const recipeWordsOf = useMemo(
+    () => (menuOnly ? recipeWords(products.find((p) => p.id === productId)) : []),
+    [menuOnly, products, productId]
+  );
   const showDishFacts =
     scope.askDishFacts ||
     !!snapshot?.composition ||
@@ -448,7 +500,7 @@ function ProductCard({ id }: { id: string | undefined }) {
   if (notFound) {
     return (
       <div className="animate-fade-up text-sq-text">
-        <PageHeader glyph={Package} title="Такого товару немає" back={{ to: backTo, label: 'Товари' }} />
+        <PageHeader glyph={Package} title="Такого товару немає" back={{ to: backTo, label: menuOnly ? 'Меню' : 'Товари' }} />
         <p className="text-[15px] text-sq-secondary">
           Картку могли архівувати, або посилання застаріло.{' '}
           <Link to={backTo} className="sq-link">
@@ -463,7 +515,25 @@ function ProductCard({ id }: { id: string | undefined }) {
 
   return (
     <div className="animate-fade-up text-sq-text">
-      <PageHeader glyph={Package} title={title} back={{ to: backTo, label: 'Товари' }} />
+      <PageHeader
+        glyph={Package}
+        title={title}
+        back={{ to: backTo, label: menuOnly ? 'Меню' : 'Товари' }}
+        actions={
+          mode === 'edit' && menuUrl && draft && !draft.menuHidden ? (
+            <a
+              href={guestDishUrl(menuUrl, productId)}
+              target="_blank"
+              rel="noreferrer"
+              className="sq-btn-quiet"
+              data-testid="guest-view"
+            >
+              <QrCode size={20} />
+              Як бачить гість
+            </a>
+          ) : undefined
+        }
+      />
 
       {flash && (
         <div className="mb-5 rounded-sq bg-amber-50 text-amber-800 px-4 py-3 text-sm" role="status">
@@ -490,6 +560,10 @@ function ProductCard({ id }: { id: string | undefined }) {
                     onPatch={patchDraft}
                     showShape={showShape}
                     showDishFacts={showDishFacts}
+                    // The marketer writes the guest's composition with the
+                    // recipe's words at hand — names only (МР5).
+                    recipeWords={menuOnly ? recipeWordsOf : undefined}
+                    allergenHints={allergenHintsOf}
                   />
                 </section>
                 {mode === 'create' ? (
@@ -502,6 +576,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                         autoBarcode={vertical.autoBarcode === true}
                         onChange={setMatrix}
                         resetKey={matrixReset}
+                        tagIds={draft.tagIds}
                       />
                     ) : (
                       <NewVariantFields
@@ -510,6 +585,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                         onChange={setSingle}
                         shape={draft.shape}
                         partOptions={partOptions}
+                        tagIds={draft.tagIds}
                       />
                     )}
                   </section>
@@ -526,17 +602,61 @@ function ProductCard({ id }: { id: string | undefined }) {
                     addLabel={useMatrix ? 'Додати варіанти' : 'Додати варіант'}
                   />
                 )}
+                {/* The recipe on the card itself, a tab per size — not behind
+                    a variant's «⋯». A sold dish with none is offered one. */}
+                {mode === 'edit' && !menuOnly && (draft.shape !== '' || (scope.canComposite && scope.askDishFacts && draft.sellable)) && (
+                  <RecipeSection
+                    draft={draft}
+                    productId={productId}
+                    products={products}
+                    options={partOptions}
+                    costs={costs}
+                    units={vertical.units}
+                    dish={scope.askDishFacts}
+                    onPatchDraft={patchDraft}
+                    onPatchVariant={patchVariant}
+                    onProductCreated={putProduct}
+                    onSetCost={setIngredientCost}
+                  />
+                )}
+                {/* A dish's questions are half of what it is, so they sit in
+                    the wide column under its sizes and prices; a shop that
+                    sells no dishes keeps them in the side column. */}
+                {scope.askDishFacts && (
+                  <section className="space-y-3">
+                    <SectionHead title="Модифікатори" count={draft.groupIds.length || undefined} />
+                    <ProductModifiers
+                      groups={groups}
+                      products={products}
+                      value={draft.groupIds}
+                      onChange={(groupIds) => patchDraft({ groupIds })}
+                      productId={mode === 'edit' ? productId : undefined}
+                      productName={draft.name.trim()}
+                      tagIds={draft.tagIds}
+                      options={modifierOptions}
+                      dish
+                      onGroupSaved={onGroupSaved}
+                    />
+                  </section>
+                )}
               </div>
               <ProductSide
                 value={draft}
                 onPatch={patchDraft}
                 flatTags={flatTags}
                 groups={groups}
+                products={products}
+                productId={mode === 'edit' ? productId : undefined}
+                modifierOptions={modifierOptions}
+                dish={scope.askDishFacts}
+                onGroupSaved={onGroupSaved}
+                showModifiers={!scope.askDishFacts}
                 techCards={techCards}
                 variants={draft.variants}
                 askMenuHidden={scope.askDishFacts}
                 registers={registers}
                 askExcise={!menuOnly && fiscal?.enabled === true}
+                corkage={mode === 'edit' && corkageId === productId}
               />
             </div>
           </fieldset>
@@ -572,8 +692,7 @@ function ProductCard({ id }: { id: string | undefined }) {
           shape={draft.shape}
           vertical={vertical}
           colours={colours}
-          partOptions={partOptions}
-          techCard={techCards.get(sheetVariant.id)}
+          tagIds={draft.tagIds}
           bottle={
             !menuOnly && fiscal?.enabled === true
               ? { excise: { on: draft.fiscalExcise, perUnit: draft.excisePerUnit, uktzed: draft.uktzed } }
@@ -600,6 +719,7 @@ function ProductCard({ id }: { id: string | undefined }) {
           existing={draft.variants}
           shape={draft.shape}
           partOptions={partOptions}
+          tagIds={draft.tagIds}
           onAdded={(updated) => {
             mergeAdded(updated);
             setAdding(false);

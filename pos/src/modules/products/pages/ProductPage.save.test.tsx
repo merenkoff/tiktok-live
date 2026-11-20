@@ -227,7 +227,7 @@ describe('when a row is refused', () => {
 });
 
 describe('the sheet of one variant', () => {
-  it('hands the purchase price to the card, which sends it as cost_cents', async () => {
+  it('hands the purchase price to the card, which sends it in thousandths of a kopeck', async () => {
     const user = userEvent.setup();
     const save = await openCard();
     await user.click(screen.getByRole('button', { name: 'Ще · блакитний / 86' }));
@@ -238,7 +238,9 @@ describe('the sheet of one variant', () => {
 
     await user.click(save);
     await waitFor(() => expect(updateVariant).toHaveBeenCalledTimes(1));
-    expect(updateVariant.mock.calls[0]![1]).toMatchObject({ cost_cents: 12000, price_cents: 40000 });
+    // 120 ₴ a piece.
+    expect(updateVariant.mock.calls[0]![1]).toMatchObject({ cost_milli: 12_000_000, price_cents: 40000 });
+    expect(updateVariant.mock.calls[0]![1]).not.toHaveProperty('cost_cents');
   });
 
   it('throws its copy away on Скасувати', async () => {
@@ -288,14 +290,13 @@ describe('the shape\'s ordering rules', () => {
     const save = await openCard(2);
 
     await user.selectOptions(screen.getByLabelText('Що це за товар'), 'derived');
-    await user.click(screen.getByRole('button', { name: 'Ще · Варіант' }));
-    const sheet = within(await screen.findByRole('dialog', { name: 'Варіант' }));
-    await user.selectOptions(sheet.getByLabelText('Складник', { exact: true }), '10');
-    await user.clear(sheet.getByLabelText('Кількість складника'));
-    await user.type(sheet.getByLabelText('Кількість складника'), '5');
-    await user.click(sheet.getByRole('button', { name: 'Додати', exact: true }));
-    await user.click(sheet.getByRole('button', { name: 'Готово' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // The recipe is on the card itself now — found by typing, not in a sheet behind «Ще».
+    const recipe = within(await screen.findByTestId('recipe-section'));
+    await user.type(recipe.getByRole('combobox', { name: 'Додати складник' }), 'троянда');
+    await user.click(recipe.getByRole('option', { name: /Троянда/ }));
+    const quantity = recipe.getByLabelText('Кількість');
+    await user.clear(quantity);
+    await user.type(quantity, '5');
 
     await user.click(save);
     await waitFor(() => expect(updateProduct).toHaveBeenCalledTimes(2));

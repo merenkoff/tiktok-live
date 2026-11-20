@@ -193,7 +193,10 @@ export interface PosVariant {
   sku: string | null;
   barcode: string | null;
   price_cents: number;
+  /** Rounded copy of `cost_milli`, in whole kopecks per base unit. */
   cost_cents: number;
+  /** Last purchase price, thousandths of a kopeck per base unit (migration 103). */
+  cost_milli: number;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;

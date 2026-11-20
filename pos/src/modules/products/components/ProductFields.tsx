@@ -7,6 +7,7 @@ import { DishFactsFields } from './DishFactsFields';
 import { captionClass } from './formStyles';
 import { compositionHint, SHAPE_OPTIONS, type ProductShape } from '../lib/productShape';
 import type { ProductDraft } from '../lib/productDraft';
+import type { AllergenHint } from '../lib/allergenHints';
 
 type Fields = Pick<
   ProductDraft,
@@ -23,7 +24,12 @@ export function ProductFields({
   onPatch,
   showShape,
   showDishFacts,
+  recipeWords,
+  allergenHints,
 }: {
+  /** The recipe's words for the hint under «Склад для гостя»; absent draws none. */
+  recipeWords?: string[];
+  allergenHints?: readonly AllergenHint[];
   value: Fields;
   onPatch: (patch: Partial<Fields>) => void;
   /** Offer «Що це за товар» — a florist or a café, or a card that already is composite. */
@@ -93,6 +99,8 @@ export function ProductFields({
           onStrength={(strength) => onPatch({ strength })}
           prepMinutes={value.prepMinutes}
           onPrepMinutes={(prepMinutes) => onPatch({ prepMinutes })}
+          recipeWords={recipeWords}
+          allergenHints={allergenHints}
         />
       )}
     </div>

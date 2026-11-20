@@ -6,6 +6,7 @@
 
 import { pool } from '../db.js';
 import { buildInternalBarcode } from './gtin/internal-code.js';
+import { skuSeries, type SkuSeries } from './sku-series.js';
 import type { CatalogItem, ProductKind, ProductStockMode } from './types.js';
 
 export type { ProductKind, ProductStockMode };
@@ -31,10 +32,12 @@ import {
   loadGroupsForProducts,
   toCatalogGroup,
 } from './modifiers.service.js';
+import { normalizeLossBps } from './composites.service.js';
 import type { ComponentInput } from './composites.service.js';
 import { activeRegisters, effectiveRegister } from './fiscal/routing.js';
 import { bottleSourcesOf, type BottleSource } from './bottles.service.js';
 import { normalizeUktzed } from './excise.js';
+import { costMilliFromInput } from './cost.js';
 
 export interface VariantInput {
   /**
@@ -49,7 +52,13 @@ export interface VariantInput {
   sku?: string | null;
   barcode?: string | null;
   price_cents: number;
+  /**
+   * The purchase price in whole kopecks per base unit — the ROUNDED figure,
+   * kept for clients built before migration 103. `cost_milli` wins over it.
+   */
   cost_cents?: number;
+  /** The purchase price in thousandths of a kopeck per base unit (`cost.ts`). */
+  cost_milli?: number;
   quantity?: number;
   compare_at_cents?: number | null;
   /**
@@ -72,6 +81,19 @@ export interface VariantInput {
    * Its own field (Д10): a receiving pack may be a case of six bottles.
    */
   bottle_ml?: number | null;
+  /**
+   * The ingredient's usual preparation loss — peel, bones — in basis points
+   * (migration 104). A typing aid: the recipe editor offers it when the
+   * ingredient is added to a recipe; no sum reads it. Null = not said.
+   */
+  prep_loss_bps?: number | null;
+}
+
+/** `undefined` leaves it, `null` or '' clears it, anything else must be 0…99 %. */
+function normalizePrepLoss(raw: unknown, current: number | null): number | null {
+  if (raw === undefined) return current;
+  if (raw === null || raw === '') return null;
+  return normalizeLossBps(raw);
 }
 
 /** The stored tenths from whichever the client sent: the form's percent («4,5») or the importer's tenths. */
@@ -372,6 +394,7 @@ export async function listProducts(storeId: number, onlyIds?: readonly number[])
       barcode: row.barcode,
       price_cents: Number(row.price_cents),
       cost_cents: Number(row.cost_cents),
+      cost_milli: Number(row.cost_milli),
       compare_at_cents:
         row.compare_at_cents == null ? null : Number(row.compare_at_cents),
       is_active: row.is_active,
@@ -382,6 +405,8 @@ export async function listProducts(storeId: number, onlyIds?: readonly number[])
       pack_label: String(row.pack_label ?? ''),
       // Poured from a bottle opened by its stamp (ДК5, migration 093).
       bottle_ml: row.bottle_ml == null ? null : Number(row.bottle_ml),
+      // The ingredient's usual preparation loss, offered by the recipe editor (migration 104).
+      prep_loss_bps: row.prep_loss_bps == null ? null : Number(row.prep_loss_bps),
       // What the price is for: 1000 = per kg/l, a weighed variant (migration 075).
       price_per: Number(row.price_per ?? 1),
     });
@@ -466,9 +491,9 @@ async function insertVariantTx(
     (vertical.autoBarcode ? await generateInternalBarcode(storeId, client) : null);
   const variantResult = await client.query(
     `INSERT INTO pos_variants
-       (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
-        pack_qty, pack_label, price_per, bottle_ml)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_milli, compare_at_cents,
+        pack_qty, pack_label, price_per, bottle_ml, prep_loss_bps)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING id`,
     [
       storeId,
@@ -479,13 +504,15 @@ async function insertVariantTx(
       emptyToNull(variant.sku),
       barcode,
       variant.price_cents,
-      variant.cost_cents ?? 0,
+      // The rounded `cost_cents` follows by the trigger of migration 103.
+      costMilliFromInput(variant) ?? 0,
       compareAt,
       pack.pack_qty,
       pack.pack_label,
       // Per kilogram or litre for a unit the vertical weighs (migration 075).
       derived.price_per,
       bottleMl,
+      normalizePrepLoss(variant.prep_loss_bps, null),
     ]
   );
   const variantId = Number(variantResult.rows[0].id);
@@ -1000,13 +1027,14 @@ export async function updateVariant(
          sku = $4,
          barcode = $5,
          price_cents = $6,
-         cost_cents = $7,
+         cost_milli = $7,
          is_active = $8,
          compare_at_cents = $9,
          pack_qty = $10,
          pack_label = $11,
          price_per = $14,
          bottle_ml = $15,
+         prep_loss_bps = $16,
          updated_at = NOW()
        WHERE id = $12 AND store_id = $13
        RETURNING product_id`,
@@ -1017,7 +1045,9 @@ export async function updateVariant(
         input.sku === undefined ? (row.sku ?? null) : emptyToNull(input.sku),
         input.barcode === undefined ? (row.barcode ?? null) : emptyToNull(input.barcode),
         price,
-        input.cost_cents === undefined ? Number(row.cost_cents) : input.cost_cents,
+        // An older client sends back the rounded figure it read: that is not
+        // a new price, and the precise one stays (`costMilliFromInput`).
+        costMilliFromInput(input, Number(row.cost_milli)) ?? Number(row.cost_milli),
         input.is_active === undefined ? row.is_active : input.is_active,
         compareAt,
         pack.pack_qty,
@@ -1028,6 +1058,7 @@ export async function updateVariant(
         // variant is in a unit the vertical weighs (migration 075).
         derived.price_per,
         bottleMl,
+        normalizePrepLoss(input.prep_loss_bps, row.prep_loss_bps == null ? null : Number(row.prep_loss_bps)),
       ]
     );
     productId = Number(result.rows[0].product_id);
@@ -1136,6 +1167,46 @@ export async function generateInternalBarcode(
     if (taken.rows.length === 0) return barcode;
   }
   throw new Error('Не вдалося згенерувати вільний штрихкод');
+}
+
+/**
+ * What the shop's article numbering looks like, and what the next number in
+ * each series would be (`sku-series.ts` for why this is a suggestion rather
+ * than a mint).
+ *
+ * `tagIds` are the card's own categories, when it has any: the strongest answer
+ * to "which series was this kind of goods in?" is what every other product in
+ * the same category uses, and it costs one EXISTS to find out. Sharing ANY tag
+ * counts — a card usually carries several (a type and an age), and only one of
+ * them is the one the numbering follows.
+ *
+ * Archived variants are deliberately counted. Their articles are still taken —
+ * `idx_pos_variants_store_sku` does not look at `is_active` — so continuing
+ * past the highest ACTIVE one would suggest a number that cannot be saved.
+ */
+export async function listSkuSeries(
+  storeId: number,
+  tagIds: number[] = [],
+  db: DbClient = pool
+): Promise<SkuSeries[]> {
+  const inTag =
+    tagIds.length === 0
+      ? 'FALSE'
+      : 'EXISTS (SELECT 1 FROM pos_product_tags pt ' +
+        'WHERE pt.product_id = p.id AND pt.tag_id = ANY($2))';
+  const result = await db.query<{ sku: string; name: string; in_tag: boolean }>(
+    `SELECT v.sku, p.name, ${inTag} AS in_tag
+       FROM pos_variants v
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE v.store_id = $1
+        -- Non-digits then digits, the same shape \`skuSeries\` groups on, so an
+        -- article like «068-130» never reaches it and never becomes a series.
+        AND v.sku ~ '^[^0-9]*[0-9]+$'`,
+    tagIds.length === 0 ? [storeId] : [storeId, tagIds]
+  );
+  return skuSeries(
+    result.rows.map((row) => ({ sku: row.sku, productName: row.name, inTag: row.in_tag }))
+  );
 }
 
 /**

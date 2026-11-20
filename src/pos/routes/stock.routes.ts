@@ -11,6 +11,7 @@ import * as stockDocumentsService from '../stock-documents.service.js';
 import * as stockReportsService from '../stock-reports.service.js';
 import * as suppliersService from '../suppliers.service.js';
 import { errorMessage } from './_shared.js';
+import { unitCostMilliFromInput } from '../cost.js';
 import type { StockDocumentType, WriteoffReasonCode } from '../types.js';
 
 export function registerStockRoutes(fastify: FastifyInstance): void {
@@ -346,6 +347,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         variant_id?: number;
         quantity?: number;
         unit_cost_cents?: number | null;
+        unit_cost_milli?: number | null;
         counted_qty?: number | null;
         target_qty?: number;
         line_note?: string | null;
@@ -368,7 +370,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
           documentId: Number(id),
           variantId: body.variant_id,
           quantity: body.quantity,
-          unitCostCents: body.unit_cost_cents,
+          unitCostMilli: unitCostMilliFromInput(body),
           countedQty: body.counted_qty,
           lineNote: body.line_note,
         })
@@ -387,6 +389,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         name?: string;
         quantity?: number;
         unit_cost_cents?: number | null;
+        unit_cost_milli?: number | null;
         price_cents?: number;
         attributes?: unknown;
         unit?: string;
@@ -409,7 +412,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         name: body.name ?? '',
         quantity: body.quantity,
         priceCents: body.price_cents,
-        unitCostCents: body.unit_cost_cents,
+        unitCostMilli: unitCostMilliFromInput(body),
         attributes: body.attributes,
         unit: body.unit,
         sku: body.sku,
@@ -436,6 +439,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
       const body = request.body as {
         quantity?: number;
         unit_cost_cents?: number | null;
+        unit_cost_milli?: number | null;
         counted_qty?: number | null;
         line_note?: string | null;
         placeholder_name?: string;
@@ -450,7 +454,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         documentId: Number(id),
         lineId: Number(lineId),
         quantity: body.quantity,
-        unitCostCents: body.unit_cost_cents,
+        unitCostMilli: unitCostMilliFromInput(body),
         countedQty: body.counted_qty,
         lineNote: body.line_note,
         placeholderName: body.placeholder_name,

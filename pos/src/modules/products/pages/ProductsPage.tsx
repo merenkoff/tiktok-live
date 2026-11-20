@@ -13,7 +13,21 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DEFAULT_TAG_COLOR, api, type TagColorKey, useAuthStore, useVertical } from '@pos/platform';
 import type { PosTag, TagStation, Product } from '@pos/platform';
-import { Boxes, Camera, ClipboardList, Inbox, LayoutGrid, Package, PageHeader, Percent, Plus, Printer, Sparkles, Star } from '@pos/platform/ui';
+import {
+  Boxes,
+  Camera,
+  ClipboardList,
+  FileText,
+  Inbox,
+  LayoutGrid,
+  Package,
+  PageHeader,
+  Percent,
+  Plus,
+  Printer,
+  Sparkles,
+  Star,
+} from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { MarkdownDialog } from '../components/MarkdownDialog';
 import { countPhrase } from '../data/markdownsApi';
@@ -28,6 +42,7 @@ import { flattenTags, tagPathLabel } from '../components/tagLabels';
 import { readListParams, writeListParams, type TagFilter } from '../lib/listParams';
 import { assignRegister, registerChoices } from '../lib/registerChoices';
 import { useMenuOnly } from '../lib/menuOnly';
+import { hasGap, menuProducts, pruneTags } from '../lib/menuGaps';
 import { ukPlural } from '../../../lib/plural';
 
 /** Whether a card carries a guest-menu label (an older payload has none). */
@@ -107,15 +122,23 @@ export function ProductsPage() {
     );
   }, [searchParams, navigate, setSearchParams]);
 
+  // The marketer's list is the menu (МР5): the dishes the till sells, never the
+  // ingredients and preps the kitchen keeps here too — and only the tags that
+  // hold one of them.
+  const listed = useMemo(() => (menuOnly ? menuProducts(products) : products), [menuOnly, products]);
+  const shownTags = useMemo(() => (menuOnly ? pruneTags(tags, listed) : tags), [menuOnly, tags, listed]);
+
   // The archive is the one view that shows archived cards; every other view
   // hides them, exactly as before.
   const inArchive = filterTag === 'archived';
-  const visible = products.filter((p) => {
+  const visible = listed.filter((p) => {
     if (inArchive) return !p.is_active && productMatchesQuery(p, query);
     if (!p.is_active) return false;
     if (!productMatchesQuery(p, query)) return false;
     if (filterTag === 'needs_review') return Boolean(p.needs_review);
-    if (filterTag === 'no_photo') return !p.image_url;
+    if (filterTag === 'no_photo') return menuOnly ? hasGap(p, 'photo') : !p.image_url;
+    if (filterTag === 'no_description') return hasGap(p, 'description');
+    if (filterTag === 'no_composition') return hasGap(p, 'composition');
     // The two guest-menu labels the owner takes off by hand (F13): a card
     // labelled «Новинка» or «Хіт» stays so until someone opens it.
     if (filterTag === 'label_new') return hasLabel(p, 'new');
@@ -124,11 +147,14 @@ export function ProductsPage() {
     return p.tag_ids?.includes(filterTag);
   });
 
-  const needsReviewCount = products.filter((p) => p.is_active && p.needs_review).length;
-  const noPhotoCount = products.filter((p) => p.is_active && !p.image_url).length;
-  const archivedCount = products.filter((p) => !p.is_active).length;
-  const newCount = products.filter((p) => p.is_active && hasLabel(p, 'new')).length;
-  const hitCount = products.filter((p) => p.is_active && hasLabel(p, 'hit')).length;
+  const live = listed.filter((p) => p.is_active);
+  const needsReviewCount = live.filter((p) => p.needs_review).length;
+  const noPhotoCount = live.filter((p) => (menuOnly ? hasGap(p, 'photo') : !p.image_url)).length;
+  const noDescriptionCount = live.filter((p) => hasGap(p, 'description')).length;
+  const noCompositionCount = live.filter((p) => hasGap(p, 'composition')).length;
+  const archivedCount = listed.filter((p) => !p.is_active).length;
+  const newCount = live.filter((p) => hasLabel(p, 'new')).length;
+  const hitCount = live.filter((p) => hasLabel(p, 'hit')).length;
   // Only a kitchen has a guest menu to label dishes on; a boutique's list keeps its four rows.
   const showLabelRows = vertical.dishFacts !== false;
 
@@ -248,7 +274,7 @@ export function ProductsPage() {
     <div className="animate-fade-up text-sq-text">
       <PageHeader
         glyph={Package}
-        title="Товари"
+        title={menuOnly ? 'Меню' : 'Товари'}
         subtitle={menuOnly ? 'Страви, ціни, порції й те, що бачить гість.' : 'Мітки, варіанти та залишки.'}
         actions={
           <>
@@ -318,7 +344,10 @@ export function ProductsPage() {
               active={filterTag === 'needs_review'}
               onClick={() => setFilterTag('needs_review')}
               icon={<Inbox size={20} className="text-sq-secondary" />}
-              label="З приходу — перевірте"
+              // A card made from a receiving document shows the guest no
+              // description until it is edited: for the marketer that is a new
+              // dish to fill in, not a delivery to check.
+              label={menuOnly ? 'Нові — заповніть' : 'З приходу — перевірте'}
               count={needsReviewCount}
             />
             <FilterRow
@@ -328,6 +357,28 @@ export function ProductsPage() {
               label="Без фото"
               count={noPhotoCount}
             />
+            {/* What the guest still misses — the marketer's to-do list, and the owner's
+                in a kitchen vertical, counted over the dishes only. */}
+            {(menuOnly || showLabelRows) && (
+              <>
+                <FilterRow
+                  active={filterTag === 'no_description'}
+                  onClick={() => setFilterTag('no_description')}
+                  icon={<FileText size={20} className="text-sq-secondary" />}
+                  label="Без опису"
+                  count={noDescriptionCount}
+                  testId="filter-no-description"
+                />
+                <FilterRow
+                  active={filterTag === 'no_composition'}
+                  onClick={() => setFilterTag('no_composition')}
+                  icon={<ClipboardList size={20} className="text-sq-secondary" />}
+                  label="Без складу для гостя"
+                  count={noCompositionCount}
+                  testId="filter-no-composition"
+                />
+              </>
+            )}
             {showLabelRows && (
               <>
                 <FilterRow
@@ -355,7 +406,7 @@ export function ProductsPage() {
               label="Архів"
               count={archivedCount}
             />
-            {tags.map((root) => (
+            {shownTags.map((root) => (
               <TagTreeNode
                 key={root.id}
                 tag={root}
@@ -412,7 +463,7 @@ export function ProductsPage() {
             type="search"
             className="sq-input"
             aria-label="Пошук товарів"
-            placeholder="Пошук: назва, колір, розмір, артикул, штрихкод"
+            placeholder={menuOnly ? 'Пошук: назва страви' : 'Пошук: назва, колір, розмір, артикул, штрихкод'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -563,7 +614,9 @@ export function ProductsPage() {
                   ? 'В архіві нічого немає.'
                   : filterTag === 'no_photo' && query.trim() === ''
                     ? 'У всіх товарів є фото.'
-                    : 'Немає товарів у цьому фільтрі.'}
+                    : (filterTag === 'no_description' || filterTag === 'no_composition') && query.trim() === ''
+                      ? 'Тут порожньо — у всіх страв усе заповнено.'
+                      : 'Немає товарів у цьому фільтрі.'}
               </p>
             </div>
           )}

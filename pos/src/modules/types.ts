@@ -116,6 +116,12 @@ export interface NavItem {
   visible?: (ctx: NavCtx) => boolean;
   /** Who sees this entry, like `RouteDef.roles` — the marketer only where it is named. */
   roles?: readonly PosRole[];
+  /**
+   * The entry's own name for a role — «Меню» rather than «Товари» for the
+   * café's marketer, whose «Товари» is the menu. The owner's rename on «Вигляд
+   * меню» still wins for everyone: `selectNavItems` applies this first.
+   */
+  roleLabels?: Partial<Record<PosRole, string>>;
 }
 
 export interface SalesCatalogProps {

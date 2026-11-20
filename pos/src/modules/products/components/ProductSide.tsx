@@ -2,9 +2,10 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import type { ModifierGroup, PosTag } from '@pos/platform';
+import type { ModifierGroup, PosTag, Product } from '@pos/platform';
 import { SectionHead } from '@pos/platform/ui';
-import { ModifierGroupChips } from './ModifierGroupChips';
+import { ProductModifiers } from './ProductModifiers';
+import type { ComponentOption } from './componentOptions';
 import { TagDot } from './TagDot';
 import { TechCardLine } from './TechCardLine';
 import { captionClass, checkboxClass } from './formStyles';
@@ -12,10 +13,19 @@ import { tagPathLabel } from './tagLabels';
 import type { TechCardRow } from '../data/techCardsApi';
 import { rowName, type ProductDraft } from '../lib/productDraft';
 import type { RegisterChoice } from '../lib/registerChoices';
+import { useMenuOnly } from '../lib/menuOnly';
 
 type Fields = Pick<
   ProductDraft,
-  'sellable' | 'menuHidden' | 'fiscalRegister' | 'fiscalExcise' | 'excisePerUnit' | 'uktzed' | 'tagIds' | 'groupIds'
+  | 'name'
+  | 'sellable'
+  | 'menuHidden'
+  | 'fiscalRegister'
+  | 'fiscalExcise'
+  | 'excisePerUnit'
+  | 'uktzed'
+  | 'tagIds'
+  | 'groupIds'
 >;
 
 /** «Продається на касі» — the same switch on every card. */
@@ -174,13 +184,22 @@ export function ProductSide({
   onPatch,
   flatTags,
   groups,
+  products = [],
+  productId,
+  modifierOptions = [],
+  dish = true,
+  onGroupSaved,
+  showModifiers = true,
   techCards,
   variants,
   askMenuHidden = false,
   registers = [],
   askExcise = false,
+  corkage = false,
 }: {
   value: Fields;
+  /** This card is the store's cork fee (migration 105): its price is the fee the guest reads. */
+  corkage?: boolean;
   onPatch: (patch: Partial<Fields>) => void;
   /** Offer «Не показувати в QR-меню» — only where the store has a guest menu. */
   askMenuHidden?: boolean;
@@ -190,6 +209,18 @@ export function ProductSide({
   askExcise?: boolean;
   flatTags: PosTag[];
   groups: ModifierGroup[];
+  /** The catalogue — where else a question is asked, and what its neighbours ask. */
+  products?: Product[];
+  /** Absent on a card that is still being created. */
+  productId?: number;
+  /** What a modifier's answer may take off the shelf. */
+  modifierOptions?: ComponentOption[];
+  /** A café says «страва», every other shop «товар». */
+  dish?: boolean;
+  /** A question was created or changed from this card. */
+  onGroupSaved?: (group: ModifierGroup) => void;
+  /** False where the page draws the modifiers itself, in the main column (a dish). */
+  showModifiers?: boolean;
   /** What each composite variant costs to assemble, by variant id. */
   techCards?: Map<number, TechCardRow>;
   variants?: ProductDraft['variants'];
@@ -201,12 +232,21 @@ export function ProductSide({
   }
 
   const costLines = (variants ?? []).filter((v) => techCards?.has(v.id));
+  // The marketer's card is the menu (МР5): whether the guest sees it, never
+  // whether the till sells it — that switch is for ingredients and preps.
+  const menuOnly = useMenuOnly();
 
   return (
     <div className="space-y-7">
       <section className="space-y-3">
-        <SectionHead title="На касі" />
-        <SellableField checked={value.sellable} onChange={(sellable) => onPatch({ sellable })} />
+        <SectionHead title={menuOnly ? 'QR-меню' : 'На касі'} />
+        {corkage && (
+          <p className="rounded-xl bg-sq-blue/[0.06] px-3.5 py-3 text-[14px] text-sq-secondary leading-snug" data-testid="corkage-note">
+            Це <strong className="font-semibold text-sq-text">корковий збір</strong> закладу. Його ціну гість бачить у
+            QR-меню під назвою закладу — змінюйте тут або на сторінці «QR-меню», це одне число.
+          </p>
+        )}
+        {!menuOnly && <SellableField checked={value.sellable} onChange={(sellable) => onPatch({ sellable })} />}
         {askMenuHidden && (
           <MenuHiddenField checked={value.menuHidden} onChange={(menuHidden) => onPatch({ menuHidden })} />
         )}
@@ -244,15 +284,23 @@ export function ProductSide({
         </div>
       </section>
 
-      <section className="space-y-3">
-        <SectionHead title="Модифікатори" count={value.groupIds.length || undefined} />
-        <ModifierGroupChips
-          caption={null}
-          groups={groups}
-          value={value.groupIds}
-          onChange={(groupIds) => onPatch({ groupIds })}
-        />
-      </section>
+      {showModifiers && (
+        <section className="space-y-3">
+          <SectionHead title="Модифікатори" count={value.groupIds.length || undefined} />
+          <ProductModifiers
+            groups={groups}
+            products={products}
+            value={value.groupIds}
+            onChange={(groupIds) => onPatch({ groupIds })}
+            productId={productId}
+            productName={value.name.trim()}
+            tagIds={value.tagIds}
+            options={modifierOptions}
+            dish={dish}
+            onGroupSaved={(group) => onGroupSaved?.(group)}
+          />
+        </section>
+      )}
 
       {costLines.length > 0 && (
         <section className="space-y-2">

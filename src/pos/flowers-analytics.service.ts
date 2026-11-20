@@ -33,6 +33,7 @@
 
 import { pool } from '../db.js';
 import { eachDate } from './analytics.service.js';
+import { sqlMilliToCents } from './cost.js';
 
 /** Reasons a florist's stock leaves without being sold. */
 export type LossReason = 'damaged' | 'gift' | 'lost' | 'other';
@@ -187,7 +188,7 @@ export async function getFlowerAnalytics(
 // same positive quantities. Filtering on status alone therefore turns an undone
 // write-off into a second one.
 //
-// Cost is the variant's cost card: `addLine` stores `unit_cost_cents` only on a
+// Cost is the variant's cost card: `addLine` stores a line price only on a
 // receipt, so a write-off line never carries one. The COALESCE keeps the line's
 // value first anyway — it is the right precedence the day a write-off screen
 // does ask for a price, and it costs nothing today.
@@ -204,13 +205,15 @@ const WRITEOFF_SCOPE = `
     AND d.occurred_at >= $2::date
     AND d.occurred_at <= $3::timestamptz`;
 
-const LINE_COST = `l.quantity * COALESCE(l.unit_cost_cents, v.cost_cents, 0)`;
+// In thousandths of a kopeck (migration 103): summed exactly, turned into whole
+// kopecks once per figure by `sqlMilliToCents`.
+const LINE_COST_MILLI = `l.quantity * COALESCE(l.unit_cost_milli, v.cost_milli, 0)`;
 
 async function lossByReason(params: unknown[]): Promise<FlowerLossRow[]> {
   const result = await pool.query(
     `SELECT COALESCE(NULLIF(d.reason_code, ''), 'other') AS reason,
             SUM(l.quantity)::int AS quantity,
-            SUM(${LINE_COST})::bigint AS cost_cents
+            ${sqlMilliToCents(`SUM(${LINE_COST_MILLI})`)} AS cost_cents
      ${WRITEOFF_SCOPE}
      GROUP BY 1
      ORDER BY 3 DESC`,
@@ -231,7 +234,7 @@ async function lossByVariant(params: unknown[]): Promise<FlowerLossVariant[]> {
               MIN(v.label) AS label,
               MIN(v.unit) AS unit,
               SUM(l.quantity)::int AS written_off,
-              SUM(${LINE_COST})::bigint AS cost_cents
+              ${sqlMilliToCents(`SUM(${LINE_COST_MILLI})`)} AS cost_cents
        ${WRITEOFF_SCOPE}
        GROUP BY l.variant_id
      ),
@@ -276,7 +279,7 @@ async function lossByVariant(params: unknown[]): Promise<FlowerLossVariant[]> {
 async function lossPerDay(params: unknown[]): Promise<Array<{ date: string; cost_cents: number }>> {
   const result = await pool.query(
     `SELECT to_char(d.occurred_at, 'YYYY-MM-DD') AS date,
-            SUM(${LINE_COST})::bigint AS cost_cents
+            ${sqlMilliToCents(`SUM(${LINE_COST_MILLI})`)} AS cost_cents
      ${WRITEOFF_SCOPE}
      GROUP BY 1`,
     params
@@ -377,7 +380,7 @@ async function stemsConsumed(params: unknown[]): Promise<FlowerStemRow[]> {
  *
  * Cost follows the same fork as the stock movement did: a line with a
  * composition snapshot cost the sum of its components; every other line cost
- * its own variant's `cost_cents`. Anything else would price a bouquet at the
+ * its own variant's purchase price. Anything else would price a bouquet at the
  * cost of a catalogue card nobody ever bought.
  *
  * Bouquets are split out from the rest because that is the comparison the
@@ -397,18 +400,18 @@ async function realisedMargin(params: unknown[]): Promise<FlowerMarginRow[]> {
               CASE WHEN si.quantity > 0 THEN si.line_total_cents::numeric / si.quantity ELSE 0 END
                 AS unit_revenue,
               COALESCE((
-                SELECT SUM(c.quantity_per_unit * COALESCE(cv.cost_cents, 0))
+                SELECT SUM(c.quantity_per_unit * COALESCE(cv.cost_milli, 0))
                 FROM pos_sale_item_components c
                 JOIN pos_variants cv ON cv.id = c.component_variant_id
                 WHERE c.sale_item_id = si.id
-              ), (SELECT COALESCE(v.cost_cents, 0) FROM pos_variants v WHERE v.id = si.variant_id))
-                AS unit_cost
+              ), (SELECT COALESCE(v.cost_milli, 0) FROM pos_variants v WHERE v.id = si.variant_id))
+                AS unit_cost_milli
        ${SOLD_SCOPE}
      )
      SELECT is_bouquet,
             COUNT(*)::int AS lines,
             SUM(unit_revenue * net_qty)::bigint AS revenue_cents,
-            SUM(unit_cost * net_qty)::bigint AS cost_cents
+            ${sqlMilliToCents('SUM(unit_cost_milli * net_qty)')} AS cost_cents
      FROM lines
      WHERE net_qty > 0
      GROUP BY is_bouquet`,

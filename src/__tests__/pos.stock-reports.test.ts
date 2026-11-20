@@ -63,7 +63,7 @@ describe.skipIf(!hasDb)('POS stock reports', () => {
       documentId: receipt.id,
       variantId,
       quantity: 20,
-      unitCostCents: 2100,
+      unitCostMilli: 2100_000,
     });
     await postDocument({ storeId, documentId: receipt.id, staffId });
 

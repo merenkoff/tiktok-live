@@ -31,7 +31,7 @@ import { TYPE_GLYPH } from '../lib/documents';
 import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
 import { confirmStubsMessage, stubsFooter, summarizeStubs } from '../lib/stubs';
 import {
-  costStepNote,
+  costPer,
   costUnit,
   countPack,
   countScale,
@@ -42,9 +42,10 @@ import {
   shownQty,
   signedStockCell,
   stockText,
-  typedCostToBase,
+  typedCostToMilli,
   typedToBase,
 } from '../lib/stockUnits';
+import { costMilliOf, lineCostCents, MILLI, milliToCents } from '../../../lib/costUnits';
 import { supportsMatrix } from '../../products/lib/variantMatrix';
 import { isWeighedUnit, unitLabels } from '../../products/lib/weighedUnit';
 import { ReceiveMatrixDialog, type ReceiveMatrixResult } from '../components/ReceiveMatrixDialog';
@@ -69,14 +70,13 @@ function attributeSummary(vertical: VerticalPublicConfig, attributes: AttributeV
     .join(' · ');
 }
 
-/** The line under a price box when the document will hold a different figure than was typed. */
-function CostStepNote({ note }: { note: string | null }) {
-  if (!note) return null;
-  return (
-    <span className="max-w-[16rem] text-[12px] leading-snug text-sq-muted" data-testid="stock-cost-step">
-      {note}
-    </span>
-  );
+/**
+ * A line's price for the wire: the precise figure, and its rounded copy for a
+ * backend that does not know the precise column yet (it reads the one it has).
+ */
+function unitCostFields(milli: number | undefined): { unit_cost_milli: number | null; unit_cost_cents: number | null } {
+  if (milli == null) return { unit_cost_milli: null, unit_cost_cents: null };
+  return { unit_cost_milli: milli, unit_cost_cents: milliToCents(milli) };
 }
 
 type ExistingLine = {
@@ -88,8 +88,8 @@ type ExistingLine = {
    * a typing aid and this is the number the document is made of.
    */
   quantity: number;
-  /** Per BASE unit, same rule as the quantity. */
-  unit_cost_cents?: number;
+  /** Per BASE unit, same rule as the quantity — in thousandths of a kopeck (`lib/costUnits.ts`). */
+  unit_cost_milli?: number;
   price_cents?: number;
   target_qty?: number;
   on_hand: number;
@@ -97,7 +97,7 @@ type ExistingLine = {
   unit: string;
   /**
    * 1000 when the variant is sold per kilogram or litre (migration 075): the
-   * row shows and takes kilograms, `quantity` and `unit_cost_cents` stay per
+   * row shows and takes kilograms, `quantity` and `unit_cost_milli` stay per
    * gram (`lib/stockUnits.ts`).
    */
   price_per: number;
@@ -108,13 +108,12 @@ type ExistingLine = {
   packMode: PackMode;
 };
 
-// `quantity`, `target_qty` and `unit_cost_cents` are ALWAYS base units in
+// `quantity`, `target_qty` and `unit_cost_milli` are ALWAYS base units in
 // state — what a pack or a weighed variant changes is only what the box shows
-// and what a keystroke means. The cost is kept UNROUNDED on purpose: 15 ₴ for
-// a 1000 ml bottle is 1.5 cents per millilitre, 14,50 ₴ a kilogram is 1.45 a
-// gram, and rounding on every keystroke would redraw the box mid-typing. The
-// single rounding happens on the way out, where the integer column needs it —
-// and the box says so when it changes the figure (`costStepNote`).
+// and what a keystroke means. The cost is thousandths of a kopeck per base
+// unit (migration 103): 15 ₴ for a 1000 ml bottle is 1500 a millilitre,
+// 14,50 ₴ a kilogram 1450 a gram — exactly what was typed, so the box reads
+// back the same figure and the document holds the delivery note's price.
 
 type PlaceholderLine = {
   kind: 'placeholder';
@@ -124,8 +123,8 @@ type PlaceholderLine = {
   quantity: number;
   /** Per kilogram for a weighed unit: the new variant's price is, from the first save. */
   price_cents: number;
-  /** Per BASE unit, unrounded until it leaves the screen. */
-  unit_cost_cents?: number;
+  /** Per BASE unit, thousandths of a kopeck. */
+  unit_cost_milli?: number;
   /** Vertical-defined attributes of the product this line will create. */
   attributes: AttributeValues;
   unit: string;
@@ -196,6 +195,8 @@ export function StockActionPage({ type }: Props) {
   const stubPricePer = isWeighedUnit(vertical, stubUnit) ? WEIGHED_PRICE_PER : 1;
   const stubWeighed = stubPricePer > 1;
   const stubCountUnit = countUnit({ unit: stubUnit, price_per: stubPricePer });
+  // What the stub's purchase price is typed per: a kilogram of grams, a piece of pieces.
+  const stubCostRow = { unit: stubUnit, price_per: stubPricePer };
   const [stubSku, setStubSku] = useState('');
   const [stubBarcodeBusy, setStubBarcodeBusy] = useState(false);
   const [stubBarcode, setStubBarcode] = useState('');
@@ -290,7 +291,7 @@ export function StockActionPage({ type }: Props) {
           // One of whatever the box counts — a pack, a kilogram, a piece —
           // so the number and the caption above it always agree.
           quantity: packMode === 'pack' && pack ? pack.qty : countScale(packFields),
-          unit_cost_cents: row.cost_cents,
+          unit_cost_milli: costMilliOf(row),
           on_hand: row.quantity,
           ...packFields,
         },
@@ -422,8 +423,8 @@ export function StockActionPage({ type }: Props) {
       return;
     }
     const costRaw = stubCost.trim();
-    const unitCostCents =
-      costRaw === '' ? undefined : typedCostToBase(stubRow, 'base', uahInputToCents(costRaw));
+    const unitCostMilli =
+      costRaw === '' ? undefined : typedCostToMilli(stubRow, 'base', uahInputToCents(costRaw));
     // Same key the server de-duplicates on (`placeholder_attributes` jsonb
     // equality) — catching it here just saves a round trip.
     const attributes = stubAttributes;
@@ -449,7 +450,7 @@ export function StockActionPage({ type }: Props) {
         name,
         quantity,
         price_cents: priceCents,
-        unit_cost_cents: unitCostCents,
+        unit_cost_milli: unitCostMilli,
         attributes,
         unit: stubUnit,
         price_per: stubPricePer,
@@ -487,7 +488,7 @@ export function StockActionPage({ type }: Props) {
           variant_id: variant.id,
           label: row ? `${row.product_name} ${row.label}`.trim() : label,
           quantity,
-          unit_cost_cents: row?.cost_cents ?? variant.cost_cents ?? undefined,
+          unit_cost_milli: costMilliOf(row ?? variant),
           on_hand: row?.quantity ?? variant.quantity,
           unit: row?.unit ?? variant.unit,
           // The grid is clothing's (colours × sizes), never weighed.
@@ -518,7 +519,7 @@ export function StockActionPage({ type }: Props) {
           name: stub.name,
           quantity: stub.quantity,
           price_cents: stub.price_cents,
-          unit_cost_cents: stub.unit_cost_cents,
+          unit_cost_milli: stub.unit_cost_cents == null ? undefined : stub.unit_cost_cents * MILLI,
           attributes: stub.attributes,
           unit: stub.unit,
           price_per: isWeighedUnit(vertical, stub.unit) ? WEIGHED_PRICE_PER : 1,
@@ -616,7 +617,7 @@ export function StockActionPage({ type }: Props) {
             name: line.name,
             quantity: line.quantity,
             price_cents: line.price_cents,
-            unit_cost_cents: line.unit_cost_cents == null ? null : Math.round(line.unit_cost_cents),
+            ...unitCostFields(line.unit_cost_milli),
             attributes: line.attributes,
             unit: line.unit,
             sku: line.sku || null,
@@ -636,10 +637,7 @@ export function StockActionPage({ type }: Props) {
           await api.addStockDocumentLine(doc.id, {
             variant_id: line.variant_id,
             quantity: line.quantity,
-            unit_cost_cents:
-              type === 'receipt' && line.unit_cost_cents != null
-                ? Math.round(line.unit_cost_cents)
-                : null,
+            ...unitCostFields(type === 'receipt' ? line.unit_cost_milli : undefined),
           });
         }
       }
@@ -655,13 +653,9 @@ export function StockActionPage({ type }: Props) {
   }
 
   const showCreateCta = type === 'receipt' && !loading && searchHits.length === 0 && q.trim().length > 0;
-  // The purchase sum as typed, and as the integer `unit_cost_cents` column will
-  // hold it — a price per kilogram keeps a 10 ₴ step (`costStepNote`).
-  const typedTotal = lines.reduce((s, l) => s + (l.unit_cost_cents ?? 0) * l.quantity, 0);
-  const storedTotal = lines.reduce(
-    (s, l) => s + (l.unit_cost_cents == null ? 0 : Math.round(l.unit_cost_cents)) * l.quantity,
-    0
-  );
+  // The purchase sum: each line is its quantity × its price, rounded to the
+  // kopeck the delivery note shows for that line.
+  const purchaseTotal = lines.reduce((s, l) => s + lineCostCents(l.quantity, l.unit_cost_milli ?? 0), 0);
 
   return (
     <form
@@ -807,23 +801,22 @@ export function StockActionPage({ type }: Props) {
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className="text-[13px] font-semibold text-sq-secondary">
-                      {isWeighedRow(line) ? `Закупка за ${countUnit(line)} ₴` : 'Закупка ₴'}
+                      {costPer(line, 'base') > 1 ? `Закупка за ${costUnit(line, 'base')} ₴` : 'Закупка ₴'}
                     </span>
                     <input
-                      value={(shownCost(line, 'base', line.unit_cost_cents ?? 0) / 100).toFixed(2)}
+                      value={(shownCost(line, 'base', line.unit_cost_milli ?? 0) / 100).toFixed(2)}
                       onChange={(e) => {
-                        const cents = typedCostToBase(line, 'base', uahInputToCents(e.target.value));
+                        const milli = typedCostToMilli(line, 'base', uahInputToCents(e.target.value));
                         setLines((prev) =>
                           prev.map((l, i) =>
                             i === idx && l.kind === 'placeholder'
-                              ? { ...l, unit_cost_cents: cents }
+                              ? { ...l, unit_cost_milli: milli }
                               : l
                           )
                         );
                       }}
                       className="sq-input max-w-[7rem]"
                     />
-                    <CostStepNote note={costStepNote(line, 'base', line.unit_cost_cents)} />
                   </label>
                   <button
                     type="button"
@@ -909,20 +902,19 @@ export function StockActionPage({ type }: Props) {
                           Закупка за {costUnit(line, line.packMode)} ₴
                         </span>
                         <input
-                          value={(shownCost(line, line.packMode, line.unit_cost_cents ?? 0) / 100).toFixed(2)}
+                          value={(shownCost(line, line.packMode, line.unit_cost_milli ?? 0) / 100).toFixed(2)}
                           onChange={(e) => {
-                            const cents = typedCostToBase(line, line.packMode, uahInputToCents(e.target.value));
+                            const milli = typedCostToMilli(line, line.packMode, uahInputToCents(e.target.value));
                             setLines((prev) =>
                               prev.map((l, i) =>
                                 i === idx && l.kind === 'existing'
-                                  ? { ...l, unit_cost_cents: cents }
+                                  ? { ...l, unit_cost_milli: milli }
                                   : l
                               )
                             );
                           }}
                           className="sq-input max-w-[7rem]"
                         />
-                        <CostStepNote note={costStepNote(line, line.packMode, line.unit_cost_cents)} />
                       </label>
                     )}
                   </>
@@ -1113,7 +1105,7 @@ export function StockActionPage({ type }: Props) {
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-[13px] font-semibold text-sq-secondary">
-                {stubWeighed ? `Закупка за 1 ${stubCountUnit}` : 'Закупка'}
+                {costPer(stubCostRow, 'base') > 1 ? `Закупка за 1 ${costUnit(stubCostRow, 'base')}` : 'Закупка'}
               </span>
               <input
                 value={stubCost}
@@ -1205,10 +1197,7 @@ export function StockActionPage({ type }: Props) {
       </div>
       {type === 'receipt' && lines.length > 0 && (
         <p className="text-[13px] text-sq-muted tabular-nums">
-          Сума закупки: {formatUah(typedTotal)}
-          {/* What the delivery note says, and — when whole kopecks per gram
-              or millilitre move it — what the document will actually hold. */}
-          {Math.abs(storedTotal - typedTotal) >= 0.5 && ` · запишеться ${formatUah(storedTotal)}`}
+          Сума закупки: {formatUah(purchaseTotal)}
           {stubsFooter(stubSummary)}
         </p>
       )}

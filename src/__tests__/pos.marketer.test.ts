@@ -43,6 +43,9 @@ const OPEN = new Set([
   'POST /products/:id/variants',
   'POST /products/:id/variants/batch',
   'POST /variants/internal-barcode',
+  // The shop's article numbering: the marketer gives new cards their article,
+  // so they need the same view of the series as the owner.
+  'GET /variants/sku-series',
   'PATCH /variants/:id',
   'POST /products/:id/archive',
   'POST /products/:id/restore',
@@ -56,6 +59,8 @@ const OPEN = new Set([
   'GET /modifier-groups',
   'POST /modifier-groups',
   'PATCH /modifier-groups/:id',
+  'PUT /modifier-groups/:id',
+  'PUT /modifier-groups/:id/products',
   'DELETE /modifier-groups/:id',
   'POST /modifier-groups/:id/modifiers',
   'PATCH /modifiers/:id',
@@ -271,6 +276,7 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       const borshch = list.find((p) => p.id === productId)!;
       expect(borshch.variants[0]).toMatchObject({ price_cents: 18_000 });
       expect(borshch.variants[0]).not.toHaveProperty('cost_cents');
+      expect(borshch.variants[0]).not.toHaveProperty('cost_milli');
       expect(borshch.variants[0]).not.toHaveProperty('quantity');
       const one = (await call('GET', `/products/${productId}`, marketerToken)).json();
       expect(one.variants[0]).not.toHaveProperty('cost_cents');
@@ -290,6 +296,7 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       expect(edited.statusCode).toBe(200);
       expect(edited.json()).toMatchObject({ name: 'Борщ український', allergens: ['celery'], menu_labels: ['hit'] });
       expect(edited.json().variants[0]).not.toHaveProperty('cost_cents');
+      expect(edited.json().variants[0]).not.toHaveProperty('cost_milli');
 
       const excise = await call('PATCH', `/products/${productId}`, marketerToken, { fiscal_excise: true, fiscal_uktzed: '2208' });
       expect(excise.statusCode).toBe(403);
@@ -299,6 +306,9 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { price_cents: 19_000 })).statusCode).toBe(200);
       // A form that resends the cost it was never shown cannot change it…
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_cents: 1 })).json().error).toMatch(/закупівельна/);
+      expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_milli: 1 })).json().error).toMatch(/закупівельна/);
+      // The ingredient's usual loss is the kitchen's figure, not the menu's.
+      expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { prep_loss_bps: 2000 })).json().error).toMatch(/відходи/);
       // …while the same value is not a change.
       expect((await call('PATCH', `/variants/${variantId}`, marketerToken, { cost_cents: 4_500, price_cents: 19_500 })).statusCode).toBe(200);
 
@@ -321,6 +331,130 @@ describe.skipIf(!hasDb)('POS «Маркетолог» role (МР1)', () => {
       expect((await call('GET', '/markdowns', marketerToken)).json().code).toBe('role_forbidden');
       // And the seller still reaches none of it.
       expect((await call('GET', '/products', store.sellerToken)).statusCode).toBe(403);
+    });
+
+    // МР5: the recipe is the kitchen's — she reads what goes in, never how much.
+    it('reads a dish’s recipe as names without grams, and her edit never touches it', async () => {
+      const beets = await call('POST', '/products', store.ownerToken, {
+        name: 'Буряк',
+        sellable: false,
+        allergens: ['celery'],
+        variants: [{ attributes: {}, unit: 'г', price_cents: 0, quantity: 0 }],
+      });
+      const beet = Number(beets.json().variants[0].id);
+      const dish = await call('POST', '/products', store.ownerToken, {
+        name: 'Салат з буряка',
+        kind: 'composite',
+        stock_mode: 'derived',
+        variants: [{ attributes: {}, price_cents: 9_000, components: [{ component_variant_id: beet, quantity: 125, loss_bps: 2000 }] }],
+      });
+      expect(dish.statusCode).toBe(201);
+      const dishId = Number(dish.json().id);
+      const dishVariant = Number(dish.json().variants[0].id);
+
+      const seen = (await call('GET', `/products/${dishId}`, marketerToken)).json();
+      expect(seen.variants[0].components).toEqual([
+        expect.objectContaining({ component_variant_id: beet, product_name: 'Буряк', unit: 'г' }),
+      ]);
+      expect(seen.variants[0].components[0]).not.toHaveProperty('quantity');
+      expect(seen.variants[0].components[0]).not.toHaveProperty('loss_bps');
+      // The ingredient's own allergens reach her list — the hint under the dish's chips reads them.
+      const list = (await call('GET', '/products', marketerToken)).json() as Array<{ name: string; allergens?: string[] }>;
+      expect(list.find((p) => p.name === 'Буряк')?.allergens).toEqual(['celery']);
+
+      // A card opened before the change sends a recipe back; it is not hers to set, and nothing moves.
+      const saved = await call('PATCH', `/variants/${dishVariant}`, marketerToken, {
+        price_cents: 9_500,
+        components: [{ component_variant_id: beet, quantity: 1 }],
+      });
+      expect(saved.statusCode).toBe(200);
+      const owner = (await call('GET', `/products/${dishId}`, store.ownerToken)).json();
+      expect(owner.variants[0]).toMatchObject({ price_cents: 9_500 });
+      expect(owner.variants[0].components).toEqual([
+        expect.objectContaining({ component_variant_id: beet, quantity: 125, loss_bps: 2000 }),
+      ]);
+    });
+
+    it('edits a question’s answers and prices, never what an answer writes off', async () => {
+      const milk = await call('POST', '/products', store.ownerToken, {
+        name: 'Молоко вівсяне',
+        sellable: false,
+        variants: [{ attributes: {}, unit: 'мл', price_cents: 0, quantity: 0 }],
+      });
+      const milkId = Number(milk.json().variants[0].id);
+      const group = await call('POST', '/modifier-groups', store.ownerToken, {
+        name: 'Молоко',
+        min_select: 0,
+        max_select: 1,
+        modifiers: [{ name: 'вівсяне', price_delta_cents: 2_000, component_variant_id: milkId, component_quantity: 150 }],
+      });
+      expect(group.statusCode).toBe(201);
+      const groupId = Number(group.json().id);
+      const answerId = Number(group.json().modifiers[0].id);
+
+      // The menu's half: a name and a price, the write-off left out — kept as it was.
+      const renamed = await call('PUT', `/modifier-groups/${groupId}`, marketerToken, {
+        name: 'Молоко',
+        min_select: 0,
+        max_select: 1,
+        modifiers: [{ id: answerId, name: 'вівсяне (Alpro)', price_delta_cents: 2_500 }],
+      });
+      expect(renamed.statusCode).toBe(200);
+      expect(renamed.json().modifiers[0]).toMatchObject({
+        name: 'вівсяне (Alpro)',
+        price_delta_cents: 2_500,
+        component_variant_id: milkId,
+        component_quantity: 150,
+      });
+      // Repeating what is stored is not a change.
+      const same = await call('PATCH', `/modifiers/${answerId}`, marketerToken, {
+        price_delta_cents: 2_600,
+        component_variant_id: milkId,
+        component_quantity: 150,
+      });
+      expect(same.statusCode).toBe(200);
+
+      // The kitchen's half: refused in words, every way in.
+      const pour = await call('PATCH', `/modifiers/${answerId}`, marketerToken, { component_quantity: 200 });
+      expect(pour.statusCode).toBe(403);
+      expect(pour.json()).toMatchObject({ code: 'role_forbidden' });
+      expect(pour.json().error).toMatch(/списання зі складу/);
+      const whole = await call('PUT', `/modifier-groups/${groupId}`, marketerToken, {
+        name: 'Молоко',
+        min_select: 0,
+        max_select: 1,
+        modifiers: [{ id: answerId, name: 'вівсяне', price_delta_cents: 2_500, component_variant_id: null }],
+      });
+      expect(whole.statusCode).toBe(403);
+      const added = await call('POST', `/modifier-groups/${groupId}/modifiers`, marketerToken, {
+        name: 'кокосове',
+        price_delta_cents: 3_000,
+        component_variant_id: milkId,
+        component_quantity: 150,
+      });
+      expect(added.statusCode).toBe(403);
+      const fresh = await call('POST', '/modifier-groups', marketerToken, {
+        name: 'Сироп',
+        min_select: 0,
+        max_select: 1,
+        modifiers: [{ name: 'карамель', price_delta_cents: 1_500, component_variant_id: milkId, component_quantity: 20 }],
+      });
+      expect(fresh.statusCode).toBe(403);
+      // An answer of her own that writes nothing off is the menu's.
+      const plainAnswer = await call('POST', `/modifier-groups/${groupId}/modifiers`, marketerToken, {
+        name: 'без молока',
+        price_delta_cents: 0,
+      });
+      expect(plainAnswer.statusCode).toBe(201);
+
+      // The owner still changes the write-off as before.
+      const ownerPour = await call('PATCH', `/modifiers/${answerId}`, store.ownerToken, {
+        component_variant_id: milkId,
+        component_quantity: 200,
+      });
+      expect(ownerPour.statusCode).toBe(200);
+      const after = (await pool.query(`SELECT component_quantity FROM pos_modifiers WHERE id = $1`, [answerId])).rows[0];
+      expect(Number(after.component_quantity)).toBe(200);
     });
   });
 

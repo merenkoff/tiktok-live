@@ -21,6 +21,7 @@
 // kitchen (no menu to put it on) sees nothing either.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, assetUrl, formatUahCompact, uahInputToCents } from '@pos/platform';
 import { ImagePlus, Trash2 } from '../../platform/glyphs';
 import { SectionHead } from '../../components/ui/Page';
@@ -43,6 +44,21 @@ interface StoreProfile {
   google_url: string | null;
   /** Phase F2: the own-alcohol terms the menu shows under the name, or null for none. */
   corkage: Corkage | null;
+  /**
+   * Migration 105: whether the terms are shown, the terms kept while they are
+   * off, and the product the waiter rings (its price IS the fee). Absent from
+   * an older server, which reads as «on while `corkage` is set».
+   */
+  corkage_on?: boolean;
+  corkage_terms?: Corkage | null;
+  corkage_product?: CorkageProduct | null;
+}
+
+interface CorkageProduct {
+  id: number;
+  name: string;
+  price_cents: number | null;
+  active: boolean;
 }
 
 interface Corkage {
@@ -135,6 +151,39 @@ function errorText(error: unknown): string {
   return res?.data?.error || 'Не вдалося зберегти. Спробуйте ще раз.';
 }
 
+/**
+ * The product the waiter rings for the fee (migration 105): its price is the
+ * fee, so this line names it and opens its card, where the price may be
+ * changed too. Before the first save there is none — saving makes it.
+ */
+function CorkageProductLine({ product }: { product: CorkageProduct | null }) {
+  if (!product) {
+    return (
+      <p className="text-xs text-sq-muted" data-testid="corkage-product">
+        Після збереження з’явиться товар «Корковий збір»: офіціант додає його в рахунок, гість його в меню не бачить.
+      </p>
+    );
+  }
+  if (!product.active) {
+    return (
+      <p className="text-xs text-sq-muted" data-testid="corkage-product">
+        Товар «{product.name}» зараз прибрано з каси (збір 0 ₴ або вимкнено). Збережіть суму більше нуля — він
+        повернеться.
+      </p>
+    );
+  }
+  return (
+    <p className="text-[13px] text-sq-secondary" data-testid="corkage-product">
+      У чек додається товар{' '}
+      <Link to={`/admin/products/${product.id}`} className="font-semibold text-sq-blue underline">
+        «{product.name}»
+      </Link>
+      {product.price_cents != null && <> · {formatUahCompact(product.price_cents)}</>}. Ціна товару і є збором: змінили
+      її тут чи в картці — гість бачить ту саму суму.
+    </p>
+  );
+}
+
 export function StoreProfileCard() {
   const [state, setState] = useState<LoadState>('loading');
   const [saved, setSaved] = useState<StoreProfile | null>(null);
@@ -166,10 +215,13 @@ export function StoreProfileCard() {
     setFacebook(view.facebook ?? '');
     setTiktok(view.tiktok ?? '');
     setGoogleUrl(view.google_url ?? '');
-    setCorkageOn(view.corkage != null);
-    setCorkageFee(view.corkage ? uahText(view.corkage.fee_cents) : '');
-    setCorkageMin(view.corkage ? uahText(view.corkage.min_food_cents) : '');
-    setCorkageNote(view.corkage?.note ?? '');
+    // Switched off, the terms are still there (105): ticking the box again
+    // brings back what the place had, not an empty form.
+    const terms = view.corkage ?? view.corkage_terms ?? null;
+    setCorkageOn(view.corkage_on ?? view.corkage != null);
+    setCorkageFee(terms ? uahText(terms.fee_cents) : '');
+    setCorkageMin(terms ? uahText(terms.min_food_cents) : '');
+    setCorkageNote(terms?.note ?? '');
     setWeek(toDraft(view.hours));
   }, []);
 
@@ -544,10 +596,16 @@ export function StoreProfileCard() {
               <p className="text-xs text-sq-muted">
                 Гість побачить «{corkagePreview(corkageFee, corkageMin)}» одразу під назвою закладу — з QR столу і з
                 QR закладу, — а умови за дотиком «Умови». Та сама позначка буде в рахунку столу й на нових
-                роздрукованих QR-картках. 0 — якщо свій алкоголь без збору. Сам збір у чек додає офіціант: заведіть
-                товар «Корковий збір» і відмітьте в ньому «Не показувати в QR-меню».
+                роздрукованих QR-картках. 0 — якщо свій алкоголь без збору.
               </p>
+              <CorkageProductLine product={saved?.corkage_product ?? null} />
             </>
+          )}
+          {!corkageOn && saved?.corkage_product && (
+            <p className="text-xs text-sq-muted" data-testid="corkage-product">
+              Товар «{saved.corkage_product.name}» прибрано з каси, умови збережено. Увімкніть — повернеться той
+              самий товар.
+            </p>
           )}
         </fieldset>
 

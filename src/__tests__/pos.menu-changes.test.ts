@@ -84,6 +84,19 @@ describe('menu change diff (pure)', () => {
     expect(diffProduct(before, card({ variants: [{ id: 10, label: 'M', unit: 'шт', price_cents: 6000, cost_cents: 1500, quantity: 99, is_active: true, components: [] }] }), names).changes).toEqual([]);
   });
 
+  it('journals a purchase price the way it is read — per kilogram, to the kopeck', () => {
+    const sugar = (cost_milli: number) =>
+      card({ variants: [{ id: 10, label: '', unit: 'г', price_cents: 0, cost_cents: Math.round(cost_milli / 1000), cost_milli, quantity: 0, is_active: true, components: [] }] });
+    // 35,50 → 36,20 ₴/кг: both round to «4 kopecks a gram», and it is still a change.
+    expect(diffProduct(sugar(3550), sugar(3620), names).changes).toEqual([
+      { field: 'variant.cost', variant: '', from: '35,50 ₴/кг', to: '36,20 ₴/кг' },
+    ]);
+    expect(diffProduct(sugar(0), sugar(4000), names).changes).toEqual([
+      { field: 'variant.cost', variant: '', from: null, to: '40 ₴/кг' },
+    ]);
+    expect(diffProduct(sugar(3550), sugar(3550), names).changes).toEqual([]);
+  });
+
   it('says create with the variants and their prices, archive and restore by the card', () => {
     expect(diffProduct(null, card(), names)).toEqual({
       action: 'create',

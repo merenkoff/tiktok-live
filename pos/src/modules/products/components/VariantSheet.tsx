@@ -6,26 +6,24 @@ import { useState, type FormEvent } from 'react';
 import { uahInputToCents } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { AttributeFields } from '@pos/platform/ui';
-import { CompositionEditor } from './CompositionEditor';
+import { SkuField } from './SkuField';
 import { Dialog } from './Dialog';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
 import { BottleField } from './BottleField';
 import { PackFields } from './PackFields';
-import { TechCardLine } from './TechCardLine';
 import { VariantDiscountEditor } from './VariantDiscountEditor';
 import { useMenuOnly } from '../lib/menuOnly';
-import type { ComponentOption } from './componentOptions';
 import { captionClass } from './formStyles';
 import { canonicalColour, type ColourUse } from '../lib/variantMatrix';
-import type { TechCardRow } from '../data/techCardsApi';
 import { centsToInput, rowName, type VariantDraft } from '../lib/productDraft';
 import type { ProductShape } from '../lib/productShape';
-import { costBaseText, costPerKgText, isWeighedUnit, priceCaption, stockText, unitLabels } from '../lib/weighedUnit';
+import { isWeighedUnit, priceCaption, stockText, unitLabels } from '../lib/weighedUnit';
+import { pricingUnit } from '../lib/recipeCost';
 
 /**
  * One variant, every field, in a sheet: the table on the card keeps the daily
  * ones in place and this holds the rest — the markdown, the purchase price,
- * the pack, the attributes, and for a composite its recipe. It edits a LOCAL
+ * the pack and the attributes (a composite's recipe is on the card itself). It edits a LOCAL
  * copy: «Готово» hands it to the card's draft (saved with the card's own
  * «Зберегти»), the X throws it away. Nothing here touches the server.
  */
@@ -34,9 +32,8 @@ export function VariantSheet({
   shape,
   vertical,
   colours,
-  partOptions,
-  techCard,
   bottle,
+  tagIds,
   onApply,
   onArchive,
   onClose,
@@ -46,8 +43,8 @@ export function VariantSheet({
   vertical: VerticalPublicConfig;
   /** The store's colours, most used first — a typed colour folds into their spelling. */
   colours: ColourUse[];
-  partOptions: ComponentOption[];
-  techCard?: TechCardRow;
+  /** The card's tags, so «Наступний» can lead with this category's series. */
+  tagIds: number[];
   /**
    * Ask «Пляшка за маркою, мл» (ДК5) — in a store that fiscalises (Д17), with
    * the product's excise fields as the card's draft holds them.
@@ -62,11 +59,11 @@ export function VariantSheet({
   const [local, setLocal] = useState<VariantDraft>(variant);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<VariantDraft>) => setLocal((prev) => ({ ...prev, ...patch }));
-  // Sold by weight here (G4_WEIGHED.md): the price is per kilogram already,
-  // while the purchase price is stored per gram — typed per kilogram, kept
-  // as typed on screen and stored with the per-gram step.
+  // Sold by weight here (G4_WEIGHED.md): the selling price is per kilogram.
   const weighed = isWeighedUnit(vertical, local.unit);
-  const [costKg, setCostKg] = useState(() => costPerKgText(variant.cost));
+  // What the purchase price is typed per — a kilogram of grams, a litre of
+  // millilitres, a piece — whether or not the variant is sold by weight.
+  const costPer = pricingUnit(local.unit);
 
   const composite = shape !== '';
   const colourSpec = vertical.attributes.find((a) => a.key === 'color' && a.type === 'text');
@@ -116,15 +113,9 @@ export function VariantSheet({
     >
       <div className="space-y-5 py-1">
         {composite && !menuOnly && (
-          <section className="space-y-2 pb-4 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
-            <p className={captionClass}>Склад</p>
-            <CompositionEditor
-              value={local.components}
-              options={partOptions}
-              onChange={(components) => set({ components })}
-            />
-            <TechCardLine card={techCard} />
-          </section>
+          <p className="text-[13px] text-sq-muted" data-testid="variant-sheet-recipe-note">
+            Склад цього варіанта — у розділі «Рецепт» на картці, з цінами складників і собівартістю.
+          </p>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -154,16 +145,18 @@ export function VariantSheet({
             schema={otherSchema}
             value={local.attributes}
             onChange={(attributes) => set({ attributes })}
-            unit={{
-              value: local.unit,
-              options: vertical.units,
-              onChange: (unit) => {
-                set({ unit });
-                // The purchase price box follows what the unit means from here on.
-                setCostKg(costPerKgText(local.cost));
-              },
-              labels: unitLabels(vertical),
-            }}
+            // What the stock counts it in is the kitchen's (МР5): the marketer
+            // names the size and prices it.
+            unit={
+              menuOnly
+                ? undefined
+                : {
+                    value: local.unit,
+                    options: vertical.units,
+                    onChange: (unit) => set({ unit }),
+                    labels: unitLabels(vertical),
+                  }
+            }
           />
         </div>
 
@@ -182,29 +175,14 @@ export function VariantSheet({
             />
             {error && <span className="text-sm text-red-600">{error}</span>}
           </label>
-          {menuOnly ? null : weighed ? (
+          {menuOnly ? null : (
             <label className="flex flex-col gap-1.5">
-              <span className={captionClass}>Закупівельна ціна за 1 кг, грн</span>
-              <input
-                className="sq-input tabular-nums"
-                inputMode="decimal"
-                placeholder="Не вказано"
-                value={costKg}
-                onChange={(e) => {
-                  setCostKg(e.target.value);
-                  set({ cost: costBaseText(e.target.value) });
-                }}
-              />
-              <span className="text-[12px] text-sq-muted" data-testid="variant-cost-step">
-                Зберігається за 1 г з кроком 1 коп (10 ₴ за 1 кг)
-                {local.cost !== '' && costPerKgText(local.cost) !== centsToInput(uahInputToCents(costKg))
-                  ? ` — запишеться як ${costPerKgText(local.cost)} ₴ за 1 кг`
-                  : ''}
+              {/* Grams are bought by the kilogram and millilitres by the litre,
+                  whether or not the variant is SOLD by weight: the box takes the
+                  figure on the delivery note, kept to the kopeck (costUnits.ts). */}
+              <span className={captionClass} data-testid="variant-cost-caption">
+                {costPer.per > 1 ? `Закупівельна ціна за 1 ${costPer.label}, грн` : 'Закупівельна ціна, грн'}
               </span>
-            </label>
-          ) : (
-            <label className="flex flex-col gap-1.5">
-              <span className={captionClass}>Закупівельна ціна, грн</span>
               <input
                 className="sq-input tabular-nums"
                 inputMode="decimal"
@@ -222,24 +200,30 @@ export function VariantSheet({
           onChange={(priceCents, compareAtCents) => set({ price: centsToInput(priceCents), compareAtCents })}
         />
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5">
-            <span className={captionClass}>Артикул (SKU)</span>
-            <input className="sq-input" value={local.sku} onChange={(e) => set({ sku: e.target.value })} />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className={captionClass}>Штрихкод</span>
-            <div className="flex gap-2">
-              <input
-                className="sq-input tabular-nums min-w-0"
-                inputMode="numeric"
-                value={local.barcode}
-                onChange={(e) => set({ barcode: e.target.value })}
-              />
-              <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
-            </div>
-          </label>
-        </div>
+        {/* The till's and the storeroom's codes (МР5) — not the menu's. */}
+        {!menuOnly && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SkuField
+              value={local.sku}
+              onChange={(sku) => set({ sku })}
+              tagIds={tagIds}
+              caption="Артикул (SKU)"
+              captionClass={captionClass}
+            />
+            <label className="flex flex-col gap-1.5">
+              <span className={captionClass}>Штрихкод</span>
+              <div className="flex gap-2">
+                <input
+                  className="sq-input tabular-nums min-w-0"
+                  inputMode="numeric"
+                  value={local.barcode}
+                  onChange={(e) => set({ barcode: e.target.value })}
+                />
+                <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
+              </div>
+            </label>
+          </div>
+        )}
 
         {!menuOnly && (
           <PackFields qty={local.pack.qty} label={local.pack.label} unit={local.unit} onChange={(pack) => set({ pack })} />

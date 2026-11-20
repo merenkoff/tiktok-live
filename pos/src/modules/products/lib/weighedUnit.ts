@@ -15,9 +15,8 @@
 // Pure, no I/O: `weighedUnit.test.ts` pins it. Nothing here runs for a store
 // whose vertical weighs nothing, which is every store until groceries (PR4).
 
-import { displayUnit, formatQuantity, parseWeightInput, uahInputToCents, WEIGHED_PRICE_PER } from '@pos/platform';
+import { displayUnit, formatQuantity, parseWeightInput, WEIGHED_PRICE_PER } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
-import { centsToInput } from './productDraft';
 
 /** Whether a variant in `unit` is sold by weight in this store — what the server will derive. */
 export function isWeighedUnit(vertical: Pick<VerticalPublicConfig, 'weighedUnits'>, unit: string): boolean {
@@ -48,18 +47,3 @@ export function openingStockOf(text: string, weighed: boolean): number {
   return Number(text) || 0;
 }
 
-/** A per-gram purchase price («0.12») as the per-kilogram text the owner reads («120»). */
-export function costPerKgText(baseText: string): string {
-  if (baseText.trim() === '') return '';
-  return centsToInput(uahInputToCents(baseText) * WEIGHED_PRICE_PER);
-}
-
-/**
- * A per-kilogram purchase price as the per-gram text the card stores: 119,90
- * ₴/кг is 11,99 kopecks a gram, kept as 12 — the step `cost_cents` has always
- * had (TechDocs/grocery/G4_WEIGHED.md, «Відомі обмеження»).
- */
-export function costBaseText(perKgText: string): string {
-  if (perKgText.trim() === '') return '';
-  return centsToInput(Math.round(uahInputToCents(perKgText) / WEIGHED_PRICE_PER));
-}

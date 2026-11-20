@@ -5,7 +5,8 @@
 import { displayUnit, WEIGHED_PRICE_PER } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { AttributeFields } from '@pos/platform/ui';
-import { CompositionEditor } from './CompositionEditor';
+import { SkuField } from './SkuField';
+import { RecipeEditor } from './RecipeEditor';
 import { useMenuOnly } from '../lib/menuOnly';
 import type { ComponentOption } from './componentOptions';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
@@ -27,6 +28,7 @@ export function NewVariantFields({
   shape,
   partOptions,
   compact,
+  tagIds,
 }: {
   vertical: VerticalPublicConfig;
   value: NewVariantValues;
@@ -35,6 +37,8 @@ export function NewVariantFields({
   partOptions: ComponentOption[];
   /** Inside a dialog: one column, no two-column grid. */
   compact?: boolean;
+  /** The card's tags, so «Наступний» can lead with this category's series. */
+  tagIds?: number[];
 }) {
   const menuOnly = useMenuOnly();
   const grid = compact ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-2';
@@ -49,7 +53,13 @@ export function NewVariantFields({
         schema={vertical.attributes}
         value={value.attributes}
         onChange={(attributes) => set({ attributes })}
-        unit={{ value: value.unit, options: vertical.units, onChange: (unit) => set({ unit }), labels: unitLabels(vertical) }}
+        // The unit, the article and the barcode are the kitchen's and the
+        // till's (МР5): the marketer names a size and prices it.
+        unit={
+          menuOnly
+            ? undefined
+            : { value: value.unit, options: vertical.units, onChange: (unit) => set({ unit }), labels: unitLabels(vertical) }
+        }
       />
       <label className="flex flex-col gap-1.5">
         <span className={captionClass}>{priceCaption(weighed, value.unit)}</span>
@@ -79,8 +89,9 @@ export function NewVariantFields({
         </label>
       )}
       {shape && !menuOnly && (
-        <div className="sm:col-span-2">
-          <CompositionEditor
+        <div className="sm:col-span-2 space-y-1">
+          <p className={captionClass}>Склад</p>
+          <RecipeEditor
             value={value.components}
             options={partOptions}
             onChange={(components) => set({ components })}
@@ -88,21 +99,28 @@ export function NewVariantFields({
           <p className="text-[13px] text-sq-muted mt-1.5">{compositionHint(shape)}</p>
         </div>
       )}
-      <label className="flex flex-col gap-1.5">
-        <span className={captionClass}>Артикул (SKU) — ваш внутрішній код</span>
-        <input className="sq-input" value={value.sku} onChange={(e) => set({ sku: e.target.value })} />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className={captionClass}>Штрихкод — те, що читає сканер</span>
-        <div className="flex gap-2">
-          <input
-            className="sq-input tabular-nums min-w-0"
-            value={value.barcode}
-            onChange={(e) => set({ barcode: e.target.value })}
-          />
-          <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
-        </div>
-      </label>
+      {!menuOnly && (
+        <SkuField
+          value={value.sku}
+          onChange={(sku) => set({ sku })}
+          tagIds={tagIds ?? []}
+          caption="Артикул (SKU) — ваш внутрішній код"
+          captionClass={captionClass}
+        />
+      )}
+      {!menuOnly && (
+        <label className="flex flex-col gap-1.5">
+          <span className={captionClass}>Штрихкод — те, що читає сканер</span>
+          <div className="flex gap-2">
+            <input
+              className="sq-input tabular-nums min-w-0"
+              value={value.barcode}
+              onChange={(e) => set({ barcode: e.target.value })}
+            />
+            <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
+          </div>
+        </label>
+      )}
       {!menuOnly && (
       <PackFields
         className="sm:col-span-2"

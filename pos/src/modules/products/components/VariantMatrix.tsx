@@ -3,8 +3,17 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildCells, cellKey, existingKeys, MAX_MATRIX_ROWS, type Cell, type ColourUse } from '../lib/variantMatrix';
+import {
+  buildCells,
+  cellKey,
+  existingKeys,
+  MAX_MATRIX_ROWS,
+  planArticles,
+  type Cell,
+  type ColourUse,
+} from '../lib/variantMatrix';
 import { ColourAxis, SizeAxis } from './MatrixAxes';
+import { SkuField } from './SkuField';
 import { matrixCaption as caption, useMatrixAxes } from '../lib/useMatrixAxes';
 
 /** One variant the matrix will create, in the shape the batch endpoint takes. */
@@ -14,6 +23,7 @@ export interface MatrixVariant {
   price_cents: number;
   cost_cents?: number;
   quantity: number;
+  sku?: string;
   barcode?: string;
 }
 
@@ -38,6 +48,7 @@ function parseMoney(text: string): number | null {
 interface RowEdit {
   price?: string;
   qty?: string;
+  sku?: string;
   barcode?: string;
   removed?: boolean;
 }
@@ -53,6 +64,12 @@ interface RowEdit {
  * never created twice. Barcodes are left to the server when the vertical mints
  * them (`autoBarcode`) — the field is only for one that came printed on a tag.
  *
+ * Articles are the shop's own numbering, so they are never invented here: the
+ * owner gives the first one («Наступний» reads it off the articles already
+ * handed out, `SkuField`) and the rows count on from it — the index is unique
+ * per store, so every variant gets its own. Each row shows the number it will
+ * get and takes another typed over it; an empty field numbers nothing.
+ *
  * It owns nothing the parent must persist: every change is reported through
  * `onChange` as the list of variants to send, plus the reason it cannot be
  * saved yet.
@@ -64,6 +81,7 @@ export function VariantMatrix({
   autoBarcode,
   onChange,
   resetKey = 0,
+  tagIds,
 }: {
   unit: string;
   /** The store's colours, most used first — suggestions, and the spellings to reuse. */
@@ -74,17 +92,22 @@ export function VariantMatrix({
   onChange: (result: MatrixResult) => void;
   /** Change it to clear every pick — the edit form does after a batch has been saved. */
   resetKey?: number;
+  /** The card's tags, so «Наступний» can lead with this category's series. */
+  tagIds?: number[];
 }) {
   const axes = useMatrixAxes({ vocabulary, resetKey });
   const { colours, sizes } = axes;
   const [price, setPrice] = useState('');
   const [cost, setCost] = useState('');
   const [qty, setQty] = useState('0');
+  /** The first article; the rows count on from it. Empty numbers nothing. */
+  const [sku, setSku] = useState('');
   const [edits, setEdits] = useState<Record<string, RowEdit>>({});
 
   useEffect(() => {
     if (resetKey === 0) return;
     setEdits({});
+    setSku('');
   }, [resetKey]);
 
   const have = useMemo(() => existingKeys(existing ?? []), [existing]);
@@ -98,6 +121,14 @@ export function VariantMatrix({
       }),
     [cells, have, existing, edits]
   );
+
+  // The article each row to be created will carry, by its key — what the
+  // row's field shows as its placeholder and what is sent.
+  const articles = useMemo(() => {
+    const live = rows.filter((r) => !r.exists && !r.edit.removed);
+    const plan = planArticles(sku, live.map((r) => r.edit.sku));
+    return { byKey: new Map(live.map((r, i) => [r.key, plan.skus[i] ?? ''])), problem: plan.problem };
+  }, [rows, sku]);
 
   const result = useMemo<MatrixResult>(() => {
     const live = rows.filter((r) => !r.exists && !r.edit.removed);
@@ -137,17 +168,22 @@ export function VariantMatrix({
       if (row.cell.color) attributes.color = row.cell.color;
       if (row.cell.size) attributes.size = row.cell.size;
       const barcode = row.edit.barcode?.trim();
+      const article = articles.byKey.get(row.key);
       variants.push({
         attributes,
         unit,
         price_cents: own,
         ...(costCents != null && costCents > 0 ? { cost_cents: costCents } : {}),
         quantity: rowQty,
+        ...(article ? { sku: article } : {}),
         ...(barcode ? { barcode } : {}),
       });
     }
+    // Last: a price that is missing is the first thing to fix, and with no rows
+    // to create there is nothing for an article to repeat on.
+    if (live.length > 0) problem ??= articles.problem;
     return { variants: problem ? [] : variants, already, problem };
-  }, [rows, price, cost, qty, unit, existing, colours, sizes]);
+  }, [rows, price, cost, qty, unit, existing, colours, sizes, articles]);
 
   // Report only a real change: the parent re-renders on every report, and the
   // result is rebuilt from a memo, so comparing the text keeps this from looping.
@@ -203,6 +239,23 @@ export function VariantMatrix({
         </label>
       </div>
 
+      <div className="space-y-1.5">
+        {/* Its own block, not a third of the price row: the list of series opens under the field and needs the width. */}
+        <div className="sm:max-w-md">
+          <SkuField
+            value={sku}
+            onChange={setSku}
+            tagIds={tagIds ?? []}
+            caption="Артикул першого варіанта"
+            captionClass={caption}
+          />
+        </div>
+        <p className="text-[13px] text-sq-muted">
+          Кожен варіант отримає наступний номер — його видно в рядку, і там же його можна замінити. Порожнє поле —
+          без артикулів.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <p className="text-[13px] text-sq-secondary" aria-live="polite" data-testid="matrix-summary">
           {toCreate === 1 ? 'Буде створено 1 варіант' : `Буде створено варіантів: ${toCreate}`}
@@ -218,7 +271,8 @@ export function VariantMatrix({
                 data-testid={`matrix-row-${i}`}
                 className={`flex flex-wrap items-center gap-2 ${row.exists || struck ? 'opacity-50' : ''}`}
               >
-                <span className={`flex-1 min-w-[9rem] text-[15px] text-sq-text ${struck ? 'line-through' : ''}`}>
+                {/* 7.5rem, not 9: with the article field the row must still fit the card's column on one line. */}
+                <span className={`flex-1 min-w-[7.5rem] text-[15px] text-sq-text ${struck ? 'line-through' : ''}`}>
                   {label}
                   {row.exists && <span className="ml-2 text-[13px] text-sq-muted">вже є</span>}
                 </span>
@@ -244,6 +298,16 @@ export function VariantMatrix({
                         value={row.edit.qty ?? ''}
                         disabled={struck}
                         onChange={(e) => edit(row.key, { qty: e.target.value })}
+                      />
+                    </div>
+                    <div className="w-24 shrink-0">
+                      <input
+                        className="sq-input"
+                        aria-label={`Артикул: ${label}`}
+                        placeholder={(!struck && articles.byKey.get(row.key)) || 'артикул'}
+                        value={row.edit.sku ?? ''}
+                        disabled={struck}
+                        onChange={(e) => edit(row.key, { sku: e.target.value })}
                       />
                     </div>
                     <div className="w-32 shrink-0">

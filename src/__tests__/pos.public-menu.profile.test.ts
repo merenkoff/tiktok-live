@@ -612,6 +612,9 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         tiktok: null,
         google_url: null,
         corkage: null,
+        corkage_on: false,
+        corkage_terms: null,
+        corkage_product: null,
       });
       expect((await profile(boutique.ownerToken)).json().available).toBe(false);
     });
@@ -665,6 +668,9 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         tiktok: null,
         google_url: null,
         corkage: null,
+        corkage_on: false,
+        corkage_terms: null,
+        corkage_product: null,
       });
 
       // A card that only changed the phone must not wipe the rest by not mentioning it.

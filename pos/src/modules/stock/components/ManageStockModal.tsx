@@ -16,8 +16,8 @@ import {
 import type { OnHandRow, PackMode } from '@pos/platform';
 import { Segmented, Warehouse, X } from '@pos/platform/ui';
 import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
+import { costMilliOf, milliToCents } from '../../../lib/costUnits';
 import {
-  costStepNote,
   costUnit,
   countPack,
   countUnit,
@@ -27,7 +27,7 @@ import {
   shownCost,
   shownQty,
   stockText,
-  typedCostToBase,
+  typedCostToMilli,
   typedToBase,
 } from '../lib/stockUnits';
 
@@ -58,7 +58,7 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
   // base units otherwise. Base units are what leaves.
   const qtyText = (n: number) => (isWeighedRow(row) ? formatDecimal(n) : String(n));
   const [qty, setQty] = useState(() => qtyText(shownQty(row, 'base', row.quantity)));
-  const [cost, setCost] = useState(String((shownCost(row, 'base', row.cost_cents) / 100).toFixed(2)));
+  const [cost, setCost] = useState(String((shownCost(row, 'base', costMilliOf(row)) / 100).toFixed(2)));
   const [reason, setReason] = useState('data_fix');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -71,8 +71,8 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
    */
   function switchPackMode(next: PackMode): void {
     if (!pack || next === packMode) return;
-    const perBase = typedCostToBase(row, packMode, uahInputToCents(cost));
-    setCost((Math.round(shownCost(row, next, perBase)) / 100).toFixed(2));
+    const perBase = typedCostToMilli(row, packMode, uahInputToCents(cost));
+    setCost((shownCost(row, next, perBase) / 100).toFixed(2));
     setPackMode(next);
   }
 
@@ -100,9 +100,10 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
         await api.addStockDocumentLine(doc.id, {
           variant_id: row.variant_id,
           quantity: n,
-          // Typed per pack or per kilogram — `unit_cost_cents` has only ever
-          // meant whole cents per BASE unit.
-          unit_cost_cents: Math.round(typedCostToBase(row, packMode, uahInputToCents(cost))),
+          // Typed per pack, per kilogram or per piece — sent per BASE unit, in
+          // thousandths of a kopeck, with the rounded figure an older backend reads.
+          unit_cost_milli: typedCostToMilli(row, packMode, uahInputToCents(cost)),
+          unit_cost_cents: milliToCents(typedCostToMilli(row, packMode, uahInputToCents(cost))),
         });
         await api.postStockDocument(doc.id, crypto.randomUUID());
       } else if (mode === 'writeoff') {
@@ -253,14 +254,6 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
                 onChange={(e) => setCost(e.target.value)}
                 className="sq-input"
               />
-              {(() => {
-                const note = costStepNote(row, packMode, typedCostToBase(row, packMode, uahInputToCents(cost)));
-                return note ? (
-                  <span className="text-[12px] text-sq-muted" data-testid="stock-cost-step">
-                    {note}
-                  </span>
-                ) : null;
-              })()}
             </label>
           )}
 

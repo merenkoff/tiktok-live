@@ -125,31 +125,29 @@ test('the owner gives a bouquet its composition', async ({ page }) => {
 
   await expect(page.getByText('Складений · збираємо')).toBeVisible();
 
-  // The card is a page of its own (C1e); the recipe of one variant lives in
-  // that variant's sheet, behind «Ще».
+  // The card is a page of its own (C1e), and the recipe is ON it — a table
+  // with a line per stem, no sheet behind «Ще».
   await page.getByRole('link', { name: 'Букет «Ранковий»' }).click();
   await expect(page).toHaveURL(/\/admin\/products\/3$/);
-  await page.getByRole('button', { name: 'Ще · Рожевий' }).click();
-  const sheet = page.getByRole('dialog', { name: 'Рожевий' });
+  const recipe = page.getByTestId('recipe-section');
 
   // Six stems and a wrap go in today. The florist makes it nine stems and
   // drops the wrap.
-  const rows = sheet.getByTestId('composition-row');
+  const rows = recipe.getByTestId('composition-row');
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText('Троянда Freedom · Червона');
   await expect(rows.nth(1)).toContainText('Крафт-пакування');
 
   await rows.first().getByLabel('Кількість', { exact: true }).fill('9');
-  await rows.nth(1).getByRole('button', { name: 'Прибрати' }).click();
+  await rows.nth(1).getByTestId('recipe-remove').click();
   await expect(rows).toHaveCount(1);
 
-  await sheet.getByRole('button', { name: 'Готово' }).click();
-  await page.getByRole('button', { name: 'Зберегти' }).click();
+  await page.getByRole('button', { name: 'Зберегти', exact: true }).click();
 
   await expect.poll(() => variantPatches.length).toBeGreaterThan(0);
   // The composition travels whole — that is how "remove this component" is
   // expressible at all, and it is exactly how the server stores it.
-  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 9 }]);
+  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 9, loss_bps: 0 }]);
 });
 
 test('an existing plain product can be turned into a bouquet', async ({ page }) => {
@@ -190,27 +188,23 @@ test('an existing plain product can be turned into a bouquet', async ({ page }) 
     .getByLabel('Що це за товар')
     .selectOption({ label: 'Складений — збирається при продажу' });
 
-  // The recipe editor is in the variant's sheet, before saving: a variant with
-  // no caption is named «Варіант».
-  await page.getByRole('button', { name: 'Ще · Варіант' }).click();
-  const sheet = page.getByRole('dialog', { name: 'Варіант' });
-  await sheet
-    .getByLabel('Складник', { exact: true })
-    .selectOption({ label: 'Троянда Freedom · Червона' });
-  await sheet.getByLabel('Кількість складника').fill('5');
-  await sheet.getByRole('button', { name: 'Додати', exact: true }).click();
-  await expect(sheet.getByTestId('composition-row')).toHaveCount(1);
-  await sheet.getByRole('button', { name: 'Готово' }).click();
+  // Choosing it puts the recipe section on the card: a stem is found by
+  // typing, and its count typed beside it.
+  const recipe = page.getByTestId('recipe-section');
+  await recipe.getByRole('combobox', { name: 'Додати складник' }).fill('троянда');
+  await recipe.getByRole('option', { name: /Троянда Freedom · Червона/ }).click();
+  await recipe.getByLabel('Кількість', { exact: true }).fill('5');
+  await expect(recipe.getByTestId('composition-row')).toHaveCount(1);
   await expect(page.getByText('Склад · 1')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Зберегти' }).click();
+  await page.getByRole('button', { name: 'Зберегти', exact: true }).click();
 
   await expect.poll(() => productPatches.length).toBeGreaterThan(1);
   // Simple → derived cannot be one write: the server refuses a composition on
   // a simple product, and refuses `derived` until every variant is composed.
   // So it goes through `own`, the composition lands, then the mode flips.
   expect(productPatches[0]).toMatchObject({ kind: 'composite', stock_mode: 'own' });
-  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 5 }]);
+  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 5, loss_bps: 0 }]);
   expect(productPatches[productPatches.length - 1]).toMatchObject({ stock_mode: 'derived' });
 });
 
