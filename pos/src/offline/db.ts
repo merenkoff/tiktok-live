@@ -91,6 +91,29 @@ export interface StaffUnlockRow {
    * reads, this keeps the offline `AuthResponse` itself complete.
    */
   moduleRemotes?: Record<string, string | ModuleRemoteEntry>;
+  /**
+   * The store's cash-rounding step — 0, 10 or 50 kopecks (НБУ № 25), cached
+   * from AuthResponse (optional on old rows → not rounded, as before).
+   *
+   * A logout wipes `pos_auth`, so a login without a network has only this row
+   * to rebuild the store from. Without the step the payment screen showed and
+   * printed the unrounded sum in a shop whose server rounds — the receipt and
+   * the sale then differ by up to 25 kopecks. Like every field below it is not
+   * indexed, so it needs no Dexie version bump.
+   */
+  cashRounding?: number;
+  /** «Покупцю є 18 років?» once per receipt (optional on old rows → not asked). */
+  ageCheck?: boolean;
+  /** The QR «Оцініть нас» on a receipt printed offline; `null` = the owner takes no feedback. */
+  feedbackUrl?: string | null;
+  /**
+   * The florist's assembly charge, basis points (optional on old rows → 0).
+   * The till prices a counter-assembled bouquet with it and the server prices
+   * the synced sale again — without it the two disagree by the whole charge.
+   */
+  floristLabourBps?: number;
+  /** Something is poured from a stamped bottle: «Пляшки» stays on the rail (optional on old rows → no entry). */
+  bottles?: boolean;
 }
 
 export type OutboxType = 'sale' | 'customer';
