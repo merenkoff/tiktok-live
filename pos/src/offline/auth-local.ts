@@ -84,8 +84,43 @@ export async function saveStaffUnlock(params: {
     moduleRemotes: params.auth.store.module_remotes ?? {},
     fiscalProvider: params.auth.store.fiscal?.provider ?? null,
     fiscal: params.auth.store.fiscal ?? null,
+    ...storeSettingsOf(params.auth.store, null),
   };
   await db.staffUnlock.put(row);
+}
+
+type StoreSettings = Pick<
+  StaffUnlockRow,
+  'cashRounding' | 'ageCheck' | 'feedbackUrl' | 'floristLabourBps' | 'bottles'
+>;
+
+/**
+ * The store's own settings that the sell screen and the receipt read off the
+ * session — everything in `AuthResponse['store']` that is neither identity nor
+ * one of the blocks cached above.
+ *
+ * A field the answer does not carry at all is «not said» (an older backend, an
+ * older cached auth), never «off»: it keeps what the row already knows, and on
+ * a first write is left out so the row reads exactly as an old one. `null` for
+ * `feedback_url` IS said — the owner takes no feedback — which is why this
+ * compares with `undefined` rather than using `??`.
+ */
+function storeSettingsOf(store: AuthResponse['store'], row: StaffUnlockRow | null): StoreSettings {
+  const said = <T,>(value: T | undefined, known: T | undefined): T | undefined =>
+    value !== undefined ? value : known;
+  const next: StoreSettings = {
+    cashRounding: said(store.cash_rounding, row?.cashRounding),
+    ageCheck: said(store.age_check, row?.ageCheck),
+    feedbackUrl: said(store.feedback_url, row?.feedbackUrl),
+    floristLabourBps: said(store.florist_labour_bps, row?.floristLabourBps),
+    bottles: said(store.bottles, row?.bottles),
+  };
+  // Dexie's `update` deletes a key it is handed as `undefined`; an absent key
+  // is the same thing said without the write.
+  for (const key of Object.keys(next) as Array<keyof StoreSettings>) {
+    if (next[key] === undefined) delete next[key];
+  }
+  return next;
 }
 
 /**
@@ -122,6 +157,10 @@ export async function updateStaffUnlockStoreFlags(auth: AuthResponse): Promise<v
     // tomorrow prints from this row.
     fiscal: auth.store.fiscal ?? null,
     moduleRemotes: auth.store.module_remotes ?? row.moduleRemotes ?? {},
+    // The owner who switches cash rounding on at noon expects tomorrow's
+    // offline morning to round too — and a row written by a build that did
+    // not keep these learns them here, without anyone typing a PIN again.
+    ...storeSettingsOf(auth.store, row),
   });
 }
 
@@ -165,6 +204,15 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
         static_image_url: row.qrStaticImageUrl ?? null,
       },
       auto_print_receipt: row.autoPrintReceipt ?? false,
+      // The settings the payment screen and the receipt read. A row written
+      // before they were kept yields what such a session always had: no
+      // rounding, no age question, no feedback QR, no assembly charge, no
+      // «Пляшки» — until the next online login or `/me` fills the row in.
+      cash_rounding: row.cashRounding ?? 0,
+      age_check: row.ageCheck ?? false,
+      feedback_url: row.feedbackUrl ?? null,
+      florist_labour_bps: row.floristLabourBps ?? 0,
+      bottles: row.bottles ?? false,
       // A row written before verticals existed yields clothing, which is what
       // that store was.
       vertical: row.vertical ?? DEFAULT_VERTICAL,
