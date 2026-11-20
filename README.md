@@ -41,16 +41,21 @@ commercially).
 
 ### Licence activation (disclosed)
 
-If you set `LICENSE_KEY`, the backend verifies that signed token locally and, on
-boot and once a day, sends a **licence-compliance** ping to `LICENSE_SERVER_URL`
-(default `https://the-live.shop`) carrying only the token, a random per-install
-id, the POS API version and `PUBLIC_BASE_URL` — **no user activity, catalogue or
-personal data**. It is best-effort and never disables anything: a missing,
-invalid or expired key, or an unreachable server, only changes what the
-owner-only `GET /api/pos/license/status` reports. This is a licence-compliance
-check, explicitly **not** a remote kill switch or undisclosed tracking (OwnNet
-1.1 §1.150). Leave `LICENSE_KEY` unset and the POS runs exactly as before, with
-status `unlicensed`. Details: [`TechDocs/POS_LICENSING.md`](TechDocs/POS_LICENSING.md).
+On boot and once a day the backend sends a **licence-compliance** ping to
+`LICENSE_SERVER_URL` (default `https://the-live.shop`) — **with or without a
+`LICENSE_KEY`**. It carries only: the licence token when one is set, a random
+per-install id, the POS API version, the origin the copy is served from
+(Railway's public domain, else the first origin of `CORS_ORIGINS`; nothing when
+neither is set) and whether it is a development run (`NODE_ENV` is not
+`production`). The receiving server also keeps the network address the ping came
+from. **No user activity, catalogue or personal data.** When `LICENSE_KEY` is
+set, the backend also verifies that signed token locally. The ping is
+best-effort and never disables anything: a missing, invalid or expired key, or
+an unreachable server, only changes what the owner-only
+`GET /api/pos/license/status` reports. This is a licence-compliance check,
+explicitly **not** a remote kill switch or undisclosed tracking (OwnNet 1.1
+§1.150). Without `LICENSE_KEY` the POS runs exactly as before, with status
+`unlicensed`. Details: [`TechDocs/POS_LICENSING.md`](TechDocs/POS_LICENSING.md).
 
 The official desktop cashier (POS 2.8.1+), only when the user presses «Встановити
 оновлення» (in-place update on macOS and Linux AppImage), adds one header to its

@@ -224,12 +224,14 @@ describe.skipIf(!hasDb)('licence activations (095)', () => {
     expect(await rowFor(keep)).toHaveLength(1);
   });
 
-  it('keeps the address a ping came from — the last X-Forwarded-For entry — and shows it for a copy that named no origin', async () => {
+  it('keeps the address a ping came from — X-Real-IP, the header Railway’s edge sets — and shows it for a copy that named no origin', async () => {
     const id = uuid();
+    // What production sends: the client in X-Real-IP, an edge node as the last
+    // X-Forwarded-For entry. The edge node is not the copy.
     const res = await app.inject({
       method: 'POST',
       url: '/api/license/activation',
-      headers: { 'x-forwarded-for': '10.0.0.1, 203.0.113.7' },
+      headers: { 'x-real-ip': '203.0.113.7', 'x-forwarded-for': '203.0.113.7, 152.233.40.1' },
       payload: { instance_id: id },
     });
     expect(res.statusCode).toBe(200);
@@ -241,7 +243,7 @@ describe.skipIf(!hasDb)('licence activations (095)', () => {
     const moved = await app.inject({
       method: 'POST',
       url: '/api/license/activation',
-      headers: { 'x-forwarded-for': '198.51.100.4' },
+      headers: { 'x-real-ip': '198.51.100.4', 'x-forwarded-for': '198.51.100.4, 152.233.40.1' },
       payload: { instance_id: id },
     });
     expect(moved.statusCode).toBe(200);
@@ -256,10 +258,62 @@ describe.skipIf(!hasDb)('licence activations (095)', () => {
     expect(inst.origins[0]).toMatchObject({ url: '', ip: '198.51.100.4' });
   });
 
-  it('remoteIpOf reads the last forwarded entry, else the socket address, and refuses junk', () => {
-    expect(remoteIpOf({ ip: '127.0.0.1', headers: { 'x-forwarded-for': 'a, b , 203.0.113.9' } })).toBe('203.0.113.9');
-    expect(remoteIpOf({ ip: '127.0.0.1', headers: { 'x-forwarded-for': ['203.0.113.1', '203.0.113.2'] } })).toBe('203.0.113.2');
-    expect(remoteIpOf({ ip: '127.0.0.1', headers: {} })).toBe('127.0.0.1');
-    expect(remoteIpOf({ ip: '127.0.0.1', headers: { 'x-forwarded-for': 'x'.repeat(80) } })).toBe('');
+  it('remoteIpOf prefers X-Real-IP, then the last forwarded entry, then the socket address, and takes nothing that is not an address', () => {
+    const socket = '127.0.0.1';
+    // Railway: the client is in X-Real-IP; the last forwarded entry is an edge node.
+    expect(remoteIpOf({ ip: socket, headers: { 'x-real-ip': '34.44.29.51', 'x-forwarded-for': '34.44.29.51, 152.233.40.1' } })).toBe('34.44.29.51');
+    expect(remoteIpOf({ ip: socket, headers: { 'x-real-ip': ' 2001:db8::7 ' } })).toBe('2001:db8::7');
+    // A proxy that sets no X-Real-IP: the entry it appended.
+    expect(remoteIpOf({ ip: socket, headers: { 'x-forwarded-for': 'a, b , 203.0.113.9' } })).toBe('203.0.113.9');
+    expect(remoteIpOf({ ip: socket, headers: { 'x-forwarded-for': ['203.0.113.1', '203.0.113.2'] } })).toBe('203.0.113.2');
+    // No proxy at all.
+    expect(remoteIpOf({ ip: socket, headers: {} })).toBe(socket);
+    // Junk in a header is skipped, never stored: the next source answers.
+    expect(remoteIpOf({ ip: socket, headers: { 'x-real-ip': '<script>', 'x-forwarded-for': '203.0.113.9' } })).toBe('203.0.113.9');
+    expect(remoteIpOf({ ip: socket, headers: { 'x-forwarded-for': 'x'.repeat(80) } })).toBe(socket);
+    expect(remoteIpOf({ ip: '', headers: { 'x-real-ip': 'not an address' } })).toBe('');
+  });
+
+  it('marks a development run: the copy’s own `dev`, kept per row, counted beside the installs and never instead of them', async () => {
+    const key = ephemeralKey();
+    const token = signLicenseToken({ kid: key.kid, licensee: 'Dev Mark Ltd', instance_limit: 1 }, key.priv);
+    const prod = uuid();
+    const dev = uuid();
+    const mixed = uuid();
+    await recordActivation({ token, instance_id: prod, public_base_url: 'https://prod.example.com' }, { keys: key.keys });
+    await recordActivation({ token, instance_id: dev, dev: true }, { keys: key.keys });
+    // One install seen both ways (the same database started with and without NODE_ENV): not a development copy.
+    await recordActivation({ token, instance_id: mixed, public_base_url: 'https://mixed.example.com' }, { keys: key.keys });
+    await recordActivation({ token, instance_id: mixed, dev: true }, { keys: key.keys });
+
+    const fp = (await rowFor(dev))[0].license_fingerprint as string;
+    expect((await rowFor(dev))[0].dev).toBe(true);
+    expect((await rowFor(prod))[0].dev).toBe(false);
+
+    const headers = { 'x-pos-super-token': superToken() };
+    const list = await app.inject({ method: 'GET', url: '/api/pos/super/licenses', headers });
+    const summary = list.json().find((l: { fingerprint: string }) => l.fingerprint === fp);
+    // The mark does not un-count a copy: three installs against a limit of one.
+    expect(summary).toMatchObject({ installs: 3, dev_installs: 1, over_limit: true });
+
+    const detail = (await app.inject({ method: 'GET', url: `/api/pos/super/licenses/${fp}`, headers })).json();
+    const byId = Object.fromEntries(detail.instances.map((i: { instance_id: string; dev: boolean }) => [i.instance_id, i.dev]));
+    expect(byId).toEqual({ [prod]: false, [dev]: true, [mixed]: false });
+
+    // The last ping's word wins on a row, and only the literal `true` marks it.
+    await recordActivation({ token, instance_id: dev }, { keys: key.keys });
+    expect((await rowFor(dev))[0].dev).toBe(false);
+    await recordActivation({ token, instance_id: dev, dev: 'yes' }, { keys: key.keys });
+    expect((await rowFor(dev))[0].dev).toBe(false);
+    await recordActivation({ token, instance_id: dev, dev: true }, { keys: key.keys });
+    expect((await rowFor(dev))[0].dev).toBe(true);
+  });
+
+  it('a copy older than the field sends no `dev` over the wire and stays unmarked', async () => {
+    const id = uuid();
+    expect((await ping({ instance_id: id })).statusCode).toBe(200);
+    expect((await rowFor(id))[0].dev).toBe(false);
+    expect((await ping({ instance_id: id, dev: true })).statusCode).toBe(200);
+    expect((await rowFor(id))[0]).toMatchObject({ dev: true, seen_count: 2 });
   });
 });

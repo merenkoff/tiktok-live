@@ -13,7 +13,9 @@
 // not disable software the user already lawfully runs") and what keeps us out
 // of §1.12(a) (kill switch) and §1.12(d) (undisclosed tracking): the ping
 // carries ONLY licence-compliance data — the token, a per-install id, the API
-// version and the public base URL — never user activity, catalogue or PII.
+// version, the origin the copy is served from and whether it is a development
+// run — never user activity, catalogue or PII. Every field of it is named in
+// README.md and NOTICE; a field added here is added there in the same commit.
 //
 // Best-effort throughout, like `qr.service.ts`'s reconcile path: fetch with a
 // hard timeout, and any failure is a `logger.warn` and a no-op, never a throw.
@@ -112,6 +114,21 @@ export interface HeartbeatResult {
 }
 
 /**
+ * Is this a development run? `NODE_ENV` is `production` in the published image
+ * (`Dockerfile`) and on every platform that builds Node for production; it is
+ * unset under `npm run dev`, on a developer's machine and in a cloud coding
+ * session. Those runs ping like any copy — the receiver marks them rather than
+ * dropping them, because a dropped ping cannot be told from one that never
+ * came — and without the mark each one is a «Без ключа» row that reads like a
+ * stranger's copy (migration 106). The copy's own word, like the origin: a
+ * label for the author's reader, nothing the receiver counts on. Pure over the
+ * env map, for the test.
+ */
+export function runsInDev(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV !== 'production';
+}
+
+/**
  * Verify the local token, ping the activation server, and cache the result.
  * Called on boot (`runBootHeartbeat`) and daily by the cron in `src/index.ts`.
  * Best-effort: returns the computed status and whether this ping reached the
@@ -149,6 +166,7 @@ export async function runLicenseHeartbeat(): Promise<HeartbeatResult> {
         instance_id: row.instance_id,
         pos_api_version: POS_API_VERSION,
         public_base_url: reportedOrigin(),
+        dev: runsInDev(),
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });

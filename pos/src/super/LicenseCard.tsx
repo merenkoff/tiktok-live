@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { superApi, superErrorText, type SuperLicenseDetail } from './superApi';
 import { formatWhen } from './leadLabels';
-import { licenseTitle, originLabel, originNote } from './licenseLabels';
+import { DEV_HINT, devLabel, licenseTitle, originLabel, originNote } from './licenseLabels';
 
 /**
  * One licence: the claim, the copy count against its limit, and every install
@@ -105,6 +105,11 @@ export function LicenseCard({
               {!lic.verified && (
                 <span className="rounded-full bg-sq-empty px-2 py-0.5 text-xs text-sq-secondary">ключ не підтверджено</span>
               )}
+              {devLabel(lic) && (
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800" title={DEV_HINT}>
+                  {devLabel(lic)}
+                </span>
+              )}
             </div>
 
             <section className="space-y-2">
@@ -114,9 +119,16 @@ export function LicenseCard({
                   <div key={inst.instance_id} className="rounded-sq border border-sq-divider p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm tabular-nums text-sq-text break-all">{inst.instance_id}</span>
-                      {inst.cloned && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">клон?</span>
-                      )}
+                      <span className="flex shrink-0 gap-1">
+                        {inst.dev && (
+                          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800" title={DEV_HINT}>
+                            розробка
+                          </span>
+                        )}
+                        {inst.cloned && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">клон?</span>
+                        )}
+                      </span>
                     </div>
                     <ul className="mt-2 space-y-1">
                       {inst.origins.map((o) => (
@@ -167,8 +179,8 @@ export function LicenseCard({
                 </button>
               )}
               <p className="text-xs text-sq-secondary">
-                Для рядка «Без ключа», що лишився від копії, якій ключ задали пізніше. Це лише історія пінгів — нічого
-                не вимикає.
+                Для рядка «Без ключа», що лишився від копії, якій ключ задали пізніше, або від запусків «розробка». Це
+                лише історія пінгів — нічого не вимикає.
               </p>
             </section>
           </>

@@ -15,12 +15,14 @@ No one may use this software as part of a "Closed System" (remote kill
 switches, undocumented data lock-in, anti-repair measures, or undisclosed
 user tracking), as defined in the LICENSE.
 
-Disclosed licence activation: when LICENSE_KEY is set, this software sends a
-licence-compliance ping (the token, a random per-install id, the POS API
-version and PUBLIC_BASE_URL — no user activity, catalogue or personal data) to
-LICENSE_SERVER_URL on boot and once a day. It is best-effort and never disables
-the software — a licence-compliance check, not a Closed System, consistent with
-the LICENSE. See README.md and TechDocs/POS_LICENSING.md.
+Disclosed licence activation: on boot and once a day this software sends a
+licence-compliance ping to LICENSE_SERVER_URL, with or without a LICENSE_KEY:
+the licence token when one is set, a random per-install id, the POS API
+version, the origin the copy is served from and whether it is a development
+run — no user activity, catalogue or personal data. The receiving server also
+keeps the network address the ping came from. It is best-effort and never
+disables the software — a licence-compliance check, not a Closed System,
+consistent with the LICENSE. See README.md and TechDocs/POS_LICENSING.md.
 
 Disclosed update check: when the user presses "install update", the official
 desktop cashier adds an X-Delivery-Token header (a licence fingerprint, a scope

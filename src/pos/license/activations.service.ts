@@ -24,6 +24,8 @@ export interface ActivationPing {
   instance_id?: unknown;
   pos_api_version?: unknown;
   public_base_url?: unknown;
+  /** `true` from a development run (migration 106); a copy older than the field sends none. */
+  dev?: unknown;
 }
 
 export class ActivationError extends Error {
@@ -60,20 +62,38 @@ interface RecordOptions {
   remoteIp?: string;
 }
 
+/** What an address may look like: IPv4 or IPv6 text, nothing else. */
+const ADDRESS_RE = /^[0-9a-fA-F:.]{3,45}$/;
+
+function addressOr(raw: unknown): string {
+  const text = (Array.isArray(raw) ? raw[raw.length - 1] : raw);
+  if (typeof text !== 'string') return '';
+  const last = text.split(',').map((part) => part.trim()).filter(Boolean).pop() ?? '';
+  return ADDRESS_RE.test(last) ? last : '';
+}
+
 /**
- * The address a request came from, behind Railway's edge: `request.ip` there
- * is the proxy's (TechDocs/POS_SINGLE_INSTANCE.md), the client's is the LAST
- * entry of `X-Forwarded-For` — the one the proxy itself appended, so a client
- * that sends its own header cannot put a made-up first entry in front of it.
- * Falls back to `request.ip` off the proxy (local dev, tests). Display only,
- * never a limiter key.
+ * The address a request came from, behind Railway's edge. `request.ip` there
+ * is the proxy's (TechDocs/POS_SINGLE_INSTANCE.md); the client's is in
+ * `X-Real-IP`, the header the edge sets for exactly this (Railway docs,
+ * «Public Networking → Specs & Limits»).
+ *
+ * Until 2026-11-20 this read the LAST entry of `X-Forwarded-For`, on the
+ * assumption that the edge appends the client there. It does not: that entry is
+ * the edge node the request came through. The author's own server was recorded
+ * as 152.233.13.165 (CDN77 Amsterdam) while Railway's HTTP log gave its real
+ * address, and a development copy on Google Cloud as 152.233.40.1 (CDN77
+ * Chicago) — an address that pointed at nobody. `X-Forwarded-For` is kept as
+ * the second choice for a proxy that sets no `X-Real-IP`, then `request.ip`
+ * off any proxy (local dev, tests). Display only, never a limiter key — so a
+ * header a client could forge elsewhere costs nothing here.
  */
 export function remoteIpOf(request: { ip: string; headers: Record<string, unknown> }): string {
-  const fwd = request.headers['x-forwarded-for'];
-  const raw = Array.isArray(fwd) ? fwd[fwd.length - 1] : fwd;
-  const last = typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(Boolean).pop() : undefined;
-  const ip = (last || request.ip || '').trim();
-  return ip.length <= 64 ? ip : '';
+  return (
+    addressOr(request.headers['x-real-ip']) ||
+    addressOr(request.headers['x-forwarded-for']) ||
+    addressOr(request.ip)
+  );
 }
 
 /**
@@ -99,12 +119,15 @@ export async function recordActivation(ping: ActivationPing, options: RecordOpti
     verdict.ok && Number.isInteger(verdict.claim.instance_limit) ? (verdict.claim.instance_limit as number) : null;
 
   const remoteIp = options.remoteIp?.trim() || null;
+  // Only the literal `true` marks a development run: anything else — absent
+  // from an older copy, or junk — leaves the row unmarked.
+  const dev = ping.dev === true;
 
   await pool.query(
     `INSERT INTO pos_license_activations
        (license_fingerprint, instance_id, public_base_url, verified, licensee, plan,
-        instance_limit, pos_api_version, first_seen, last_seen, seen_count, remote_ip)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, 1, $10)
+        instance_limit, pos_api_version, first_seen, last_seen, seen_count, remote_ip, dev)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, 1, $10, $11)
      ON CONFLICT (license_fingerprint, instance_id, public_base_url) DO UPDATE SET
        verified        = EXCLUDED.verified,
        licensee        = EXCLUDED.licensee,
@@ -113,8 +136,9 @@ export async function recordActivation(ping: ActivationPing, options: RecordOpti
        pos_api_version = EXCLUDED.pos_api_version,
        last_seen       = EXCLUDED.last_seen,
        seen_count      = pos_license_activations.seen_count + 1,
-       remote_ip       = COALESCE(EXCLUDED.remote_ip, pos_license_activations.remote_ip)`,
-    [fp, instanceId, baseUrl, verdict.ok, licensee, plan, instanceLimit, apiVersion, now.toISOString(), remoteIp]
+       remote_ip       = COALESCE(EXCLUDED.remote_ip, pos_license_activations.remote_ip),
+       dev             = EXCLUDED.dev`,
+    [fp, instanceId, baseUrl, verdict.ok, licensee, plan, instanceLimit, apiVersion, now.toISOString(), remoteIp, dev]
   );
 }
 
@@ -128,6 +152,12 @@ export interface LicenseSummary {
   instance_limit: number | null;
   /** Distinct instance ids = how many copies run. */
   installs: number;
+  /**
+   * How many of them are development runs — every row of the install says
+   * `dev` (migration 106). They stay inside `installs` and the over-limit
+   * check: the mark tells the reader what a copy is, it does not un-count it.
+   */
+  dev_installs: number;
   /** Distinct non-empty origins seen. */
   origins: number;
   /** installs > instance_limit (only when a limit is in the token). */
@@ -151,6 +181,8 @@ export interface LicenseOrigin {
 export interface LicenseInstance {
   instance_id: string;
   verified: boolean;
+  /** A development run: every row of this install was last pinged with `dev`. */
+  dev: boolean;
   last_seen: string;
   /** '' origin is reported as the literal "(невідомо)" to the reader. */
   origins: LicenseOrigin[];
@@ -172,6 +204,7 @@ function summaryFromRow(row: Record<string, unknown>): LicenseSummary {
     plan: (row.plan as string | null) ?? null,
     instance_limit: instanceLimit,
     installs,
+    dev_installs: Number(row.dev_installs ?? 0),
     origins: Number(row.origins),
     over_limit: instanceLimit !== null && installs > instanceLimit,
     cloned: Boolean(row.cloned),
@@ -186,7 +219,8 @@ export async function listLicenses(): Promise<LicenseSummary[]> {
   const r = await pool.query(
     `WITH inst AS (
        SELECT license_fingerprint, instance_id,
-              count(DISTINCT NULLIF(public_base_url, '')) AS origins
+              count(DISTINCT NULLIF(public_base_url, '')) AS origins,
+              bool_and(dev) AS dev
          FROM pos_license_activations
         GROUP BY license_fingerprint, instance_id
      )
@@ -196,6 +230,7 @@ export async function listLicenses(): Promise<LicenseSummary[]> {
             (array_agg(a.plan ORDER BY a.last_seen DESC) FILTER (WHERE a.verified))[1] AS plan,
             max(a.instance_limit) AS instance_limit,
             count(DISTINCT a.instance_id) AS installs,
+            count(DISTINCT a.instance_id) FILTER (WHERE i.dev) AS dev_installs,
             count(DISTINCT NULLIF(a.public_base_url, '')) AS origins,
             min(a.first_seen) AS first_seen,
             max(a.last_seen) AS last_seen,
@@ -219,7 +254,7 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
   if (!summary) return null;
 
   const r = await pool.query(
-    `SELECT instance_id, public_base_url, verified, first_seen, last_seen, seen_count, remote_ip
+    `SELECT instance_id, public_base_url, verified, first_seen, last_seen, seen_count, remote_ip, dev
        FROM pos_license_activations
       WHERE license_fingerprint = $1
       ORDER BY instance_id, last_seen DESC`,
@@ -231,10 +266,11 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
     const id = String(row.instance_id);
     let inst = byInstance.get(id);
     if (!inst) {
-      inst = { instance_id: id, verified: false, last_seen: '', origins: [], cloned: false };
+      inst = { instance_id: id, verified: false, dev: true, last_seen: '', origins: [], cloned: false };
       byInstance.set(id, inst);
     }
     if (row.verified) inst.verified = true;
+    if (!row.dev) inst.dev = false;
     const lastSeen = new Date(row.last_seen as string).toISOString();
     if (!inst.last_seen || lastSeen > inst.last_seen) inst.last_seen = lastSeen;
     inst.origins.push({
