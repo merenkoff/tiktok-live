@@ -9,6 +9,7 @@
 // Pure, so the layout is tested without a canvas; `receiptImage.ts` draws it.
 
 import type { ReceiptData, ReceiptVatLine } from './printer';
+import { paymentWords, withCurrency } from './paymentWords';
 
 export interface ReceiptLine {
   text: string;
@@ -27,13 +28,6 @@ function money(cents: number) {
 
 function signedMoney(cents: number) {
   return `${cents < 0 ? '-' : '+'}${money(Math.abs(cents))}`;
-}
-
-function paymentLabel(method: string) {
-  if (method === 'cash') return 'ГОТІВКА';
-  if (method === 'card') return 'БЕЗГОТІВКОВА (картка)';
-  if (method === 'qr') return 'БЕЗГОТІВКОВА (QR)';
-  return `ІНШЕ (${method})`;
 }
 
 function vatLabel(line: ReceiptVatLine) {
@@ -135,13 +129,22 @@ export function receiptLines(receipt: ReceiptData, cols: number = RECEIPT_COLUMN
   if (rounding && receipt.discount_cents) pushRow('УСЬОГО', money(receipt.total_cents));
   for (const line of receipt.vat_lines ?? []) pushRow(vatLabel(line), money(line.amount_cents));
   if (rounding) pushRow('ЗАОКРУГЛЕННЯ', signedMoney(rounding));
-  pushRow(receipt.kind === 'refund' ? 'ДО ПОВЕРНЕННЯ' : 'ДО СПЛАТИ', money(receipt.total_cents + rounding), {
-    bold: true,
-  });
+  pushRow(
+    receipt.kind === 'refund' ? 'ДО ПОВЕРНЕННЯ' : 'ДО СПЛАТИ',
+    withCurrency(money(receipt.total_cents + rounding)),
+    { bold: true }
+  );
   out.push(divider(cols));
 
-  for (const p of receipt.payments) pushRow(paymentLabel(p.method), money(p.amount_cents));
-  if (receipt.change_cents && receipt.change_cents > 0) pushRow('РЕШТА', money(receipt.change_cents));
+  // Рядок 18 (form, sum, currency), then рядок 19 (the means) on its own line.
+  for (const p of receipt.payments) {
+    const words = paymentWords(p.method);
+    pushRow(words.form, withCurrency(money(p.amount_cents)), { bold: true });
+    push(words.means);
+  }
+  if (receipt.change_cents && receipt.change_cents > 0) {
+    pushRow('РЕШТА', withCurrency(money(receipt.change_cents)));
+  }
 
   const fiscal = receipt.fiscal;
   if (fiscal) {
