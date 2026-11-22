@@ -8,6 +8,7 @@ import { applyNavOverride, navItemKey, type NavOverrides } from './navOverrides'
 import { runsInShell } from './shells';
 import { navGroupOf } from './navGroups';
 import { moduleOpenTo, navOpenTo } from './roles';
+import { sectionClosedFor } from './staffSections';
 
 /**
  * The nav entries a given shell/role/variant should see, in display order:
@@ -36,7 +37,8 @@ export function selectNavItems(
       (m) =>
         (('alwaysEnabled' in m && m.alwaysEnabled) || enabled.has(m.id as ModuleId)) &&
         runsInShell(m, ctx.shell) &&
-        moduleOpenTo(m, ctx.role)
+        moduleOpenTo(m, ctx.role) &&
+        !sectionClosedFor(m.id, ctx.role, ctx.blocked)
     )
     .flatMap((m) =>
       m.nav

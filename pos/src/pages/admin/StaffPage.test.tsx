@@ -112,3 +112,84 @@ describe('StaffPage — the café marketer', () => {
     await waitFor(() => expect(writes[1]).toEqual({ path: '/staff/3', body: { role: 'seller' } }));
   });
 });
+
+describe('StaffPage — «Доступ до каси» (TechDocs/POS_STAFF_SECTIONS.md)', () => {
+  const CASHIERS = [
+    { id: 1, store_id: 1, role: 'owner', display_name: 'Олена', login: 'owner@cafe.shop', is_active: true, has_pin: false, blocked_sections: [], created_at: '' },
+    { id: 2, store_id: 1, role: 'seller', display_name: 'Ігор', login: null, is_active: true, has_pin: true, blocked_sections: [], created_at: '' },
+    { id: 4, store_id: 1, role: 'seller', display_name: 'Марта', login: null, is_active: true, has_pin: true, blocked_sections: ['customers', 'returns'], created_at: '' },
+  ];
+
+  function serveCashiers(writes: Array<{ path: string; body: unknown }>) {
+    server.use(
+      http.get(url('/staff'), () => HttpResponse.json(CASHIERS)),
+      http.get(url('/staff/pin-lock'), () => HttpResponse.json({ failed_count: 0, locked_until: null, blocked: false })),
+      http.patch(url('/staff/:id'), async ({ request, params }) => {
+        const body = (await request.json()) as { blocked_sections: string[] };
+        writes.push({ path: `/staff/${String(params.id)}`, body });
+        return HttpResponse.json({ ok: true, blocked_sections: body.blocked_sections });
+      })
+    );
+  }
+
+  afterEach(() => {
+    useAuthStore.setState({ auth: null } as never);
+  });
+
+  it('says under each cashier what is closed, and offers «Доступ» to sellers only', async () => {
+    serveCashiers([]);
+    signIn();
+    renderWithProviders(<StaffPage />);
+    expect(await screen.findByTestId('staff-closed')).toHaveTextContent('Закрито:КлієнтиЧеки');
+    expect(screen.getByText('Уся каса відкрита')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Доступ' })).toHaveLength(2);
+  });
+
+  it('a tap closes a section on the preview rail at once, «Каса» never closes, and one save sends the list', async () => {
+    const writes: Array<{ path: string; body: unknown }> = [];
+    serveCashiers(writes);
+    signIn();
+    renderWithProviders(<StaffPage />);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Доступ' }))[0]);
+
+    const dialog = await screen.findByTestId('staff-access');
+    expect(dialog).toHaveTextContent('Що бачить Ігор на касі');
+    const preview = () => screen.getAllByTestId('rail-preview-item').map((el) => el.textContent);
+    expect(preview()).toContain('Клієнти');
+
+    const till = screen.getByTestId('section-catalog-checkout');
+    expect(till).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(till);
+    expect(till).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(screen.getByTestId('section-customers'));
+    expect(screen.getByTestId('section-customers')).toHaveAttribute('aria-checked', 'false');
+    expect(preview()).not.toContain('Клієнти');
+    expect(preview()).toContain('Каса');
+    expect(screen.getByTestId('staff-access-count')).toHaveTextContent('Закрито розділів: 1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
+    await waitFor(() => expect(writes).toEqual([{ path: '/staff/2', body: { blocked_sections: ['customers'] } }]));
+    await waitFor(() => expect(screen.queryByTestId('staff-access')).toBeNull());
+    expect(screen.getAllByTestId('staff-closed')[0]).toHaveTextContent('Клієнти');
+  });
+
+  it('«Як у…» copies another cashier\'s access, «Відкрити все» opens everything, and nothing changed saves nothing', async () => {
+    serveCashiers([]);
+    signIn();
+    renderWithProviders(<StaffPage />);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Доступ' }))[0]);
+    await screen.findByTestId('staff-access');
+
+    expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Доступ як у'), { target: { value: '4' } });
+    expect(screen.getByTestId('section-customers')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByTestId('section-returns')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('button', { name: 'Зберегти' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Відкрити все' }));
+    expect(screen.getByTestId('section-customers')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('staff-access-count')).toHaveTextContent('Уся каса відкрита');
+    expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled();
+  });
+});

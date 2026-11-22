@@ -133,6 +133,11 @@ export interface PosAuthContext {
   staffId: number;
   role: PosRole;
   displayName: string;
+  /**
+   * The till's sections the owner closed for this person (migration 111,
+   * `core/staffSections.ts`): module ids. Always empty for the owner.
+   */
+  blockedSections: string[];
   storeName: string;
   storeSlug: string;
   currency: string;

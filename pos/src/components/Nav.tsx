@@ -8,6 +8,7 @@ import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { allModules } from '../modules/registry';
 import { selectNavItems } from '../modules/selectNav';
 import { useNavOverrides } from '../modules/useNavOverrides';
+import { useBlockedSections } from '../modules/staffSections';
 import { adminIconOf, groupNavItems, navGroupLabel } from '../modules/navGroups';
 import type { NavCtx, NavItem, NavLocation, NavVariant } from '../modules/types';
 import { ShoppingCart } from '../platform/glyphs';
@@ -35,11 +36,12 @@ export function Nav({ location, variant, tillLink, counts }: Props) {
   const role = useAuthStore((s) => s.role());
   const enabled = useEnabledModules();
   const overrides = useNavOverrides();
+  const blocked = useBlockedSections();
   const { pathname } = useLocation();
   const updateAvailable = useUpdateStore((s) => s.updateInfo?.update_available ?? false);
   const vertical = useAuthStore((s) => s.auth?.store.vertical?.id ?? null);
 
-  const ctx: NavCtx = { shell, role, variant };
+  const ctx: NavCtx = { shell, role, variant, blocked };
   const items: NavItem[] = selectNavItems(allModules(), enabled, ctx, location, overrides);
 
   if (location === 'admin-sidebar') {

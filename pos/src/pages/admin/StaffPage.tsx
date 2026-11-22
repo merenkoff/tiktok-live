@@ -2,13 +2,17 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { api, useAuthStore } from '@pos/platform';
+import { api, useAuthStore, useEnabledModules } from '@pos/platform';
 import type { PosRole, StaffMember } from '../../types';
 import { PageHeader } from '../../components/ui/Page';
 import { Plus, User } from '../../platform/glyphs';
 import { PinLockNotice } from './PinLockNotice';
+import { StaffAccessDialog } from './StaffAccessDialog';
+import { closedLabels, tillSections } from './staffAccess';
+import { allModules } from '../../modules/registry';
+import { useNavOverrides } from '../../modules/useNavOverrides';
 
 /** A role the owner gives on this page — never a second owner. */
 type StaffRole = Exclude<PosRole, 'owner'>;
@@ -44,6 +48,12 @@ export function StaffPage() {
   // The roles this store's vertical offers besides the seller: the café's
   // marketer (track МР). An older backend sends none — sellers only.
   const offersMarketer = useAuthStore((s) => s.auth?.store.vertical?.staffRoles?.includes('marketer') === true);
+  // «Доступ до каси»: whose access is being edited, and the till's sections
+  // the row's summary names (TechDocs/POS_STAFF_SECTIONS.md).
+  const [accessFor, setAccessFor] = useState<StaffMember | null>(null);
+  const enabled = useEnabledModules();
+  const overrides = useNavOverrides();
+  const sections = useMemo(() => tillSections(allModules(), enabled, overrides), [enabled, overrides]);
 
   async function reload() {
     setStaff(await api.listStaff());
@@ -176,9 +186,19 @@ export function StaffPage() {
                 {member.login || (member.role === 'marketer' ? 'PIN-вхід у кабінет' : 'PIN-доступ')} ·{' '}
                 {member.is_active ? 'активний' : 'вимкнений'}
               </p>
+              {member.role === 'seller' && <AccessSummary labels={closedLabels(member.blocked_sections, sections)} />}
             </div>
             {member.role !== 'owner' && (
               <div className="flex shrink-0 items-center gap-4">
+                {member.role === 'seller' && member.is_active && (
+                  <button
+                    type="button"
+                    className="min-h-9 text-[15px] font-semibold text-sq-blue"
+                    onClick={() => setAccessFor(member)}
+                  >
+                    Доступ
+                  </button>
+                )}
                 {offersMarketer && member.is_active && (
                   <button
                     type="button"
@@ -212,6 +232,38 @@ export function StaffPage() {
           </li>
         ))}
       </ul>
+
+      {accessFor && (
+        <StaffAccessDialog
+          member={accessFor}
+          staff={staff}
+          onClose={() => setAccessFor(null)}
+          onSaved={(blocked) => {
+            setStaff((list) => list.map((s) => (s.id === accessFor.id ? { ...s, blocked_sections: blocked } : s)));
+            setAccessFor(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Under a cashier's name: what of the till is closed, or that it is all open. */
+function AccessSummary({ labels }: { labels: string[] }) {
+  if (labels.length === 0) {
+    return <p className="text-[13px] text-sq-muted mt-0.5">Уся каса відкрита</p>;
+  }
+  return (
+    <p className="flex flex-wrap items-center gap-1 mt-1" data-testid="staff-closed">
+      <span className="text-[13px] text-sq-muted">Закрито:</span>
+      {labels.map((label) => (
+        <span
+          key={label}
+          className="h-[22px] px-2 rounded-md bg-amber-100 text-amber-900 text-xs font-semibold inline-flex items-center"
+        >
+          {label}
+        </span>
+      ))}
+    </p>
   );
 }

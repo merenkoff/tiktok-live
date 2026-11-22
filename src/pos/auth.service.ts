@@ -18,6 +18,7 @@ import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
 import { effectiveEnabledModules } from './core/modules.js';
 import { getVertical, publicConfigOf, verticalOffersRole } from './verticals/index.js';
 import { ROLE_UNAVAILABLE } from './core/roles.js';
+import { normalizeBlockedSections, readBlockedSections, StaffSectionsError } from './core/staffSections.js';
 import { clearPinMisses, reservePinAttempt, type PinLock } from './pin-attempts.js';
 import { moduleRemotesForTill } from './license/moduleToken.js';
 import { noteClientLaunch, type LicenseNotice } from './license/notice.js';
@@ -38,6 +39,8 @@ export interface AuthResponse {
     id: number;
     display_name: string;
     role: PosRole;
+    /** The till's sections closed for this person (module ids); always [] for the owner. */
+    blocked_sections: string[];
   };
   store: {
     id: number;
@@ -180,6 +183,7 @@ function toAuthResponse(
       id: auth.staffId,
       display_name: auth.displayName,
       role: auth.role,
+      blocked_sections: auth.blockedSections,
     },
     store: {
       id: auth.storeId,
@@ -347,7 +351,7 @@ export async function me(auth: PosAuthContext): Promise<AuthResponse> {
 
 export async function listStaff(storeId: number) {
   const result = await pool.query(
-    `SELECT id, store_id, role, display_name, login, is_active, created_at,
+    `SELECT id, store_id, role, display_name, login, is_active, created_at, blocked_sections,
             (pin_hash IS NOT NULL) AS has_pin
      FROM pos_staff
      WHERE store_id = $1
@@ -362,8 +366,32 @@ export async function listStaff(storeId: number) {
     login: row.login,
     is_active: row.is_active,
     has_pin: Boolean(row.has_pin),
+    blocked_sections: row.role === 'owner' ? [] : readBlockedSections(row.blocked_sections),
     created_at: row.created_at,
   }));
+}
+
+/**
+ * The till's sections closed for one person (TechDocs/POS_STAFF_SECTIONS.md).
+ * The owner's own row is refused: the owner is never limited. Takes effect on
+ * that person's next request — the server reads the list on every one.
+ */
+export async function setStaffSections(storeId: number, staffId: number, value: unknown): Promise<string[]> {
+  let blocked: string[];
+  try {
+    blocked = normalizeBlockedSections(value);
+  } catch (error) {
+    if (error instanceof StaffSectionsError) throw new StaffError(error.message);
+    throw error;
+  }
+  const staff = await pool.query(`SELECT role FROM pos_staff WHERE id = $1 AND store_id = $2`, [staffId, storeId]);
+  if (staff.rows.length === 0) throw new StaffError('Співробітника не знайдено', 404);
+  if (staff.rows[0].role === 'owner') throw new StaffError('Власнику каса відкрита вся');
+  await pool.query(
+    `UPDATE pos_staff SET blocked_sections = $1, updated_at = NOW() WHERE id = $2 AND store_id = $3`,
+    [blocked, staffId, storeId]
+  );
+  return blocked;
 }
 
 /** A staff write refused in the owner's words, with the status the route answers. */

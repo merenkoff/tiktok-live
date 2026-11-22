@@ -4,6 +4,7 @@
 
 import { useEffect } from 'react';
 import { useAuthStore, usePosShell, useEnabledModules, startOfflineRuntime } from '@pos/platform';
+import { useBlockedSections } from './modules/staffSections';
 import { renderModuleRoutes } from './modules/renderRoutes';
 import { ModuleRemotesReloadBanner } from './components/ModuleRemotesReloadBanner';
 import { LicenseNoticeStrip } from './components/LicenseNoticeStrip';
@@ -22,6 +23,7 @@ export function TabletApp() {
   const dismissUpdate = useAppUpdate((s) => s.dismiss);
   const shell = usePosShell();
   const enabled = useEnabledModules();
+  const blocked = useBlockedSections();
 
   useEffect(() => {
     void bootstrap();
@@ -66,7 +68,7 @@ export function TabletApp() {
   return (
     <>
       <LicenseNoticeStrip />
-      {renderModuleRoutes({ shell, role, enabled, isAuthenticated })}
+      {renderModuleRoutes({ shell, role, enabled, blocked, isAuthenticated })}
       {isAuthenticated && banner && <ModuleRemotesReloadBanner {...banner} />}
     </>
   );

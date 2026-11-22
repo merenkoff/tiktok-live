@@ -263,6 +263,11 @@ export interface AuthResponse {
     id: number;
     display_name: string;
     role: PosRole;
+    /**
+     * The till's sections the owner closed for this person — module ids
+     * (TechDocs/POS_STAFF_SECTIONS.md). Absent from an older server: nothing closed.
+     */
+    blocked_sections?: string[];
   };
   store: {
     id: number;
@@ -1722,6 +1727,11 @@ export interface StaffMember {
   login: string | null;
   is_active: boolean;
   has_pin: boolean;
+  /**
+   * The till's sections the owner closed for this person — module ids
+   * (TechDocs/POS_STAFF_SECTIONS.md). Absent from an older server.
+   */
+  blocked_sections?: string[];
 }
 
 export type StockDocumentType =

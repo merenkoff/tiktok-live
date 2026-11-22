@@ -17,6 +17,7 @@ import { isModuleEnabled } from './modules.js';
 import { verticalOrDefault } from '../verticals/index.js';
 import { feedbackMenuKey, feedbackUrl } from '../public-menu/urls.js';
 import { MARKETER_FORBIDDEN, marketerMay, roleUnavailable, type StaffCapability } from './roles.js';
+import { readBlockedSections, SECTION_CLOSED_MESSAGE, sectionClosed, sectionOfRoute } from './staffSections.js';
 
 /** The feedback QR's address for the session's store, or null (see `urls.ts`). */
 function feedbackUrlOf(row: Record<string, unknown>): string | null {
@@ -52,6 +53,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        s.staff_id,
        st.role,
        st.display_name,
+       st.blocked_sections,
        st.is_active AS staff_active,
        store.name AS store_name,
        store.slug AS store_slug,
@@ -105,6 +107,8 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     staffId: Number(row.staff_id),
     role: row.role as PosRole,
     displayName: row.display_name,
+    // The owner is never limited, whatever the column holds.
+    blockedSections: row.role === 'owner' ? [] : readBlockedSections(row.blocked_sections),
     storeName: row.store_name,
     storeSlug: row.store_slug,
     currency: row.currency,
@@ -194,6 +198,16 @@ export async function ensurePosAuth(
     }
     if (!marketerMay(opts.allow)) {
       await reply.code(403).send({ error: MARKETER_FORBIDDEN, code: 'role_forbidden' });
+      return null;
+    }
+  }
+
+  // A section the owner closed for this person (TechDocs/POS_STAFF_SECTIONS.md):
+  // read off the route the request matched, so no route file names it.
+  if (auth.blockedSections.length > 0) {
+    const section = sectionOfRoute(request.method, request.routeOptions?.url);
+    if (section && sectionClosed(auth.blockedSections, section)) {
+      await reply.code(403).send({ error: SECTION_CLOSED_MESSAGE, code: 'section_closed', section });
       return null;
     }
   }

@@ -50,6 +50,7 @@ import type {
   ModuleStation,
 } from './types';
 import { VERTICAL_MODULE_PREFIX, verticalModuleId } from './verticals';
+import { sectionClosedFor, useBlockedSections } from './staffSections';
 
 interface SlotValues {
   'checkout.Action': ModuleCheckoutSlot['Action'];
@@ -74,6 +75,13 @@ export interface ModuleSlotContext {
   shell: PosShell;
   role: PosRole | null;
   enabled: ReadonlySet<ModuleId>;
+  /**
+   * The till's sections the owner closed for this person: a closed feature
+   * module draws nothing in the cart («Під запис» goes with «Борги»). Never the
+   * vertical's slots — its catalog is the sell screen, which nobody's section
+   * may take away.
+   */
+  blocked?: ReadonlySet<string>;
 }
 
 export interface ResolvedModuleSlot<T> {
@@ -111,6 +119,7 @@ export function resolveModuleSlots<K extends ModuleSlotName>(
       if (!runsInShell(m, ctx.shell)) continue;
       if (m.ownerOnly && ctx.role !== 'owner') continue;
       if (!isRemote(m) && !ctx.enabled.has(m.id as ModuleId)) continue;
+      if (sectionClosedFor(m.id, ctx.role, ctx.blocked)) continue;
     }
 
     const value = pick(m);
@@ -128,8 +137,9 @@ export function useModuleSlots<K extends ModuleSlotName>(slot: K): ResolvedModul
   const role = useAuthStore((s) => s.auth?.staff.role ?? null);
   const vertical = useAuthStore((s) => s.auth?.store.vertical?.id);
   const enabled = useEnabledModules();
+  const blocked = useBlockedSections();
   return useMemo(
-    () => resolveModuleSlots(slot, { vertical, shell, role, enabled }),
-    [slot, vertical, shell, role, enabled]
+    () => resolveModuleSlots(slot, { vertical, shell, role, enabled, blocked }),
+    [slot, vertical, shell, role, enabled, blocked]
   );
 }

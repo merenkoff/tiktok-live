@@ -265,3 +265,15 @@ describe('store menu appearance (nav_overrides)', () => {
     ).not.toContain('/admin/products');
   });
 });
+
+describe('the till sections the owner closed for a person (TechDocs/POS_STAFF_SECTIONS.md)', () => {
+  it('drops a closed section from the cashier rail, never «Каса», and never for the owner', () => {
+    const blocked = new Set(['customers', 'catalog-checkout']);
+    const rail = select({ shell: 'cashier', role: 'seller', variant: 'rail', blocked }, 'cashier-primary');
+    expect(rail).not.toContain('/customers');
+    expect(rail).toContain('/register');
+    const owner = select({ shell: 'cashier', role: 'owner', variant: 'rail', blocked }, 'cashier-primary');
+    expect(owner).toContain('/customers');
+    expect(select({ shell: 'cashier', role: 'seller', variant: 'rail' }, 'cashier-primary')).toContain('/customers');
+  });
+});
