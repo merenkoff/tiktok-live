@@ -78,6 +78,11 @@ export interface NavCtx {
   role: PosRole | null;
   /** Set for `cashier-primary` — lets an item show only in the rail or only in the bottom bar. */
   variant?: NavVariant;
+  /**
+   * The till's sections the owner closed for this person — module ids
+   * (TechDocs/POS_STAFF_SECTIONS.md); their entries are left out.
+   */
+  blocked?: ReadonlySet<string>;
 }
 
 export interface NavItem {

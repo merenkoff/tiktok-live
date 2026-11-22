@@ -86,3 +86,15 @@ describe('moduleVisible', () => {
     expect(moduleVisible(mod({ core: true }), ctx({ enabled: new Set<ModuleId>() }))).toBe(false);
   });
 });
+
+describe('moduleVisible — a section the owner closed', () => {
+  it('has no page for that person, and the owner keeps it', () => {
+    const blocked = new Set(['stock']);
+    expect(moduleVisible(mod(), ctx({ role: 'seller', blocked }))).toBe(false);
+    expect(moduleVisible(mod(), ctx({ role: 'owner', blocked }))).toBe(true);
+    expect(moduleVisible(mod(), ctx({ role: 'seller' }))).toBe(true);
+    // «Каса» is never closed: without it the till sells nothing.
+    const till = mod({ id: 'catalog-checkout' as ModuleId });
+    expect(moduleVisible(till, ctx({ role: 'seller', blocked: new Set(['catalog-checkout']), enabled: new Set<ModuleId>(['catalog-checkout' as ModuleId]) }))).toBe(true);
+  });
+});

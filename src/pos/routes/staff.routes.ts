@@ -75,10 +75,20 @@ export function registerStaffRoutes(fastify: FastifyInstance): void {
     const auth = await ensureModule(request, reply, 'staff', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { is_active?: boolean; role?: unknown; pin?: unknown };
+    const body = (request.body ?? {}) as {
+      is_active?: boolean;
+      role?: unknown;
+      pin?: unknown;
+      blocked_sections?: unknown;
+    };
     try {
-      if (typeof body.is_active !== 'boolean' && body.role === undefined) {
-        return reply.code(400).send({ error: 'is_active or role required' });
+      if (typeof body.is_active !== 'boolean' && body.role === undefined && body.blocked_sections === undefined) {
+        return reply.code(400).send({ error: 'is_active, role or blocked_sections required' });
+      }
+      // The till's sections this person may not open (TechDocs/POS_STAFF_SECTIONS.md).
+      if (body.blocked_sections !== undefined) {
+        const blocked = await authService.setStaffSections(auth.storeId, Number(id), body.blocked_sections);
+        if (body.role === undefined && typeof body.is_active !== 'boolean') return { ok: true, blocked_sections: blocked };
       }
       // A seller ↔ marketer switch (track МР, М9), a new PIN with it when needed.
       if (body.role !== undefined) await authService.setStaffRole(auth.storeId, Number(id), { role: body.role, pin: body.pin });

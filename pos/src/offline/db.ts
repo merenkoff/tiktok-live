@@ -36,6 +36,11 @@ export interface StaffUnlockRow {
   role: PosRole;
   kind: 'pin' | 'password';
   loginHint: string | null;
+  /**
+   * The till's sections the owner closed for this person (optional on old
+   * rows → none), so a cold-offline till hides them too.
+   */
+  blockedSections?: string[];
   saltB64: string;
   hashB64: string;
   iterations: number;

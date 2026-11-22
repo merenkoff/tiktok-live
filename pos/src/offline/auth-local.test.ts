@@ -168,3 +168,40 @@ describe('local login — the store settings a session is rebuilt from', () => {
     expect(session.store.cash_rounding).toBe(10);
   });
 });
+
+describe('local login — the till sections the owner closed (TechDocs/POS_STAFF_SECTIONS.md)', () => {
+  beforeEach(async () => {
+    await db.staffUnlock.clear();
+  });
+
+  const closed = (blocked_sections?: string[]) =>
+    makeAuthResponse({
+      staff: { id: 2, display_name: 'Ігор', role: 'seller', ...(blocked_sections ? { blocked_sections } : {}) },
+      store: { slug: 'demo-grocery' },
+    });
+
+  it('a cold offline till hides what the owner closed, and learns a change from `/me`', async () => {
+    await saveStaffUnlock({ auth: closed(['tiktok-live']), secret: '1234', kind: 'pin' });
+    expect((await localPinLogin('demo-grocery', '1234', null)).staff.blocked_sections).toEqual(['tiktok-live']);
+
+    await updateStaffUnlockStoreFlags(closed(['stocktake', 'tiktok-live']));
+    expect((await localPinLogin('demo-grocery', '1234', null)).staff.blocked_sections).toEqual([
+      'stocktake',
+      'tiktok-live',
+    ]);
+
+    // An older server says nothing: the row keeps what it knew.
+    await updateStaffUnlockStoreFlags(closed());
+    expect((await localPinLogin('demo-grocery', '1234', null)).staff.blocked_sections).toEqual([
+      'stocktake',
+      'tiktok-live',
+    ]);
+  });
+
+  it('a row written by an older build closes nothing', async () => {
+    await saveStaffUnlock({ auth: closed(), secret: '1234', kind: 'pin' });
+    const row = (await db.staffUnlock.toArray())[0] as StaffUnlockRow;
+    await db.staffUnlock.put({ ...row, blockedSections: undefined });
+    expect((await localPinLogin('demo-grocery', '1234', null)).staff.blocked_sections).toEqual([]);
+  });
+});

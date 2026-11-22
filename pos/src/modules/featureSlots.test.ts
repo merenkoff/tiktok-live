@@ -125,3 +125,15 @@ describe('resolveModuleSlots', () => {
     expect(resolveModuleSlots('settings.Card', ctx({ vertical: undefined }), MODULES)).toEqual([]);
   });
 });
+
+describe('resolveModuleSlots — a section the owner closed', () => {
+  it('takes a closed feature module out of the cart, never the vertical, never for the owner', () => {
+    const blocked = new Set(['debts', 'vertical-flowers']);
+    const seller = resolveModuleSlots('checkout.Action', ctx({ role: 'seller', blocked }), [debts]);
+    expect(seller).toEqual([]);
+    expect(resolveModuleSlots('checkout.Action', ctx({ role: 'owner', blocked }), [debts]).map((s) => s.moduleId)).toEqual(['debts']);
+    // The vertical's slots stay: its catalog is the sell screen itself.
+    const vertical = resolveModuleSlots('settings.Card', ctx({ role: 'seller', blocked }), [flowers]);
+    expect(vertical.map((s) => s.moduleId)).toEqual(['vertical-flowers']);
+  });
+});

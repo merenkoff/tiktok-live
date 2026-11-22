@@ -224,6 +224,9 @@ export const POS_MIGRATIONS = [
   // A second job per station, `kind = 'cancel'`, for a round cancelled after
   // its ticket was printed or taken: the kitchen gets «СКАСОВАНО» on paper.
   '110_pos_round_print_cancel.sql',
+  // The till's sections a staff member may not open (`pos_staff.blocked_sections`),
+  // set by the owner on «Співробітники» (TechDocs/POS_STAFF_SECTIONS.md).
+  '111_pos_staff_sections.sql',
 ] as const;
 
 export function readMigration(file: string): string {

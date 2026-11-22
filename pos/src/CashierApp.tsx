@@ -5,6 +5,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, usePosShell, useEnabledModules, startOfflineRuntime } from '@pos/platform';
+import { useBlockedSections } from './modules/staffSections';
 import { useUpdateStore } from './hooks/useUpdateCheck';
 import { renderModuleRoutes } from './modules/renderRoutes';
 import { useModuleRemoteUpdates } from './modules/desktopRemotes';
@@ -24,6 +25,7 @@ export function CashierApp() {
   const dismissUpdates = useModuleRemoteUpdates((s) => s.dismiss);
   const shell = usePosShell();
   const enabled = useEnabledModules();
+  const blocked = useBlockedSections();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,7 +72,7 @@ export function CashierApp() {
   return (
     <>
       <LicenseNoticeStrip />
-      {renderModuleRoutes({ shell, role, enabled, isAuthenticated })}
+      {renderModuleRoutes({ shell, role, enabled, blocked, isAuthenticated })}
       {isAuthenticated && banner && <ModuleRemotesReloadBanner {...banner} />}
     </>
   );

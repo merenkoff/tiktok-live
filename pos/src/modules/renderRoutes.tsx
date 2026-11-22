@@ -32,12 +32,15 @@ import type { PosRole } from '../types';
 import { allModules, type AnyModuleDescriptor } from './registry';
 import { runsInShell } from './shells';
 import { moduleOpenTo, routeOpenTo, usesCabinet } from './roles';
+import { sectionClosedFor } from './staffSections';
 import type { ModuleId } from './types';
 
 export interface RouteContext {
   shell: PosShell;
   role: PosRole | null;
   enabled: ReadonlySet<ModuleId>;
+  /** The till's sections the owner closed for this person (`useBlockedSections`). */
+  blocked?: ReadonlySet<string>;
   isAuthenticated: boolean;
 }
 
@@ -89,6 +92,8 @@ export function homePath(ctx: RouteContext): string {
 export function moduleVisible(m: AnyModuleDescriptor, ctx: RouteContext): boolean {
   if (!runsInShell(m, ctx.shell)) return false;
   if (!moduleOpenTo(m, ctx.role)) return false;
+  // A section the owner closed for this person has no page: its address leads home.
+  if (sectionClosedFor(m.id, ctx.role, ctx.blocked)) return false;
   // Online-only remote modules (roadmap #13 Part C) opt in via `module_remotes`,
   // not `enabled_modules`.
   if ('alwaysEnabled' in m && m.alwaysEnabled) return true;

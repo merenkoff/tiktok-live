@@ -67,6 +67,7 @@ export async function saveStaffUnlock(params: {
     staffId: params.auth.staff.id,
     displayName: params.auth.staff.display_name,
     role: params.auth.staff.role,
+    blockedSections: params.auth.staff.blocked_sections ?? [],
     kind: params.kind,
     loginHint: params.loginHint?.trim().toLowerCase() || null,
     saltB64: toB64(salt),
@@ -140,6 +141,9 @@ export async function updateStaffUnlockStoreFlags(auth: AuthResponse): Promise<v
   const row = await db.staffUnlock.get(id);
   if (!row) return;
   await db.staffUnlock.update(id, {
+    // The owner who closes «Ефір» for a cashier at noon expects tomorrow's
+    // offline morning to hide it too.
+    blockedSections: auth.staff.blocked_sections ?? row.blockedSections ?? [],
     storeName: auth.store.name,
     storeCurrency: auth.store.currency,
     qrPaymentEnabled: auth.store.qr_payment?.enabled ?? row.qrPaymentEnabled ?? false,
@@ -193,6 +197,7 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
       id: row.staffId,
       display_name: row.displayName,
       role: row.role,
+      blocked_sections: row.blockedSections ?? [],
     },
     store: {
       id: row.storeId,
