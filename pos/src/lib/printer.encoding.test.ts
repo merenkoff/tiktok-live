@@ -43,7 +43,7 @@ describe('a printer that was never set up', () => {
     await printReceipt('Xprinter', receipt, 58);
     expect(invoke).toHaveBeenCalledWith('print_receipt', {
       printerName: 'Xprinter',
-      receipt,
+      receipt: { ...receipt, attribution: false },
       paperWidthMm: 58,
       encoding: { table: 'windows1251', esc_t: null },
     });
@@ -68,10 +68,10 @@ describe('a printer with a chosen profile', () => {
     await printKitchenTicket('Xprinter', ticket, 58);
     await printSlip('Xprinter', slip, 58);
 
-    expect(invoke).toHaveBeenCalledWith('print_receipt', { printerName: 'Xprinter', receipt, paperWidthMm: 80, encoding: chosen });
-    expect(invoke).toHaveBeenCalledWith('print_precheck', { printerName: 'Xprinter', bill, paperWidthMm: 58, encoding: chosen });
+    expect(invoke).toHaveBeenCalledWith('print_receipt', { printerName: 'Xprinter', receipt: { ...receipt, attribution: false }, paperWidthMm: 80, encoding: chosen });
+    expect(invoke).toHaveBeenCalledWith('print_precheck', { printerName: 'Xprinter', bill: { ...bill, attribution: false }, paperWidthMm: 58, encoding: chosen });
     expect(invoke).toHaveBeenCalledWith('print_kitchen_ticket', { printerName: 'Xprinter', ticket, paperWidthMm: 58, encoding: chosen });
-    expect(invoke).toHaveBeenCalledWith('print_slip', { printerName: 'Xprinter', slip, paperWidthMm: 58, encoding: chosen });
+    expect(invoke).toHaveBeenCalledWith('print_slip', { printerName: 'Xprinter', slip: { ...slip, attribution: false }, paperWidthMm: 58, encoding: chosen });
   });
 
   it('never hands the printer a value that is not a profile', async () => {

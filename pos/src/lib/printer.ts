@@ -12,6 +12,7 @@ import {
   type PrinterEncoding,
 } from './printerEncoding';
 import { notePrinted, rememberDrivers, resolvePrinterEncoding } from './printerProfiles';
+import { storeAttribution } from './attribution';
 
 export interface PrinterInfo {
   name: string;
@@ -162,6 +163,13 @@ export interface ReceiptData {
    * it ignores the field, and the web renderer prints it as a link.
    */
   feedback_url?: string | null;
+  /**
+   * The Live Shop's attribution as the last lines (`lib/attribution.ts`).
+   * Nobody sets it by hand: `printReceipt` fills it from the cached login on
+   * the way to the printer, and the web and phone renderers read the same
+   * login when it is absent. A Rust build older than it prints none.
+   */
+  attribution?: boolean;
 }
 
 export async function listPrinters(): Promise<PrinterInfo[]> {
@@ -226,7 +234,9 @@ export async function printReceipt(
   receipt: ReceiptData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH,
 ): Promise<void> {
-  return printThrough('print_receipt', printerName, paperWidthMm, { receipt });
+  return printThrough('print_receipt', printerName, paperWidthMm, {
+    receipt: { ...receipt, attribution: storeAttribution() },
+  });
 }
 
 /** One line of a kitchen ticket — what to make, how many, and how. */
@@ -315,7 +325,9 @@ export async function printPrecheck(
   bill: PrecheckData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH
 ): Promise<void> {
-  return printThrough('print_precheck', printerName, paperWidthMm, { bill });
+  return printThrough('print_precheck', printerName, paperWidthMm, {
+    bill: { ...bill, attribution: storeAttribution() },
+  });
 }
 
 /** One line of a non-fiscal slip: what, how much, and — when it matters — for how much. */
@@ -359,5 +371,7 @@ export async function printSlip(
   slip: SlipData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH
 ): Promise<void> {
-  return printThrough('print_slip', printerName, paperWidthMm, { slip });
+  return printThrough('print_slip', printerName, paperWidthMm, {
+    slip: { ...slip, attribution: storeAttribution() },
+  });
 }

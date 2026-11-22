@@ -201,6 +201,16 @@ body {
     gap: 10mm;
   }
 
+  /* The Live Shop's attribution: last on the sheet, the act's own size. */
+  .act-print-attribution {
+    margin-top: 10mm;
+    text-align: center;
+  }
+
+  .act-print-attribution p {
+    margin: 0;
+  }
+
   /* One tag per page, so a receipt printer cuts between them exactly as it
      does between receipts. Height stays automatic, so a long product name
      grows the tag instead of being clipped. */
@@ -313,6 +323,13 @@ body {
     margin-top: 1mm;
   }
 
+  /* The Live Shop's «the-live.shop» in the tag's bottom margin (licence's
+     attribution form, п. 2): the smallest type on the tag, under everything. */
+  .price-tag-attribution {
+    font-size: 6pt;
+    margin-top: 1mm;
+  }
+
   .receipt-print-area {
     display: block;
     width: 72mm;
@@ -320,6 +337,10 @@ body {
     font-family: 'Courier New', monospace;
     font-size: 12px;
     color: #000;
+    /* The paper's margins, as the thermal printer has them (receipt.rs):
+       one blank line above the first line, three under the last. */
+    padding-top: 1lh;
+    padding-bottom: 3lh;
   }
 
   .receipt-print-area hr {
@@ -412,6 +433,17 @@ body {
     font-size: 9px;
     word-break: break-all;
     margin-top: 6px;
+  }
+
+  /* The Live Shop's attribution: the last lines, centred, in the receipt's
+     own size and weight — never larger (the licence's attribution form). */
+  .receipt-print-attribution {
+    text-align: center;
+    margin-top: 1lh;
+  }
+
+  .receipt-print-attribution p {
+    margin: 0;
   }
 }
 

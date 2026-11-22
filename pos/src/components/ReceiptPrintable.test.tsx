@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { ReceiptPrintable } from './ReceiptPrintable';
 import type { ReceiptData } from '../lib/printer';
 
@@ -251,5 +251,34 @@ describe('ReceiptPrintable — a weighed line (TechDocs/grocery/G4_WEIGHED.md)',
     expect(screen.getByText('0.350 кг x 189.90')).toBeInTheDocument();
     expect(screen.queryByText('350 x 189.90')).toBeNull();
     expect(screen.getByText('вагу введено вручну')).toHaveClass('receipt-print-note');
+  });
+
+  describe('The Live Shop attribution', () => {
+    afterEach(() => localStorage.clear());
+
+    it('is the last thing on the paper where the store has it, after the feedback link', () => {
+      localStorage.setItem('pos_auth', JSON.stringify({ store: { attribution: true } }));
+      const { container } = render(
+        <ReceiptPrintable receipt={receipt({ feedback_url: 'https://the-live.shop/m/x#feedback' })} />
+      );
+      const area = container.ownerDocument.querySelector('.receipt-print-area')!;
+      const last = area.lastElementChild!;
+      expect(last).toHaveClass('receipt-print-attribution');
+      expect(last.textContent).toBe('Каса: The Live Shopthe-live.shop');
+    });
+
+    it('goes under the provider\'s text too, never inside it', () => {
+      localStorage.setItem('pos_auth', JSON.stringify({ store: { attribution: true } }));
+      const { container } = render(<ReceiptPrintable receipt={receipt({ provider_text: '=== ЧЕК ===' })} />);
+      const area = container.ownerDocument.querySelector('.receipt-print-area')!;
+      expect(area.firstElementChild?.tagName).toBe('PRE');
+      expect(area.lastElementChild).toHaveClass('receipt-print-attribution');
+    });
+
+    it('is not printed where the store does not have it', () => {
+      localStorage.setItem('pos_auth', JSON.stringify({ store: { attribution: false } }));
+      render(<ReceiptPrintable receipt={receipt()} />);
+      expect(screen.queryByText('the-live.shop')).not.toBeInTheDocument();
+    });
   });
 });

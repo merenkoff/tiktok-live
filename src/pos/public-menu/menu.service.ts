@@ -212,6 +212,8 @@ interface MenuStore {
   autoKitchen: AutoKitchenMode;
   /** An order dearer than this waits for a waiter whatever `autoKitchen` says. */
   autoLimitCents: number;
+  /** The Live Shop's logo and name in the page's footer — the super admin's switch (migration 108). */
+  attribution: boolean;
 }
 
 /**
@@ -630,7 +632,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
             public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents, public_menu_feedback,
             public_logo_url, public_address, public_phone, public_hours,
             public_email, public_instagram, public_facebook, public_tiktok, public_google_url, public_corkage,
-            public_corkage_on, ${CORKAGE_PRICE_SQL} AS corkage_price_cents
+            public_corkage_on, ${CORKAGE_PRICE_SQL} AS corkage_price_cents, attribution
      FROM pos_stores s
      WHERE public_menu_token = $1
         OR (public_menu_slug_enabled AND slug = lower($1))
@@ -667,6 +669,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
     // Auto-sending is a way of ordering: with ordering off there is nothing to send.
     autoKitchen: row.public_menu_ordering === true ? autoModeOf(row.public_menu_auto_kitchen) : 'off',
     autoLimitCents: Number(row.public_menu_auto_limit_cents ?? 0),
+    attribution: row.attribution === true,
   };
   storeByToken.set(token, { value: store, expires: Date.now() + CACHE_TTL_MS });
   return store;

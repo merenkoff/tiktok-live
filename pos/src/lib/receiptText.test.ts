@@ -2,9 +2,9 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { ReceiptData } from './printer';
-import { receiptLines, row, wrapText } from './receiptText';
+import { receiptLines, receiptTrailer, row, wrapText } from './receiptText';
 
 function receipt(over: Partial<ReceiptData> = {}): ReceiptData {
   return {
@@ -123,5 +123,23 @@ describe('receiptLines', () => {
   it('takes the provider’s own text as the receipt', () => {
     const lines = text(receiptLines(receipt({ provider_text: 'ТОВ «Евелін»\r\nЧЕК 1' }), 32));
     expect(lines).toEqual(['ТОВ «Евелін»', 'ЧЕК 1']);
+  });
+});
+
+describe('receiptTrailer — what goes under the QR', () => {
+  afterEach(() => localStorage.clear());
+
+  it('is The Live Shop attribution where the store has it', () => {
+    localStorage.setItem('pos_auth', JSON.stringify({ store: { attribution: true } }));
+    expect(receiptTrailer(receipt()).map((l) => l.text)).toEqual(['', 'Каса: The Live Shop', 'the-live.shop']);
+    // Never part of the receipt's own rows: the picture draws the QR between the two.
+    expect(receiptLines(receipt()).some((l) => l.text.includes('the-live.shop'))).toBe(false);
+  });
+
+  it('is nothing otherwise, and the receipt\'s own flag wins over the login', () => {
+    expect(receiptTrailer(receipt())).toEqual([]);
+    expect(receiptTrailer(receipt({ attribution: true }))).toHaveLength(3);
+    localStorage.setItem('pos_auth', JSON.stringify({ store: { attribution: true } }));
+    expect(receiptTrailer(receipt({ attribution: false }))).toEqual([]);
   });
 });

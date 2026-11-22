@@ -28,6 +28,12 @@ export interface SuperStoreRow {
   enabled_modules: string[];
   module_remotes: Record<string, string | ModuleRemoteEntry>;
   live_tiktok_username: string | null;
+  /**
+   * The Live Shop's attribution on the store's receipts, price tags and guest
+   * menu — writable here and nowhere else (migration 108). Absent from an
+   * older server → off.
+   */
+  attribution?: boolean;
   fiscal: { enabled: boolean; provider: string | null };
   staff_count: number;
   last_sale_at: string | null;
@@ -326,6 +332,7 @@ export class SuperApi {
       enabled_modules?: string[];
       module_remotes?: Record<string, string | ModuleRemoteEntry>;
       vertical?: VerticalId;
+      attribution?: boolean;
     }
   ): Promise<SuperStoreRow> {
     const { data } = await this.client.patch<SuperStoreRow>(`/stores/${id}`, body);

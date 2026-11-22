@@ -153,6 +153,8 @@ export interface PosAuthContext {
   cashRounding: number;
   /** Ask the buyer's age once per receipt with excise goods (migration 102). */
   ageCheck: boolean;
+  /** The Live Shop's attribution on the store's paper — the super admin's switch (migration 108). */
+  attribution: boolean;
   /**
    * The guest menu's feedback sheet, as the till prints it — the QR «Оцініть
    * нас» on a receipt (phase F7, `public-menu/urls.ts`). Null unless the menu

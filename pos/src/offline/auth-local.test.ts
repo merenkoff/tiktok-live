@@ -32,6 +32,7 @@ function groceryAuth(store: Parameters<typeof makeAuthResponse>[0] = {}) {
       slug: 'demo-grocery',
       cash_rounding: 50,
       age_check: true,
+      attribution: true,
       feedback_url: 'https://the-live.shop/m/demo-grocery#feedback',
       florist_labour_bps: 1500,
       bottles: true,
@@ -76,6 +77,8 @@ describe('local login — the store settings a session is rebuilt from', () => {
     const { store } = await localPinLogin('demo-grocery', '1234', null);
 
     expect(store.age_check).toBe(true);
+    // The attribution the desktop prints without a network.
+    expect(store.attribution).toBe(true);
     expect(store.feedback_url).toBe('https://the-live.shop/m/demo-grocery#feedback');
     expect(store.florist_labour_bps).toBe(1500);
     expect(store.bottles).toBe(true);
@@ -103,13 +106,21 @@ describe('local login — the store settings a session is rebuilt from', () => {
 
     await updateStaffUnlockStoreFlags(
       groceryAuth({
-        store: { cash_rounding: 0, age_check: false, feedback_url: null, florist_labour_bps: 0, bottles: false },
+        store: {
+          cash_rounding: 0,
+          age_check: false,
+          attribution: false,
+          feedback_url: null,
+          florist_labour_bps: 0,
+          bottles: false,
+        },
       })
     );
 
     const { store } = await localPinLogin('demo-grocery', '1234', null);
     expect(store.cash_rounding).toBe(0);
     expect(store.age_check).toBe(false);
+    expect(store.attribution).toBe(false);
     expect(store.feedback_url).toBeNull();
     expect(store.florist_labour_bps).toBe(0);
     expect(store.bottles).toBe(false);
@@ -133,14 +144,15 @@ describe('local login — the store settings a session is rebuilt from', () => {
     await saveStaffUnlock({ auth: groceryAuth(), secret: '1234', kind: 'pin' });
     // What a build before this one stored: the same row without the new fields.
     const row = (await db.staffUnlock.toArray())[0];
-    const { cashRounding, ageCheck, feedbackUrl, floristLabourBps, bottles, ...old } = row;
-    void [cashRounding, ageCheck, feedbackUrl, floristLabourBps, bottles];
+    const { cashRounding, ageCheck, attribution, feedbackUrl, floristLabourBps, bottles, ...old } = row;
+    void [cashRounding, ageCheck, attribution, feedbackUrl, floristLabourBps, bottles];
     await db.staffUnlock.put(old as StaffUnlockRow);
 
     const { store } = await localPinLogin('demo-grocery', '1234', null);
 
     expect(storeCashRounding(store.cash_rounding)).toBe(0);
     expect(store.age_check === true).toBe(false);
+    expect(store.attribution === true).toBe(false);
     expect(store.feedback_url ?? null).toBeNull();
     expect(store.florist_labour_bps ?? 0).toBe(0);
     expect(store.bottles === true).toBe(false);

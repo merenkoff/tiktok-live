@@ -163,6 +163,11 @@ pub struct ReceiptData {
     /// host, ignored on a refund — nobody is asked to rate a return.
     #[serde(default)]
     pub feedback_url: Option<String>,
+    /// The Live Shop's attribution as the last lines of the paper — only where
+    /// the super admin switched it on for the store (`store.attribution`). The
+    /// host reads it, never a module; absent from an older host.
+    #[serde(default)]
+    pub attribution: bool,
 }
 
 /// Title and caption of the feedback QR — the same words the guest page's
@@ -320,7 +325,9 @@ fn build_ticket_with(
         if let Some(url) = feedback_url_of(receipt) {
             feedback_block(&mut printer, width, url)?;
         }
-        printer.feed().map_err(|e| e.to_string())?;
+        if receipt.attribution {
+            printer.attribution().map_err(|e| e.to_string())?;
+        }
         printer.print_cut().map_err(|e| e.to_string())?;
         let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
         let _ = std::fs::remove_file(&path);
@@ -561,6 +568,11 @@ fn build_ticket_with(
     if let Some(url) = feedback_url_of(receipt) {
         feedback_block(&mut printer, width, url)?;
     }
+    // The very last lines, under the fiscal block and every QR (the licence's
+    // attribution form, п. 1).
+    if receipt.attribution {
+        printer.attribution().map_err(|e| e.to_string())?;
+    }
     printer.print_cut().map_err(|e| e.to_string())?;
 
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
@@ -651,6 +663,50 @@ pub(crate) mod test_util {
     pub(crate) fn contains(haystack: &[u8], needle: &[u8]) -> bool {
         haystack.windows(needle.len()).any(|w| w == needle)
     }
+
+    /// `ESC @`, `ESC t 46`, `FS .` — how every document with the default
+    /// profile starts — then the one blank line on top (`ESC d 1`).
+    pub(crate) const STARTS_WITH_TOP_MARGIN: [u8; 10] =
+        [0x1b, 0x40, 0x1b, 0x74, 46, 0x1c, 0x2e, 0x1b, 0x64, 1];
+    /// Three blank lines (`ESC d 3`) and the full cut (`GS V A 0`) — how every
+    /// document ends, with nothing between the two.
+    pub(crate) const ENDS_WITH_BOTTOM_MARGIN: [u8; 7] = [0x1b, 0x64, 3, 0x1d, b'V', b'A', 0];
+
+    /// The paper's margins (1 line on top, 3 under the last line), and nothing
+    /// printed after the cut.
+    pub(crate) fn assert_paper_margins(bytes: &[u8]) {
+        assert!(
+            bytes.starts_with(&STARTS_WITH_TOP_MARGIN),
+            "top margin missing: {:?}",
+            &bytes[..bytes.len().min(12)]
+        );
+        assert!(
+            bytes.ends_with(&ENDS_WITH_BOTTOM_MARGIN),
+            "bottom margin missing: {:?}",
+            &bytes[bytes.len().saturating_sub(12)..]
+        );
+        // Exactly three: the last printed line ends with its own `ESC d 1`,
+        // and no empty one follows it before the margin.
+        let before = &bytes[..bytes.len() - ENDS_WITH_BOTTOM_MARGIN.len()];
+        assert!(
+            !before.ends_with(&[0x1b, 0x64, 1, 0x1b, 0x64, 1]),
+            "an extra blank line before the bottom margin"
+        );
+    }
+
+    /// The attribution's two lines and their position: the last text on the
+    /// paper, right before the bottom margin.
+    pub(crate) fn assert_attribution_last(bytes: &[u8]) {
+        let expected_end =
+            [win1251("the-live.shop"), vec![0x1b, 0x64, 1], ENDS_WITH_BOTTOM_MARGIN.to_vec()].concat();
+        assert!(bytes.ends_with(&expected_end), "attribution is not the last line");
+        assert!(contains(bytes, &win1251("Каса: The Live Shop")));
+    }
+
+    pub(crate) fn assert_no_attribution(bytes: &[u8]) {
+        assert!(!contains(bytes, b"the-live.shop"));
+        assert!(!contains(bytes, b"The Live Shop"));
+    }
 }
 
 #[cfg(test)]
@@ -702,6 +758,62 @@ mod tests {
         assert!(contains(&bytes, &win1251("СУМА 100.00 ГРН")));
         assert!(!contains(&bytes, &win1251("Дякуємо за покупку!")));
         assert!(!contains(&bytes, &win1251("Касир")));
+    }
+
+    #[test]
+    fn every_receipt_has_a_line_on_top_and_three_under_the_last() {
+        use super::test_util::assert_paper_margins;
+        assert_paper_margins(&build_ticket(&base(), CHARS_58MM).unwrap());
+        let mut refund = base();
+        refund.kind = ReceiptKind::Refund;
+        assert_paper_margins(&build_ticket(&refund, CHARS_58MM).unwrap());
+        let mut provider = base();
+        provider.provider_text = Some("=== ТЕСТОВИЙ ЧЕК ===\nСУМА 100.00 ГРН\n".into());
+        assert_paper_margins(&build_ticket(&provider, CHARS_58MM).unwrap());
+        let mut with_qr = base();
+        with_qr.feedback_url = Some(FEEDBACK.into());
+        assert_paper_margins(&build_ticket(&with_qr, CHARS_58MM).unwrap());
+    }
+
+    #[test]
+    fn the_attribution_is_the_last_thing_on_the_receipt_after_every_qr() {
+        use super::test_util::{assert_attribution_last, assert_paper_margins};
+        let mut receipt = base();
+        receipt.fiscal = Some(fiscal());
+        receipt.feedback_url = Some(FEEDBACK.into());
+        receipt.attribution = true;
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert_attribution_last(&bytes);
+        assert_paper_margins(&bytes);
+        assert!(after(&bytes, FEEDBACK_TITLE) < after(&bytes, "Каса: The Live Shop"));
+        assert!(after(&bytes, "ФІСКАЛЬНИЙ ЧЕК") < after(&bytes, "Каса: The Live Shop"));
+        // In the receipt's own size: never doubled, never bold (`GS ! 0`, `ESC E 0`).
+        let at = after(&bytes, "Каса: The Live Shop");
+        let head = &bytes[..at];
+        let last_size = head.windows(2).rposition(|w| w == [0x1d, 0x21]).unwrap();
+        assert_eq!(head[last_size + 2], 0);
+    }
+
+    #[test]
+    fn the_attribution_follows_the_providers_text_and_never_goes_inside_it() {
+        use super::test_util::assert_attribution_last;
+        let mut receipt = base();
+        receipt.provider_text = Some("=== ТЕСТОВИЙ ЧЕК ===\nСУМА 100.00 ГРН\n".into());
+        receipt.feedback_url = Some(FEEDBACK.into());
+        receipt.attribution = true;
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert_attribution_last(&bytes);
+        assert!(after(&bytes, "СУМА 100.00 ГРН") < after(&bytes, FEEDBACK_TITLE));
+    }
+
+    #[test]
+    fn the_attribution_on_a_refund_too_and_nowhere_unless_switched_on() {
+        use super::test_util::{assert_attribution_last, assert_no_attribution};
+        let mut refund = base();
+        refund.kind = ReceiptKind::Refund;
+        refund.attribution = true;
+        assert_attribution_last(&build_ticket(&refund, CHARS_58MM).unwrap());
+        assert_no_attribution(&build_ticket(&base(), CHARS_58MM).unwrap());
     }
 
     #[test]

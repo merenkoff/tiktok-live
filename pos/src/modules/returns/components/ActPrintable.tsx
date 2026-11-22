@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import type { ActData } from '../lib/actPayload';
+import { ATTRIBUTION_LINES, storeAttribution } from '../../../lib/attribution';
 
 function money(cents: number) {
   return `${(cents / 100).toFixed(2)} ₴`;
@@ -90,6 +91,14 @@ export function ActPrintable({ act }: { act: ActData | null }) {
         <p>Касир: {act.cashier} ______________</p>
         <p>Покупець: ______________</p>
       </div>
+      {/* The Live Shop's attribution, last on the paper (licence attribution form, п. 1). */}
+      {storeAttribution() && (
+        <div className="act-print-attribution">
+          {ATTRIBUTION_LINES.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

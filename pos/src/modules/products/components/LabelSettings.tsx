@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Segmented } from '@pos/platform/ui';
 import { PriceLabel } from '../../../components/PriceTagsPrintable';
 import { labelLayout, type LabelWarning } from '../../../lib/priceLabelLayout';
+import { storeAttribution } from '../../../lib/attribution';
 import {
   LABEL_HEIGHT_MM,
   LABEL_PRESETS,
@@ -63,7 +64,9 @@ export function LabelSettings({
   const [widthText, setWidthText] = useState(formatMm(value.widthMm));
   const [heightText, setHeightText] = useState(formatMm(value.heightMm));
 
-  const layout = labelLayout(value);
+  // The preview prints what the label will: The Live Shop's line included
+  // where the store has it.
+  const layout = labelLayout(value, { attribution: storeAttribution() });
   const scale = Math.min(
     1,
     PREVIEW_MAX.w / (layout.page.w * MM_PX),

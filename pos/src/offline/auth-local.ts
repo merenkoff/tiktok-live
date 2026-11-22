@@ -91,7 +91,7 @@ export async function saveStaffUnlock(params: {
 
 type StoreSettings = Pick<
   StaffUnlockRow,
-  'cashRounding' | 'ageCheck' | 'feedbackUrl' | 'floristLabourBps' | 'bottles'
+  'cashRounding' | 'ageCheck' | 'attribution' | 'feedbackUrl' | 'floristLabourBps' | 'bottles'
 >;
 
 /**
@@ -111,6 +111,7 @@ function storeSettingsOf(store: AuthResponse['store'], row: StaffUnlockRow | nul
   const next: StoreSettings = {
     cashRounding: said(store.cash_rounding, row?.cashRounding),
     ageCheck: said(store.age_check, row?.ageCheck),
+    attribution: said(store.attribution, row?.attribution),
     feedbackUrl: said(store.feedback_url, row?.feedbackUrl),
     floristLabourBps: said(store.florist_labour_bps, row?.floristLabourBps),
     bottles: said(store.bottles, row?.bottles),
@@ -210,6 +211,7 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
       // «Пляшки» — until the next online login or `/me` fills the row in.
       cash_rounding: row.cashRounding ?? 0,
       age_check: row.ageCheck ?? false,
+      attribution: row.attribution ?? false,
       feedback_url: row.feedbackUrl ?? null,
       florist_labour_bps: row.floristLabourBps ?? 0,
       bottles: row.bottles ?? false,

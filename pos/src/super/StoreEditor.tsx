@@ -35,6 +35,7 @@ export function StoreEditor({
   onClose: () => void;
 }) {
   const [vertical, setVertical] = useState<VerticalId>(store.vertical);
+  const [attribution, setAttribution] = useState(store.attribution === true);
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(store.enabled_modules));
   const [remotes, setRemotes] = useState<Remotes>(() => ({ ...store.module_remotes }));
   const [busy, setBusy] = useState(false);
@@ -108,8 +109,10 @@ export function StoreEditor({
         vertical,
         enabled_modules: [...enabled],
         module_remotes: remotes,
+        attribution,
       });
       onSaved(row);
+      setAttribution(row.attribution === true);
       setRemotes({ ...row.module_remotes });
       setEnabled(new Set(row.enabled_modules));
       setVertical(row.vertical);
@@ -160,6 +163,25 @@ export function StoreEditor({
             {vertical} не підключено — каса продаватиме на загальному екрані.
           </p>
         )}
+      </section>
+
+      <section>
+        <p className="sq-section-label">Атрибуція The Live Shop</p>
+        <label className="mt-2 flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={attribution}
+            onChange={(e) => setAttribution(e.target.checked)}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            Друкувати «Каса: The Live Shop / the-live.shop» останніми рядками чеків, передчеків і квитанцій,
+            «the-live.shop» під цінником і логотип у підвалі QR-меню.
+            <span className="block text-xs text-sq-secondary">
+              Каса підхоплює зміну з наступним запуском або входом (на комп'ютері — з версії 2.9.2); QR-меню — одразу.
+            </span>
+          </span>
+        </label>
       </section>
 
       <section>

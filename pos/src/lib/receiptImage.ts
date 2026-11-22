@@ -9,7 +9,7 @@
 
 import type { ReceiptData } from './printer';
 import { qrMatrix } from './qrMatrix';
-import { RECEIPT_COLUMNS, receiptLines } from './receiptText';
+import { RECEIPT_COLUMNS, receiptLines, receiptTrailer, type ReceiptLine } from './receiptText';
 
 /** Wide enough to read on a phone without zooming, narrow enough to stay small. */
 const WIDTH = 720;
@@ -24,6 +24,8 @@ export async function renderReceiptPng(receipt: ReceiptData, taxUrl: string | nu
   if (!ctx) return null;
 
   const lines = receiptLines(receipt, RECEIPT_COLUMNS);
+  // Under the QR, the very last thing in the picture as on the paper.
+  const trailer = receiptTrailer(receipt);
   // A size at which one character is 1/48 of the inner width.
   ctx.font = `20px ${FONT}`;
   const charWidth = ctx.measureText('0').width || 12;
@@ -36,7 +38,7 @@ export async function renderReceiptPng(receipt: ReceiptData, taxUrl: string | nu
   const qrBlock = qr ? qrSide + PADDING + lineHeight * 2 : 0;
 
   canvas.width = WIDTH;
-  canvas.height = PADDING * 2 + lines.length * lineHeight + qrBlock;
+  canvas.height = PADDING * 2 + lines.length * lineHeight + qrBlock + trailer.length * lineHeight;
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -44,13 +46,14 @@ export async function renderReceiptPng(receipt: ReceiptData, taxUrl: string | nu
   ctx.textBaseline = 'top';
 
   let y = PADDING;
-  for (const line of lines) {
+  const draw = (line: ReceiptLine) => {
     ctx.font = `${line.bold ? '700 ' : ''}${fontSize}px ${FONT}`;
     const text = line.center ? line.text.trim() : line.text;
     const x = line.center ? (WIDTH - ctx.measureText(text).width) / 2 : PADDING;
     ctx.fillText(text, x, y);
     y += lineHeight;
-  }
+  };
+  for (const line of lines) draw(line);
 
   if (qr) {
     y += PADDING / 2;
@@ -64,7 +67,9 @@ export async function renderReceiptPng(receipt: ReceiptData, taxUrl: string | nu
     ctx.font = `${fontSize}px ${FONT}`;
     const caption = 'Перевірити чек у Податковій';
     ctx.fillText(caption, (WIDTH - ctx.measureText(caption).width) / 2, y);
+    y += lineHeight;
   }
+  for (const line of trailer) draw(line);
 
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'));
 }

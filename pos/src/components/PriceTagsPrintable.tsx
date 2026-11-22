@@ -21,6 +21,7 @@ import {
   type TagPaperWidth,
 } from '../lib/priceTagLayout';
 import {
+  LABEL_ATTRIBUTION_FONT_MM,
   LABEL_GAP_MM,
   LABEL_LINE_HEIGHT,
   labelBodyTop,
@@ -38,6 +39,7 @@ import {
 } from '../lib/priceSheetLayout';
 import type { LabelSpec, TagMedia } from '../lib/priceTagMedia';
 import { expandCopies, type PriceTag } from '../lib/priceTag';
+import { ATTRIBUTION_SITE, storeAttribution } from '../lib/attribution';
 
 export type { TagPaperWidth };
 
@@ -183,6 +185,9 @@ export function PriceTagsPrintable({
   media?: TagMedia;
 }) {
   if (!tags || typeof document === 'undefined') return null;
+  // The Live Shop's small «the-live.shop» under the tag, where the super admin
+  // switched it on for the store (the licence's attribution form, п. 2).
+  const attribution = storeAttribution();
 
   if (media?.kind === 'sheet') {
     return createPortal(
@@ -194,7 +199,7 @@ export function PriceTagsPrintable({
   }
 
   if (media?.kind === 'label') {
-    const layout = labelLayout(media);
+    const layout = labelLayout(media, { attribution });
     const all = expandCopies(tags);
     return createPortal(
       <div
@@ -243,6 +248,7 @@ export function PriceTagsPrintable({
             <p className="price-tag-digits">без штрихкоду</p>
           )}
           {tag.sku && <p className="price-tag-sku">{tag.sku}</p>}
+          {attribution && <p className="price-tag-attribution">{ATTRIBUTION_SITE}</p>}
         </div>
       ))}
     </div>,
@@ -468,6 +474,21 @@ export function PriceLabel({
               {tag.sku ?? ''}
             </p>
           )}
+
+          {layout.attributionRoom && (
+            <p
+              className="price-label-attribution"
+              style={{
+                ...ONE_LINE,
+                margin: `${gap} 0 0`,
+                fontSize: mm(LABEL_ATTRIBUTION_FONT_MM),
+                lineHeight: lh.text,
+                textAlign: 'center',
+              }}
+            >
+              {ATTRIBUTION_SITE}
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -497,7 +518,7 @@ const CUT_GUIDE = '1px dashed #888';
  */
 export function PriceSheets({ tags, spec }: { tags: PriceTag[]; spec: LabelSpec }) {
   const grid = sheetLayout(spec);
-  const layout = labelLayout(spec);
+  const layout = labelLayout(spec, { attribution: storeAttribution() });
   const all = expandCopies(tags);
 
   const sheets: PriceTag[][] = [];

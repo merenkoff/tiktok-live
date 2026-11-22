@@ -69,6 +69,11 @@ pub struct PrecheckData {
     /// more a receipt with it than without.
     #[serde(default)]
     pub feedback_url: Option<String>,
+    /// The Live Shop's attribution as the last lines of the paper — only where
+    /// the super admin switched it on for the store (`store.attribution`). The
+    /// host reads it, never a module; absent from an older host.
+    #[serde(default)]
+    pub attribution: bool,
 }
 
 const TITLE: &str = "ПЕРЕДЧЕК";
@@ -191,8 +196,10 @@ fn build_precheck_with(
     if !bill.printed_at.trim().is_empty() {
         printer.writeln(bill.printed_at.trim()).map_err(|e| e.to_string())?;
     }
+    if bill.attribution {
+        printer.attribution().map_err(|e| e.to_string())?;
+    }
 
-    printer.feed().map_err(|e| e.to_string())?;
     printer.print_cut().map_err(|e| e.to_string())?;
 
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
@@ -249,6 +256,7 @@ mod tests {
             ],
             total_cents: 23500,
             feedback_url: None,
+            attribution: false,
         }
     }
 
@@ -355,5 +363,23 @@ mod tests {
         assert!(!contains(&bytes, &win1251("Рахунок")));
         assert!(!contains(&bytes, &win1251("Відкрито")));
         assert!(contains(&bytes, &win1251("Еспресо")));
+    }
+
+    #[test]
+    fn a_pre_bill_has_its_margins_and_the_attribution_last_only_when_on() {
+        use crate::hardware::receipt::test_util::{
+            assert_attribution_last, assert_no_attribution, assert_paper_margins,
+        };
+        let plain = build_precheck(&base(), CHARS_58MM).unwrap();
+        assert_paper_margins(&plain);
+        assert_no_attribution(&plain);
+        let mut bill = base();
+        bill.attribution = true;
+        bill.feedback_url = Some("https://the-live.shop/m/x?t=5&k=abcdefgh#feedback".into());
+        let bytes = build_precheck(&bill, CHARS_58MM).unwrap();
+        assert_paper_margins(&bytes);
+        assert_attribution_last(&bytes);
+        // Under the closing disclaimer, not between the two.
+        assert!(position(&bytes, &win1251("20:41")) < position(&bytes, &win1251("Каса: The Live Shop")));
     }
 }
