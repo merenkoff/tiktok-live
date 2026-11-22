@@ -19,7 +19,7 @@
 // - the ticket carries no prices: it is not a receipt.
 
 import type { KitchenTicketData, KitchenTicketItem } from './printer';
-import type { CatalogItem, PosTag, SaleDetail, TagStation } from '../types';
+import type { CatalogItem, PosTag, RoundPrintJob, SaleDetail, TagStation } from '../types';
 import { flattenTags } from '../offline/catalog-filter';
 import { localOrderLabel } from './localOrderNo';
 
@@ -148,4 +148,36 @@ export function buildKitchenTickets(
     station,
     ticket: { ...head, station: STATION_TITLES[station], items: perStation.get(station)! },
   }));
+}
+
+/**
+ * A table's round as its station's ticket (TechDocs/POS_TABLES.md §11): the
+ * server's print queue already filtered the lines to this station, so this
+ * only shapes them. «Стіл 5» is the big label — what the runner reads across
+ * the pass — and «Раунд 2 · Тераса» sits under it; the station heading only
+ * where the store routes by station. No prices and no receipt number: a round
+ * has no receipt yet. The caption is printed without the answers the round
+ * appended to it, and the answers one per line, exactly as a counter sale's.
+ */
+export function roundTicketOf(
+  job: RoundPrintJob,
+  formatTime: (iso: string) => string = formatTicketTime
+): KitchenTicketData {
+  const where = [`Раунд ${job.round_seq}`, job.hall_name.trim()].filter(Boolean).join(' · ');
+  return {
+    order_label: `Стіл ${job.table_name}`,
+    station: job.heading ? STATION_TITLES[job.heading] : null,
+    subtitle: where,
+    created_at: formatTime(job.fired_at),
+    staff_name: job.staff_name,
+    note: job.note,
+    receipt_number: null,
+    items: job.items.map((item) => ({
+      name: item.product_name,
+      variant_label: bareVariantLabel(item.variant_label, item.modifiers),
+      quantity: item.quantity,
+      modifiers: item.modifiers,
+      note: item.note?.trim() ? item.note.trim() : null,
+    })),
+  };
 }

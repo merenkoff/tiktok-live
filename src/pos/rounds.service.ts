@@ -48,7 +48,7 @@ import {
 } from './composites.service.js';
 import type { ComponentInput } from './composites.service.js';
 import * as bills from './bills.service.js';
-import { ALLOWED_FROM, explainPrepRefusal, KitchenNotFound } from './kitchen.service.js';
+import { ALLOWED_FROM, explainPrepRefusal, KitchenNotFound, STATIONS_SQL } from './kitchen.service.js';
 import type { PrepStatusRow } from './kitchen.service.js';
 import * as modifiers from './modifiers.service.js';
 import { customBouquetLabel } from './sales.service.js';
@@ -267,8 +267,36 @@ export async function fireRoundTx(
     });
   }
 
+  await queueRoundPrints(client, input.storeId, roundId);
+
   await client.query(`UPDATE pos_bills SET updated_at = NOW() WHERE id = $1`, [input.billId]);
   return { roundId, replay: false };
+}
+
+/**
+ * Put the round on the stations' print queue (`pos_round_prints`, migration
+ * 109): one job per station its lines are made at, from the products' tags
+ * exactly as the kitchen board reads them. A line with no station goes to the
+ * kitchen, never nowhere; a store whose tags name no station gets one kitchen
+ * job, printed with no heading. Inside the firing transaction, so a round that
+ * rolls back leaves no job, and only for a NEW round — a replayed tap never
+ * prints twice.
+ */
+async function queueRoundPrints(client: PoolClient, storeId: number, roundId: number): Promise<void> {
+  await client.query(
+    `INSERT INTO pos_round_prints (store_id, round_id, station)
+     SELECT DISTINCT $1::bigint, $2::bigint, st.station
+       FROM pos_bill_items i
+       CROSS JOIN LATERAL unnest(
+         CASE WHEN EXISTS (SELECT 1 FROM pos_tags t WHERE t.store_id = $1 AND t.station IS NOT NULL)
+              THEN COALESCE((${STATIONS_SQL})::text[], ARRAY['kitchen']::text[])
+              ELSE ARRAY['kitchen']::text[]
+         END
+       ) AS st(station)
+      WHERE i.round_id = $2
+     ON CONFLICT DO NOTHING`,
+    [storeId, roundId]
+  );
 }
 
 /**

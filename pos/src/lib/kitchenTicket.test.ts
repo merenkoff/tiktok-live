@@ -4,8 +4,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { makeSaleDetail } from '../test/utils';
-import type { PosTag, SaleDetail } from '../types';
-import { bareVariantLabel, buildKitchenTickets, formatTicketTime, orderLabelOf, stationByTag, stationsOf } from './kitchenTicket';
+import type { PosTag, RoundPrintJob, SaleDetail } from '../types';
+import { bareVariantLabel, buildKitchenTickets, formatTicketTime, orderLabelOf, roundTicketOf, stationByTag, stationsOf } from './kitchenTicket';
 
 function tag(over: Partial<PosTag> & Pick<PosTag, 'id' | 'name'>): PosTag {
   return { store_id: 1, parent_id: null, sort_order: 0, color: null, show_in_catalog_bar: true, ...over };
@@ -152,5 +152,45 @@ describe('bareVariantLabel', () => {
     expect(bareVariantLabel('M', [])).toBe('M');
     // A caption that was not composed this way is left alone.
     expect(bareVariantLabel('M · щось інше', ['вівсяне'])).toBe('M · щось інше');
+  });
+});
+
+describe('roundTicketOf — a table\'s round on its station\'s printer', () => {
+  const job: RoundPrintJob = {
+    round_id: 41,
+    station: 'kitchen',
+    heading: 'kitchen',
+    table_name: '5',
+    hall_name: 'Тераса',
+    round_seq: 2,
+    fired_at: '2026-11-22T18:12:00Z',
+    staff_name: 'Марта',
+    note: 'алергія на горіхи',
+    items: [
+      { product_name: 'Латте', variant_label: 'M · вівсяне', quantity: 2, modifiers: ['вівсяне'], note: ' гарячіше ' },
+      { product_name: 'Бограч', variant_label: '', quantity: 1, modifiers: [], note: null },
+    ],
+  };
+
+  it('is «Стіл 5», then «Раунд 2 · Тераса», the station and the lines — no prices, no receipt', () => {
+    expect(roundTicketOf(job, () => '20:12')).toEqual({
+      order_label: 'Стіл 5',
+      station: 'КУХНЯ',
+      subtitle: 'Раунд 2 · Тераса',
+      created_at: '20:12',
+      staff_name: 'Марта',
+      note: 'алергія на горіхи',
+      receipt_number: null,
+      items: [
+        { name: 'Латте', variant_label: 'M', quantity: 2, modifiers: ['вівсяне'], note: 'гарячіше' },
+        { name: 'Бограч', variant_label: '', quantity: 1, modifiers: [], note: null },
+      ],
+    });
+  });
+
+  it('has no heading where the store routes nothing by station, and no hall when it has none', () => {
+    const ticket = roundTicketOf({ ...job, heading: null, hall_name: '' }, () => '20:12');
+    expect(ticket.station).toBeNull();
+    expect(ticket.subtitle).toBe('Раунд 2');
   });
 });

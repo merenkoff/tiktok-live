@@ -282,4 +282,6 @@ export function startOfflineRuntime(): void {
   void runSync();
   // A table's receipts on this desktop's «Чеки столів» printer, if it has one (ДК3-Г).
   void import('./receiptQueue').then((mod) => mod.startReceiptQueue());
+  // A table's rounds on this desktop's kitchen and bar printers, if it has them.
+  void import('./kitchenQueue').then((mod) => mod.startKitchenQueue());
 }

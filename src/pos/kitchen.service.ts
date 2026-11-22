@@ -110,7 +110,7 @@ export const ALLOWED_FROM: Record<'ready' | 'served', PrepStatus[]> = {
  * Where a line is made, from its product's tags — the same subquery for a
  * sale line and a bill line, both of which name their variant as `i.variant_id`.
  */
-const STATIONS_SQL = `(SELECT array_agg(DISTINCT t.station ORDER BY t.station)
+export const STATIONS_SQL = `(SELECT array_agg(DISTINCT t.station ORDER BY t.station)
                          FROM pos_variants v
                          JOIN pos_product_tags pt ON pt.product_id = v.product_id
                          JOIN pos_tags t ON t.id = pt.tag_id

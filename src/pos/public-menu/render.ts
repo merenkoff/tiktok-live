@@ -352,8 +352,8 @@ function renderContacts(store: PublicMenuStore): string {
 export interface MenuPageOptions {
   /**
    * The Live Shop's attribution (migration 108, the super admin's switch): the
-   * footer carries the logo and «The Live Shop» — no link, no call to buy
-   * anything. Without it the footer keeps its «Меню працює на The Live Shop
+   * footer carries the logo and «The Live Shop», one link to the program's
+   * page — no call to buy anything. Without it the footer keeps its «Меню працює на The Live Shop
    * POS» line, as every menu had before.
    */
   attribution?: boolean;
@@ -475,10 +475,13 @@ export const MENU_ATTRIBUTION_LOGO = '/menu-assets/liveshop.svg';
 
 /** The footer's last line: our attribution where the store has it, else the old credit line. */
 function footerCredit(attribution: boolean): string {
+  // Both lead to the program's page, as the credit line always did — the
+  // owner's word of 2026-11-22: the logo and the name ARE the link.
+  const href = `${escapeHtml(publicBaseUrl())}/pos/kafe`;
   if (attribution) {
-    return `<p class="attr"><img src="${MENU_ATTRIBUTION_LOGO}" width="20" height="20" alt="">${MENU_ATTRIBUTION_TEXT}</p>`;
+    return `<p class="attr"><a href="${href}" rel="noopener"><img src="${MENU_ATTRIBUTION_LOGO}" width="20" height="20" alt="">${MENU_ATTRIBUTION_TEXT}</a></p>`;
   }
-  return `<p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p>`;
+  return `<p><a href="${href}" rel="noopener">Меню працює на The Live Shop POS</a></p>`;
 }
 
 export function renderMenuPage(

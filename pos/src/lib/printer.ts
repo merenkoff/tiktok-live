@@ -261,6 +261,12 @@ export interface KitchenTicketData {
   order_label: string;
   /** «КУХНЯ» / «БАР»; null when the store routes nothing by station. */
   station: string | null;
+  /**
+   * Under the number, ordinary size: a table's round says «Раунд 2 · Тераса»
+   * there (TechDocs/POS_TABLES.md §11). Absent on a counter sale; a Rust build
+   * older than it ignores the field.
+   */
+  subtitle?: string | null;
   /** Already formatted — the time the sale was rung. */
   created_at: string;
   staff_name: string;
