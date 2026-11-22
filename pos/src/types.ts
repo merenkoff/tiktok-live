@@ -979,6 +979,11 @@ export type TagStation = 'kitchen' | 'bar';
  */
 export interface RoundPrintJob {
   round_id: number;
+  /**
+   * `cancel`: the round was taken back after its ticket was printed — print
+   * «СКАСОВАНО». Absent from a server before 2.9.3, which reads as `fire`.
+   */
+  kind?: 'fire' | 'cancel';
   /** Which station's printer it goes to. */
   station: TagStation;
   /** The ticket's heading — null when the store routes nothing by station. */

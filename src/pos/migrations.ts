@@ -221,6 +221,9 @@ export const POS_MIGRATIONS = [
   // lines are made at, taken by the desktop that holds that station's printer
   // (TechDocs/POS_TABLES.md §11).
   '109_pos_round_prints.sql',
+  // A second job per station, `kind = 'cancel'`, for a round cancelled after
+  // its ticket was printed or taken: the kitchen gets «СКАСОВАНО» on paper.
+  '110_pos_round_print_cancel.sql',
 ] as const;
 
 export function readMigration(file: string): string {

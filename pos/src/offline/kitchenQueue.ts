@@ -56,7 +56,7 @@ export async function drainKitchenQueue(now: () => number = Date.now): Promise<K
         restUntil = now() + REST_AFTER_FAILURE_MS;
         return { failed: typeof error === 'string' ? error : String(error) };
       }
-      await api.markRoundPrinted(job.round_id, job.station);
+      await api.markRoundPrinted(job.round_id, job.station, job.kind === 'cancel' ? 'cancel' : 'fire');
       printed += 1;
     }
     return { printed };

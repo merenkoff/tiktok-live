@@ -598,14 +598,24 @@ class PosApi {
    */
   async roundPrintQueue(stations: TagStation[]): Promise<{ jobs: RoundPrintJob[] }> {
     const { data } = await this.client.get<{ jobs: RoundPrintJob[] }>('/kitchen/print-queue', {
-      params: { stations: stations.join(',') },
+      // This build prints «СКАСОВАНО»; without `kinds` the server hands out
+      // only fire tickets, which is what a desktop before 2.9.3 can print.
+      params: { stations: stations.join(','), kinds: 'fire,cancel' },
     });
     return data;
   }
 
-  /** This device printed the round's ticket for that station; idempotent. */
-  async markRoundPrinted(roundId: number, station: TagStation): Promise<void> {
-    await this.client.post(`/kitchen/print-queue/${roundId}/${station}/printed`);
+  /**
+   * This device printed the round's ticket for that station; idempotent. A
+   * «СКАСОВАНО» ticket is confirmed with its kind; the fire ticket without one,
+   * so an older server still understands it.
+   */
+  async markRoundPrinted(roundId: number, station: TagStation, kind: 'fire' | 'cancel' = 'fire'): Promise<void> {
+    await this.client.post(
+      `/kitchen/print-queue/${roundId}/${station}/printed`,
+      undefined,
+      kind === 'cancel' ? { params: { kind } } : undefined
+    );
   }
 
   /** What each receipt of a two-register cart will come to; writes nothing. */

@@ -74,8 +74,8 @@ describe('drainKitchenQueue', () => {
     expect(api.roundPrintQueue).toHaveBeenCalledWith(['kitchen', 'bar']);
     expect(printKitchenTicket).toHaveBeenNthCalledWith(1, 'Kitchen-1', expect.objectContaining({ order_label: 'Стіл 5', station: 'КУХНЯ' }), 80);
     expect(printKitchenTicket).toHaveBeenNthCalledWith(2, 'Bar-1', expect.objectContaining({ station: 'БАР' }), 58);
-    expect(api.markRoundPrinted).toHaveBeenCalledWith(7, 'kitchen');
-    expect(api.markRoundPrinted).toHaveBeenCalledWith(7, 'bar');
+    expect(api.markRoundPrinted).toHaveBeenCalledWith(7, 'kitchen', 'fire');
+    expect(api.markRoundPrinted).toHaveBeenCalledWith(7, 'bar', 'fire');
   });
 
   it('prints the bar\'s ticket on the kitchen\'s printer when the bar has none', async () => {
@@ -96,6 +96,14 @@ describe('drainKitchenQueue', () => {
     expect(await drainKitchenQueue(() => clock)).toBe('resting');
     clock += 31_000;
     expect(await drainKitchenQueue(() => clock)).toEqual({ printed: 1 });
+  });
+
+  it('prints a «СКАСОВАНО» job as a cancelled ticket and confirms it as such', async () => {
+    meta.set(KITCHEN_PRINTER_META_KEY, 'Kitchen-1');
+    vi.mocked(api.roundPrintQueue).mockResolvedValue({ jobs: [{ ...job(10, 'kitchen'), kind: 'cancel' }] });
+    expect(await drainKitchenQueue()).toEqual({ printed: 1 });
+    expect(printKitchenTicket).toHaveBeenCalledWith('Kitchen-1', expect.objectContaining({ cancelled: true }), 58);
+    expect(api.markRoundPrinted).toHaveBeenCalledWith(10, 'kitchen', 'cancel');
   });
 
   it('waits without a network', async () => {

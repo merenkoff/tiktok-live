@@ -275,6 +275,12 @@ export interface KitchenTicketData {
   /** Small, at the bottom: what to look for on the till if something is off. */
   receipt_number: string | null;
   items: KitchenTicketItem[];
+  /**
+   * The round was taken back after this ticket went out: «СКАСОВАНО» in
+   * reverse print on top, «Не готувати» under it, then the same lines so the
+   * cook finds what to stop. A Rust build before 2.9.3 ignores the field.
+   */
+  cancelled?: boolean;
 }
 
 /** Print one kitchen ticket to a named OS printer — the Rust `print_kitchen_ticket` command. */
