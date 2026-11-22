@@ -302,6 +302,9 @@ body[data-view="fav"] .cat[data-has-chosen="0"] { display: none; }
 
 .foot { max-width: 720px; margin: 0 auto; padding: 8px 16px 40px; color: var(--muted); font-size: 13px; text-align: center; }
 .foot p { margin: 4px 0; }
+/* The Live Shop's attribution (migration 108): the logo and the name, quiet, in the footer's own size. */
+.foot .attr { display: inline-flex; align-items: center; gap: 6px; }
+.foot .attr img { display: block; border-radius: 5px; }
 
 .gone { max-width: 420px; margin: 20vh auto 0; padding: 0 20px; text-align: center; }
 .gone h1 { font-size: 24px; margin: 0 0 8px; }

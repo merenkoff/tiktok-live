@@ -250,6 +250,32 @@ impl TextPrinter {
         if let Some(n) = self.encoding.esc_t {
             self.inner.custom(&select_table(n))?;
         }
+        // The top margin: the first line does not start at the very edge of
+        // the paper the last cut left.
+        self.inner.feeds(TOP_BLANK_LINES)?;
+        Ok(&mut self.inner)
+    }
+
+    /// The bottom margin, then the cut. Every document ends here, so the paper
+    /// past its last line is the same three lines whatever printed it — a
+    /// receipt cut right under its last word looked as if we were saving paper.
+    pub(crate) fn print_cut(&mut self) -> EscResult<&mut Printer<FileDriver>> {
+        self.inner.feeds(BOTTOM_BLANK_LINES)?;
+        self.inner.print_cut()
+    }
+
+    /// The Live Shop's attribution (the licence's attribution form, п. 1): the
+    /// last lines of a receipt, pre-bill or slip — after every requisite, the
+    /// fiscal number and the QR — centred, in the receipt's own font and never
+    /// larger. Only where the super admin switched it on for the store.
+    pub(crate) fn attribution(&mut self) -> EscResult<&mut Printer<FileDriver>> {
+        self.inner.justify(JustifyMode::CENTER)?;
+        self.inner.bold(false)?;
+        self.inner.reset_size()?;
+        self.inner.feed()?;
+        for line in ATTRIBUTION_LINES {
+            self.writeln(line)?;
+        }
         Ok(&mut self.inner)
     }
 
@@ -295,6 +321,13 @@ impl DerefMut for TextPrinter {
         &mut self.inner
     }
 }
+
+/// Blank lines before the first line of every document and after its last.
+pub(crate) const TOP_BLANK_LINES: u8 = 1;
+pub(crate) const BOTTOM_BLANK_LINES: u8 = 3;
+
+/// The attribution's two lines — the text the licence's attribution form gives.
+pub(crate) const ATTRIBUTION_LINES: [&str; 2] = ["Каса: The Live Shop", "the-live.shop"];
 
 /// `FS .` — cancel Kanji (Chinese double-byte) character mode, so bytes from
 /// 0x80 up are read one at a time through the `ESC t` table. See the module
@@ -365,6 +398,7 @@ fn build_test_sheet(candidates: &[EncodingCandidate], width: usize) -> Result<Ve
     // Before anything else: on a printer in Chinese mode no row of the sheet
     // would differ from the next.
     printer.custom(&CANCEL_KANJI).map_err(e)?;
+    printer.feeds(TOP_BLANK_LINES).map_err(e)?;
     printer.justify(JustifyMode::LEFT).map_err(e)?;
     // ASCII on purpose: the sheet is read on a printer that may be on the wrong
     // table, and these two lines must survive that.
@@ -400,7 +434,7 @@ fn build_test_sheet(candidates: &[EncodingCandidate], width: usize) -> Result<Ve
         }
     }
 
-    printer.feed().map_err(e)?;
+    printer.feeds(BOTTOM_BLANK_LINES).map_err(e)?;
     printer.print_cut().map_err(e)?;
     let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
     let _ = std::fs::remove_file(&path);
@@ -686,5 +720,13 @@ mod tests {
         let exactly: Vec<EncodingCandidate> =
             (0..MAX_CANDIDATES).map(|_| candidate(EncodingTable::Cp866, None)).collect();
         assert!(build_test_sheet(&exactly, 32).is_ok());
+    }
+
+    #[test]
+    fn the_test_sheet_has_the_same_margins_as_every_document() {
+        let sheet = build_test_sheet(&[candidate(EncodingTable::Windows1251, None)], 32).unwrap();
+        let cancel = sheet.windows(2).position(|w| w == CANCEL_KANJI).unwrap();
+        assert_eq!(&sheet[cancel + 2..cancel + 5], &[0x1b, 0x64, TOP_BLANK_LINES]);
+        assert!(sheet.ends_with(&[0x1b, 0x64, BOTTOM_BLANK_LINES, 0x1d, b'V', b'A', 0]));
     }
 }

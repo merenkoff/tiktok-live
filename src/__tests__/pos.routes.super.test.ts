@@ -182,6 +182,50 @@ describe.skipIf(!hasDb)('POS super admin routes', () => {
     });
   });
 
+  describe('attribution (migration 108)', () => {
+    const patch = (payload: unknown) =>
+      app.inject({ method: 'PATCH', url: `/api/pos/super/stores/${c.storeId}`, headers: superHeaders(), payload: payload as object });
+    const me = () => app.inject({ method: 'GET', url: '/api/pos/me', headers: { authorization: `Bearer ${c.ownerToken}` } });
+
+    it('is off for every store until the super admin switches it on', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/pos/super/stores', headers: superHeaders() });
+      const row = (res.json() as Array<{ id: number; attribution: boolean }>).find((r) => r.id === c.storeId)!;
+      expect(row.attribution).toBe(false);
+      expect((await me()).json().store.attribution).toBe(false);
+    });
+
+    it('the super admin switches it, and the login carries it to the till', async () => {
+      const on = await patch({ attribution: true });
+      expect(on.statusCode).toBe(200);
+      expect(on.json().attribution).toBe(true);
+      expect((await me()).json().store.attribution).toBe(true);
+      // A patch that does not name it leaves it.
+      expect((await patch({ enabled_modules: ['returns'] })).json().attribution).toBe(true);
+      const off = await patch({ attribution: false });
+      expect(off.json().attribution).toBe(false);
+      expect((await me()).json().store.attribution).toBe(false);
+    });
+
+    it('refuses anything but true or false, writing nothing', async () => {
+      const bad = await patch({ attribution: 'yes', enabled_modules: [] });
+      expect(bad.statusCode).toBe(400);
+      expect(bad.json().error).toMatch(/attribution/);
+      const { rows } = await pool.query('SELECT attribution FROM pos_stores WHERE id = $1', [c.storeId]);
+      expect(rows[0].attribution).toBe(false);
+    });
+
+    it('the owner cannot switch it through PATCH /store', async () => {
+      await app.inject({
+        method: 'PATCH',
+        url: '/api/pos/store',
+        headers: { authorization: `Bearer ${c.ownerToken}` },
+        payload: { attribution: true },
+      });
+      const { rows } = await pool.query('SELECT attribution FROM pos_stores WHERE id = $1', [c.storeId]);
+      expect(rows[0].attribution).toBe(false);
+    });
+  });
+
   describe('vertical', () => {
     // Its own store, created here and dropped here. These cases move the
     // vertical column and clear `module_remotes`, and the shared a/b/c

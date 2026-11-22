@@ -104,6 +104,8 @@ export interface StaffUnlockRow {
   cashRounding?: number;
   /** «Покупцю є 18 років?» once per receipt (optional on old rows → not asked). */
   ageCheck?: boolean;
+  /** The Live Shop's attribution on the paper (optional on old rows → off). */
+  attribution?: boolean;
   /** The QR «Оцініть нас» on a receipt printed offline; `null` = the owner takes no feedback. */
   feedbackUrl?: string | null;
   /**

@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  LABEL_ATTRIBUTION_MM,
   LABEL_COMFORT_BAR_MM,
   LABEL_MAX_MODULE_MM,
   LABEL_MIN_BAR_MM,
@@ -228,5 +229,39 @@ describe('the price row', () => {
     expect(priceRowFonts(tall, price, old, 'ARTICLE-0001')).toEqual(
       priceRowFonts(tall, price, old, null)
     );
+  });
+});
+
+describe('The Live Shop attribution on a label (licence attribution form, п. 2)', () => {
+  const presets = LABEL_PRESETS.map((p) => [`${p.widthMm}×${p.heightMm}`, p] as const);
+
+  it.each(presets)('%s is laid out exactly as before for a store without it', (_, p) => {
+    for (const rotate of [0, 90] as const) {
+      const plain = labelLayout({ ...p, rotate });
+      expect(plain.attributionRoom).toBe(false);
+      expect(labelLayout({ ...p, rotate }, { attribution: false })).toEqual(plain);
+    }
+  });
+
+  it.each(presets)('%s gives the line only from slack or bars — never a font, the name or the store', (_, p) => {
+    for (const rotate of [0, 90] as const) {
+      const plain = labelLayout({ ...p, rotate });
+      const withIt = labelLayout({ ...p, rotate }, { attribution: true });
+      expect(withIt.fonts).toEqual(plain.fonts);
+      expect(withIt.nameLines).toBe(plain.nameLines);
+      expect(withIt.showStore).toBe(plain.showStore);
+      expect(withIt.barcode.barMm).toBeGreaterThanOrEqual(LABEL_MIN_BAR_MM - 0.001);
+      expect(withIt.warnings).toEqual(plain.warnings);
+      if (withIt.attributionRoom) {
+        // Its line fits under the rest of the content.
+        expect(labelContentHeightMm(withIt) + LABEL_ATTRIBUTION_MM).toBeLessThanOrEqual(inner(withIt).h + 0.01);
+      }
+    }
+  });
+
+  it('fits on the usual 58×40 label and on every label turned upright, and goes without on the smallest', () => {
+    expect(labelLayout({ widthMm: 58, heightMm: 40, rotate: 0 }, { attribution: true }).attributionRoom).toBe(true);
+    expect(labelLayout({ widthMm: 40, heightMm: 25, rotate: 90 }, { attribution: true }).attributionRoom).toBe(true);
+    expect(labelLayout({ widthMm: 40, heightMm: 25, rotate: 0 }, { attribution: true }).attributionRoom).toBe(false);
   });
 });

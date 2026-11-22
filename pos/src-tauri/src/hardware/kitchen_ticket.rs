@@ -144,7 +144,6 @@ fn build_kitchen_ticket_with(
             .map_err(|e| e.to_string())?;
     }
 
-    printer.feed().map_err(|e| e.to_string())?;
     printer.print_cut().map_err(|e| e.to_string())?;
 
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
@@ -270,5 +269,13 @@ mod tests {
         let bytes = build_kitchen_ticket(&ticket, CHARS_58MM).unwrap();
         assert!(contains(&bytes, &win1251("К1")));
         assert!(contains(&bytes, &win1251("1 x Еспресо")));
+    }
+
+    #[test]
+    fn a_kitchen_ticket_has_the_margins_and_never_the_attribution() {
+        use crate::hardware::receipt::test_util::{assert_no_attribution, assert_paper_margins};
+        let bytes = build_kitchen_ticket(&base(), CHARS_58MM).unwrap();
+        assert_paper_margins(&bytes);
+        assert_no_attribution(&bytes);
     }
 }

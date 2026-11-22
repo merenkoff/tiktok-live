@@ -15,7 +15,7 @@
  */
 
 import { cleanup, render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { PriceTagsPrintable } from './PriceTagsPrintable';
 import { buildPriceTags } from '../lib/priceTag';
 import {
@@ -577,5 +577,39 @@ describe('a weighed good’s tag', () => {
     render(<PriceTagsPrintable tags={weighed()} media={{ kind: 'label', widthMm: 58, heightMm: 40, rotate: 0 }} />);
     expect(document.querySelector('.price-label-price')?.textContent).toBe('189.90 ₴/кг');
     expect(document.querySelector('.price-label-variant')?.textContent).toBe('Гауда · 18.99 ₴ за 100 г');
+  });
+});
+
+describe('The Live Shop attribution under a tag (licence attribution form, п. 2)', () => {
+  afterEach(() => {
+    localStorage.clear();
+    cleanup();
+  });
+
+  const on = () => localStorage.setItem('pos_auth', JSON.stringify({ store: { attribution: true } }));
+
+  it('is the last, smallest line of a roll tag where the store has it', () => {
+    on();
+    render(<PriceTagsPrintable tags={tags()} paperWidth={58} />);
+    const tag = document.querySelector('.price-tag')!;
+    expect(tag.lastElementChild).toHaveClass('price-tag-attribution');
+    expect(tag.lastElementChild?.textContent).toBe('the-live.shop');
+  });
+
+  it('goes under a label that has a line for it, and nowhere for a store without it', () => {
+    const media: TagMedia = { kind: 'label', widthMm: 58, heightMm: 40, rotate: 0 };
+    render(<PriceTagsPrintable tags={tags()} media={media} />);
+    expect(document.querySelector('.price-label-attribution')).toBeNull();
+    cleanup();
+    on();
+    render(<PriceTagsPrintable tags={tags()} media={media} />);
+    expect(document.querySelector('.price-label-attribution')?.textContent).toBe('the-live.shop');
+  });
+
+  it('is left off a label too small to spare the line', () => {
+    on();
+    render(<PriceTagsPrintable tags={tags()} media={{ kind: 'label', widthMm: 40, heightMm: 25, rotate: 0 }} />);
+    expect(document.querySelector('.price-label')).not.toBeNull();
+    expect(document.querySelector('.price-label-attribution')).toBeNull();
   });
 });

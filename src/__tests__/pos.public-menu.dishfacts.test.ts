@@ -10,6 +10,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
+import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import {
@@ -246,6 +247,28 @@ describe('the guest page', () => {
     expect(html).toContain('<p class="comp"><b>Склад:</b> Еспресо, молоко</p>');
     expect(html).toContain('<ul class="allergens" aria-label="Містить алергени"><li>Глютен</li><li>Молоко</li></ul>');
     expect(html).toContain('Склад і алергени вказує заклад. Якщо у вас алергія — скажіть офіціанту.');
+  });
+
+  it('is the logo and the name, with no link and no call to buy, where the store has it', () => {
+    const html = renderMenuPage(menuOf(dish()), 'tok_12345678', null, { attribution: true });
+    const footer = html.slice(html.indexOf('<footer class="foot">'), html.indexOf('</footer>'));
+    expect(footer).toContain('<p class="attr"><img src="/menu-assets/liveshop.svg" width="20" height="20" alt="">The Live Shop</p>');
+    expect(footer).not.toContain('<a ');
+    expect(footer).not.toContain('Меню працює на');
+  });
+
+  it('keeps the old credit line where it does not', () => {
+    for (const html of [
+      renderMenuPage(menuOf(dish()), 'tok_12345678'),
+      renderMenuPage(menuOf(dish()), 'tok_12345678', null, { attribution: false }),
+    ]) {
+      expect(html).toContain('Меню працює на The Live Shop POS</a>');
+      expect(html).not.toContain('class="attr"');
+    }
+  });
+
+  it('serves the logo from the menu\'s own assets, which the page\'s CSP allows', () => {
+    expect(fs.existsSync(path.join(process.cwd(), 'public/menu-assets/liveshop.svg'))).toBe(true);
   });
 
   it('says nothing about a dish whose owner said nothing — and no note when nothing needs one', () => {

@@ -66,6 +66,11 @@ pub struct SlipData {
     /// Already formatted by the host: now.
     #[serde(default)]
     pub printed_at: String,
+    /// The Live Shop's attribution as the last lines of the paper — only where
+    /// the super admin switched it on for the store (`store.attribution`). The
+    /// host reads it, never a module; absent from an older host.
+    #[serde(default)]
+    pub attribution: bool,
 }
 
 const DISCLAIMER: &str = "НЕ Є РОЗРАХУНКОВИМ ДОКУМЕНТОМ";
@@ -186,8 +191,10 @@ fn build_slip_with(
     if !slip.printed_at.trim().is_empty() {
         printer.writeln(slip.printed_at.trim()).map_err(|e| e.to_string())?;
     }
+    if slip.attribution {
+        printer.attribution().map_err(|e| e.to_string())?;
+    }
 
-    printer.feed().map_err(|e| e.to_string())?;
     printer.print_cut().map_err(|e| e.to_string())?;
 
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
@@ -242,6 +249,7 @@ mod tests {
             ],
             footer: vec!["Підпис покупця ________".into()],
             printed_at: "24.10.2026 14:05".into(),
+            attribution: false,
         }
     }
 
@@ -313,5 +321,21 @@ mod tests {
         let bytes = build_slip(&slip, CHARS_58MM).unwrap();
         assert!(contains(&bytes, &win1251("ВИДАЧА")));
         assert_eq!(count(&bytes, &win1251(DISCLAIMER)), 2);
+    }
+
+    #[test]
+    fn a_slip_has_its_margins_and_the_attribution_last_only_when_on() {
+        use crate::hardware::receipt::test_util::{
+            assert_attribution_last, assert_no_attribution, assert_paper_margins,
+        };
+        let plain = build_slip(&base(), CHARS_58MM).unwrap();
+        assert_paper_margins(&plain);
+        assert_no_attribution(&plain);
+        let mut slip = base();
+        slip.attribution = true;
+        let bytes = build_slip(&slip, CHARS_58MM).unwrap();
+        assert_paper_margins(&bytes);
+        assert_attribution_last(&bytes);
+        assert!(position(&bytes, &win1251("24.10.2026 14:05")) < position(&bytes, &win1251("Каса: The Live Shop")));
     }
 }

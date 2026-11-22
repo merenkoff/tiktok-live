@@ -92,6 +92,7 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
       enabled_modules?: unknown;
       module_remotes?: unknown;
       vertical?: unknown;
+      attribution?: unknown;
     };
     try {
       const updated = await superService.patchStoreModules(storeId, body);

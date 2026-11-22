@@ -25,6 +25,7 @@ import {
 import { hashPassword } from './core/crypto.js';
 import { getFiscalSettings } from './fiscal/settings.service.js';
 import { isFiscalProviderId } from './fiscal/types.js';
+import { invalidatePublicMenu } from './public-menu/menu.service.js';
 import { getVertical, hasVertical, verticalOrDefault } from './verticals/index.js';
 import { WEIGHABLE_UNITS, WEIGHED_PRICE_PER } from './weighed.js';
 import type { AttributeValues, VerticalDefinition, VerticalId } from './verticals/types.js';
@@ -41,6 +42,11 @@ export interface SuperStoreRow {
   enabled_modules: string[];
   module_remotes: Record<string, string | ModuleRemoteEntry>;
   live_tiktok_username: string | null;
+  /**
+   * The Live Shop's attribution on the store's paper and guest menu — written
+   * only here, never by the owner (migration 108).
+   */
+  attribution: boolean;
   fiscal: { enabled: boolean; provider: string | null };
   staff_count: number;
   last_sale_at: string | null;
@@ -64,7 +70,7 @@ export class SuperConflictError extends Error {
 
 const STORE_SELECT = `
   SELECT s.id, s.name, s.slug, s.currency, s.created_at, s.vertical,
-         s.enabled_modules, s.module_remotes, s.live_tiktok_username,
+         s.enabled_modules, s.module_remotes, s.live_tiktok_username, s.attribution,
          fs.enabled AS fiscal_enabled, fs.provider AS fiscal_provider,
          (SELECT count(*)::int FROM pos_staff st WHERE st.store_id = s.id AND st.is_active) AS staff_count,
          (SELECT max(sa.created_at) FROM pos_sales sa WHERE sa.store_id = s.id) AS last_sale_at
@@ -84,6 +90,7 @@ function mapRow(row: Record<string, unknown>): SuperStoreRow {
     enabled_modules: effectiveEnabledModules(row.enabled_modules as string[] | null),
     module_remotes: (row.module_remotes as SuperStoreRow['module_remotes'] | null) ?? {},
     live_tiktok_username: (row.live_tiktok_username as string | null) ?? null,
+    attribution: row.attribution === true,
     fiscal: {
       enabled: Boolean(row.fiscal_enabled),
       provider: isFiscalProviderId(row.fiscal_provider) ? String(row.fiscal_provider) : null,
@@ -258,10 +265,13 @@ async function relabelStoreVariants(
 
 export async function patchStoreModules(
   storeId: number,
-  body: { enabled_modules?: unknown; module_remotes?: unknown; vertical?: unknown }
+  body: { enabled_modules?: unknown; module_remotes?: unknown; vertical?: unknown; attribution?: unknown }
 ): Promise<SuperStoreRow | null> {
   const current = await getStore(storeId);
   if (!current) return null;
+  if (body.attribution !== undefined && typeof body.attribution !== 'boolean') {
+    throw new SuperValidationError('attribution must be true or false');
+  }
 
   // Validate everything against the state this request would produce, before
   // writing anything: setting `vertical: clothing` while `vertical-flowers` is
@@ -297,6 +307,13 @@ export async function patchStoreModules(
     await setStoreVertical(storeId, vertical);
   }
   await updateStore(storeId, patch);
+  if (typeof body.attribution === 'boolean' && body.attribution !== current.attribution) {
+    // Its own statement, like `vertical`: the column is not in
+    // `STORE_PATCH_COLUMNS`, which is what keeps the owner from writing it.
+    await pool.query('UPDATE pos_stores SET attribution = $2 WHERE id = $1', [storeId, body.attribution]);
+    // The guest menu is cached per process; its footer changes with this.
+    invalidatePublicMenu(storeId);
+  }
   return getStore(storeId);
 }
 

@@ -4,6 +4,7 @@
 
 import type { ReceiptData, ReceiptVatLine } from '../lib/printer';
 import { paymentWords, withCurrency } from '../lib/paymentWords';
+import { ATTRIBUTION_LINES, storeAttribution } from '../lib/attribution';
 
 function money(cents: number) {
   return (cents / 100).toFixed(2);
@@ -22,6 +23,21 @@ function vatLabel(line: ReceiptVatLine) {
 // Rendered off-screen at all times; only visible to the browser's print engine
 // via the `@media print` rules in tokens.css, so window.print() reproduces the
 // same layout the ESC/POS ticket uses (see receipt.rs) instead of the app UI.
+/**
+ * The Live Shop's attribution — the last lines of the paper, under everything
+ * else, in the receipt's own font (the licence's attribution form, п. 1).
+ */
+function Attribution({ receipt }: { receipt: ReceiptData }) {
+  if (!(receipt.attribution ?? storeAttribution())) return null;
+  return (
+    <div className="receipt-print-attribution">
+      {ATTRIBUTION_LINES.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </div>
+  );
+}
+
 export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
   if (!receipt) return null;
 
@@ -31,6 +47,7 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
     return (
       <div className="receipt-print-area">
         <pre className="receipt-print-provider">{receipt.provider_text}</pre>
+        <Attribution receipt={receipt} />
       </div>
     );
   }
@@ -209,6 +226,7 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
           Оцініть нас: <a href={receipt.feedback_url}>{receipt.feedback_url}</a>
         </p>
       ) : null}
+      <Attribution receipt={receipt} />
     </div>
   );
 }

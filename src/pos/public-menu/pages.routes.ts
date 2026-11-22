@@ -111,6 +111,7 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
             : { mode: found.store.autoKitchen, limitCents: found.store.autoLimitCents },
         ogImage: await ogImageFor(found.store, token),
         licenceNote: await guestNoticeText(),
+        attribution: found.store.attribution,
       })
     );
   });
@@ -162,6 +163,7 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
         openDish: dish,
         ogImage: await ogImageFor(found.store, token),
         licenceNote: await guestNoticeText(),
+        attribution: found.store.attribution,
       })
     );
   });

@@ -351,6 +351,13 @@ function renderContacts(store: PublicMenuStore): string {
 
 export interface MenuPageOptions {
   /**
+   * The Live Shop's attribution (migration 108, the super admin's switch): the
+   * footer carries the logo and «The Live Shop» — no link, no call to buy
+   * anything. Without it the footer keeps its «Меню працює на The Live Shop
+   * POS» line, as every menu had before.
+   */
+  attribution?: boolean;
+  /**
    * The line a copy without a valid licence key shows its guests under each
    * dish — only when the author switched that on for it (phase 2G,
    * `guestNoticeText`). Plain text, escaped here; null for every other copy.
@@ -461,6 +468,19 @@ function openGraphHead(menu: PublicMenu, token: string, dish: PublicMenuProduct,
   );
 }
 
+/** The attribution form's words for the guest menu (п. 3): the logo and the name, nothing else. */
+export const MENU_ATTRIBUTION_TEXT = 'The Live Shop';
+/** Served from `public/menu-assets/`; the page's CSP allows `img-src 'self'`. */
+export const MENU_ATTRIBUTION_LOGO = '/menu-assets/liveshop.svg';
+
+/** The footer's last line: our attribution where the store has it, else the old credit line. */
+function footerCredit(attribution: boolean): string {
+  if (attribution) {
+    return `<p class="attr"><img src="${MENU_ATTRIBUTION_LOGO}" width="20" height="20" alt="">${MENU_ATTRIBUTION_TEXT}</p>`;
+  }
+  return `<p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p>`;
+}
+
 export function renderMenuPage(
   menu: PublicMenu,
   token: string,
@@ -529,7 +549,7 @@ ${renderCorkage(menu.store)}${tabs ? `<nav class="tabs" aria-label="Розділ
 <main>
 ${empty}${sections}${ask}
 </main>${dishSheet}
-<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering || call || feedback ? dockMarkup(table, showBill, ordering, call, billCorkage, feedback) : ''}`;
+<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p>${footerCredit(options.attribution === true)}</footer>${showBill || ordering || call || feedback ? dockMarkup(table, showBill, ordering, call, billCorkage, feedback) : ''}`;
   return shell(
     openDish ? `${openDish.name} — ${menu.store.name}` : `${menu.store.name} — меню`,
     body,

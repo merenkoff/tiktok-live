@@ -296,6 +296,14 @@ export interface AuthResponse {
      */
     age_check?: boolean;
     /**
+     * The Live Shop's attribution (migration 108, the super admin's switch):
+     * «Каса: The Live Shop» / «the-live.shop» as the last lines of every
+     * receipt, pre-bill and slip, a small «the-live.shop» under a price tag.
+     * The printers read it from the cached login (`lib/attribution.ts`);
+     * absent on an older auth → off.
+     */
+    attribution?: boolean;
+    /**
      * The guest menu's feedback sheet, printed as the QR «Оцініть нас» on a
      * sale receipt (phase F7). Null unless the menu is published, the owner
      * takes feedback and the store has a kitchen; absent on an older cached

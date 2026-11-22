@@ -84,6 +84,14 @@ export interface LabelLayout {
   /** The article has its own line under the barcode (portrait) rather than sharing the price row. */
   skuOwnLine: boolean;
   barcode: LabelBarcode;
+  /**
+   * Draw The Live Shop's small «the-live.shop» under everything else: asked
+   * for (`opts.attribution`) AND the label has a line for it, taken from slack
+   * or from the bars down to `LABEL_MIN_BAR_MM`. The licence's attribution
+   * form, п. 2, PERMITS it on a price tag and never REQUIRES it, so a label
+   * with no line to spare goes without.
+   */
+  attributionRoom: boolean;
   warnings: LabelWarning[];
 }
 
@@ -193,10 +201,15 @@ export function labelContentHeightMm(layout: LabelLayout): number {
   return contentHeight({ ...layout, barcodeMm: layout.barcode.heightMm });
 }
 
+/** The attribution's size on a label: the smallest letter the head still draws. */
+export const LABEL_ATTRIBUTION_FONT_MM = FLOOR.sku;
+/** What the attribution's line costs under the rest: a gap and one small line. */
+export const LABEL_ATTRIBUTION_MM = LABEL_GAP_MM + LABEL_ATTRIBUTION_FONT_MM * LINE;
+
 /** The line heights the printable must use for `labelContentHeightMm` to hold. */
 export const LABEL_LINE_HEIGHT = { text: LINE, name: NAME_LINE, price: PRICE_LINE } as const;
 
-export function labelLayout(spec: LabelSpec): LabelLayout {
+export function labelLayout(spec: LabelSpec, opts: { attribution?: boolean } = {}): LabelLayout {
   const page = { w: spec.widthMm, h: spec.heightMm };
   const turned = spec.rotate === 90 || spec.rotate === 270;
   const box = turned ? { w: page.h, h: page.w } : { w: page.w, h: page.h };
@@ -239,6 +252,20 @@ export function labelLayout(spec: LabelSpec): LabelLayout {
     }
   }
 
+  // The attribution's line (п. 2 of the licence's attribution form): taken
+  // from the slack the layout left, or from the bars down to the least height
+  // the layout itself accepts — never from the name, the price or a font. A
+  // label that cannot spare it goes without: the form permits the line on a
+  // price tag, it never requires it.
+  // Only for a store that prints it: everyone else's labels stay exactly as
+  // they were.
+  let attributionRoom = false;
+  if (opts.attribution) {
+    const deficit = LABEL_ATTRIBUTION_MM - (inner.h - need());
+    if (deficit > EPS && barMm - deficit >= LABEL_MIN_BAR_MM - EPS) barMm -= deficit;
+    attributionRoom = inner.h - need() >= LABEL_ATTRIBUTION_MM - EPS;
+  }
+
   const warnings: LabelWarning[] = [];
   if (moduleMm < EAN13_MIN_MODULE_MM) warnings.push('barcode_small');
   if (need() > inner.h + 0.05) warnings.push('cramped');
@@ -260,6 +287,7 @@ export function labelLayout(spec: LabelSpec): LabelLayout {
       heightMm: round(barMm + hriMm),
       barModules: round(barMm / moduleMm),
     },
+    attributionRoom,
     warnings,
   };
 }

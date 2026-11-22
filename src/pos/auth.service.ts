@@ -78,6 +78,13 @@ export interface AuthResponse {
     /** Ask «Покупцю є 18 років?» once per receipt with excise goods (migration 102). */
     age_check: boolean;
     /**
+     * The Live Shop's attribution: the till prints «Каса: The Live Shop» /
+     * «the-live.shop» as the last lines of its receipts, pre-bills and slips
+     * and a small «the-live.shop» under a price tag. Only the super admin
+     * switches it (migration 108).
+     */
+    attribution: boolean;
+    /**
      * The guest menu's feedback sheet — what the till prints as the QR
      * «Оцініть нас» at the bottom of a receipt (phase F7). Null unless the
      * menu is published, the owner takes feedback and the store has a kitchen.
@@ -186,6 +193,7 @@ function toAuthResponse(
       florist_labour_bps: auth.floristLabourBps,
       cash_rounding: auth.cashRounding,
       age_check: auth.ageCheck,
+      attribution: auth.attribution,
       feedback_url: auth.feedbackUrl,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: moduleRemotes,

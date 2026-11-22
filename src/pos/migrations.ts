@@ -213,6 +213,10 @@ export const POS_MIGRATIONS = [
   // (`pos_license_notice_policy`, `pos_license_copy_notices`), and the counter
   // as reported (TechDocs/POS_LICENSING.md, phase 2G).
   '107_pos_license_notice.sql',
+  // The Live Shop's attribution, per store, written only by the super admin:
+  // the last lines of every receipt, a small line under a price tag, the logo
+  // in the guest menu's footer (TechDocs/POS_LICENSING.md).
+  '108_pos_store_attribution.sql',
 ] as const;
 
 export function readMigration(file: string): string {

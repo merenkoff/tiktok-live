@@ -10,6 +10,7 @@
 
 import type { ReceiptData, ReceiptVatLine } from './printer';
 import { paymentWords, withCurrency } from './paymentWords';
+import { ATTRIBUTION_LINES, storeAttribution } from './attribution';
 
 export interface ReceiptLine {
   text: string;
@@ -77,6 +78,17 @@ function divider(cols: number): ReceiptLine {
 }
 
 /** The receipt as lines. The provider's own text, when it came, is the receipt. */
+/**
+ * What goes under everything else, the tax office's QR included: The Live
+ * Shop's attribution, where the store has it (`lib/attribution.ts`; the
+ * licence's attribution form, п. 1). Empty otherwise. Apart from
+ * `receiptLines` because the picture draws the QR between the two.
+ */
+export function receiptTrailer(receipt: ReceiptData): ReceiptLine[] {
+  if (!(receipt.attribution ?? storeAttribution())) return [];
+  return [{ text: '' }, ...ATTRIBUTION_LINES.map((text) => ({ text, center: true }))];
+}
+
 export function receiptLines(receipt: ReceiptData, cols: number = RECEIPT_COLUMNS): ReceiptLine[] {
   if (receipt.provider_text?.trim()) {
     return receipt.provider_text
