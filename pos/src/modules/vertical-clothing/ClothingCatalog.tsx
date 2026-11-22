@@ -31,6 +31,7 @@ import {
   useDragScroll,
 } from '@pos/platform/ui';
 import { tileCompareAt } from './lib/tilePrice';
+import { useProgressiveList } from '../../hooks/useProgressiveList';
 
 export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
   const catalog = useSalesCatalog();
@@ -38,6 +39,13 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
   const addWeighed = useCartStore((s) => s.addWeighed);
   const setBanner = useCartStore((s) => s.setBanner);
   const gridRef = useDragScroll<HTMLDivElement>();
+  // A screenful of tiles at a time: a shop's whole catalog in one grid was
+  // what made a till with a few hundred photographed products crawl.
+  const tiles = useProgressiveList(
+    catalog.grouped,
+    `${catalog.query}|${String(catalog.catalogBarActiveId)}|${catalog.backLabel ?? ''}|${catalog.folderTiles.length}`,
+    { root: gridRef }
+  );
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
@@ -117,7 +125,8 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
       </div>
 
       <div ref={gridRef} className="flex-1 overflow-auto px-4 pt-2 pb-4 bg-white select-none">
-        {catalog.loading && <p className="text-sm text-sq-muted">Завантаження…</p>}
+        {/* Only on an empty grid: a re-read after a sale keeps the tiles on screen. */}
+        {catalog.loading && catalog.grouped.length === 0 && <p className="text-sm text-sq-muted">Завантаження…</p>}
         <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-3">
           {catalog.folderTiles.map((folder) => (
             <TagFolderTile
@@ -128,7 +137,7 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
             />
           ))}
 
-          {catalog.grouped.map(([productId, variants]) => {
+          {tiles.visible.map(([productId, variants]) => {
             const first = variants[0];
             // A weighed product is priced per kilogram and never sold out by
             // the books (G4_WEIGHED.md, decision 6); a card that mixes it with
@@ -147,6 +156,7 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
                 priceUnit={allWeighed ? displayUnit(first.unit, first.price_per) : undefined}
                 compareAtCents={weighed.length > 0 ? null : tileCompareAt(variants)}
                 imageUrl={first.image_url}
+                thumbUrl={first.thumb_url}
                 stock={weighed.length > 0 ? undefined : stock}
                 disabled={weighed.length === 0 && stock <= 0}
                 onClick={() => onProductTap(variants)}
@@ -154,6 +164,7 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
             );
           })}
         </div>
+        {tiles.hasMore && <div ref={tiles.sentinelRef} className="h-px" aria-hidden data-testid="catalog-more" />}
         {!catalog.loading && catalog.folderTiles.length === 0 && catalog.grouped.length === 0 && (
           <div className="rounded-sq border border-dashed border-sq-divider p-8 text-center text-sq-muted text-sm mt-4">
             Порожньо

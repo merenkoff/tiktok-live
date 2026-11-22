@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, Trash2 } from '@pos/platform/ui';
 import { api, assetUrl } from '@pos/platform';
+import { downscaleImage } from '../../../lib/downscaleImage';
 
 /**
  * Long edge of the stored picture.
@@ -38,29 +39,9 @@ import { api, assetUrl } from '@pos/platform';
 const MAX_EDGE = 1280;
 const JPEG_QUALITY = 0.8;
 
-/** Downscale to a JPEG the upload limit cannot reject. */
-async function shrink(file: File): Promise<File> {
-  const bitmap = await createImageBitmap(file);
-  try {
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-    // Already small enough: re-encoding would only lose detail for nothing.
-    if (scale === 1 && file.type === 'image/jpeg') return file;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY)
-    );
-    if (!blob) return file;
-    return new File([blob], 'bouquet.jpg', { type: 'image/jpeg' });
-  } finally {
-    bitmap.close();
-  }
+/** Downscale to a JPEG the upload limit cannot reject (`lib/downscaleImage.ts`). */
+function shrink(file: File): Promise<File> {
+  return downscaleImage(file, { maxEdge: MAX_EDGE, quality: JPEG_QUALITY, name: 'bouquet.jpg' });
 }
 
 interface Props {

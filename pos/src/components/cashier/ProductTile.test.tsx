@@ -136,3 +136,30 @@ describe('ProductTile — the price before a markdown', () => {
     expect(screen.queryByTestId('tile-old-price')).toBeNull();
   });
 });
+
+describe('ProductTile — the small copy of the photo (TechDocs/POS_CLOTHING.md «Головна каси й швидкість фото»)', () => {
+  const src = () => document.querySelector('img')?.getAttribute('src') ?? null;
+
+  it('draws the thumbnail the catalog names, lazily', () => {
+    render(<ProductTile name="Боді" imageUrl="/pos-uploads/a1.jpg" thumbUrl="/pos-uploads/a1.t.webp" onClick={() => {}} />);
+    expect(src()).toMatch(/\/pos-uploads\/a1\.t\.webp$/);
+    const img = document.querySelector('img')!;
+    expect(img.getAttribute('loading')).toBe('lazy');
+    expect(img.getAttribute('decoding')).toBe('async');
+  });
+
+  it('derives the thumbnail for a module that sends only the photo, and falls back to the photo, then the caption', () => {
+    render(<ProductTile name="Боді" subtitle="Біле · 86" imageUrl="/pos-uploads/b2.png" onClick={() => {}} />);
+    expect(src()).toMatch(/\/pos-uploads\/b2\.t\.webp$/);
+    fireEvent.error(document.querySelector('img')!);
+    expect(src()).toMatch(/\/pos-uploads\/b2\.png$/);
+    fireEvent.error(document.querySelector('img')!);
+    expect(document.querySelector('img')).toBeNull();
+    expect(screen.getByText('Біле · 86')).toBeInTheDocument();
+  });
+
+  it('a demo picture has no thumbnail and is drawn as it is', () => {
+    render(<ProductTile name="Троянда" imageUrl="/demo-flowers/rose.svg" onClick={() => {}} />);
+    expect(src()).toMatch(/\/demo-flowers\/rose\.svg$/);
+  });
+});

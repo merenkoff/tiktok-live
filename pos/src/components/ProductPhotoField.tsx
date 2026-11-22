@@ -5,6 +5,14 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2 } from '../platform/glyphs';
 import { api, assetUrl } from '@pos/platform';
+import { downscaleImage } from '../lib/downscaleImage';
+
+/**
+ * A product photo as it is stored: 1600 px on the long side is more than the
+ * product card ever draws, and a phone's 3–8 MB frame goes up as a few
+ * hundred kilobytes instead of being refused at 5 MB or kept full size.
+ */
+const PHOTO = { maxEdge: 1600, quality: 0.85 };
 
 interface Props {
   value: string | null;
@@ -22,7 +30,7 @@ export function ProductPhotoField({ value, onChange, label = 'Фото' }: Props
     setError(null);
     setUploading(true);
     try {
-      const { url } = await api.uploadProductImage(file);
+      const { url } = await api.uploadProductImage(await downscaleImage(file, PHOTO));
       onChange(url);
     } catch (err) {
       const message =

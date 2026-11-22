@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, Suspense, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { Check, DownloadLine, Printer, Repeat, ShieldCheck } from '../../platform/glyphs';
 import { api, cashierApi, cartItemCount, useAuthStore, useCartStore, useOfflineStatus, usePosShell } from '@pos/platform';
 import type { CartLine } from '@pos/platform';
@@ -118,10 +118,14 @@ export function RegisterPage() {
   const shell = usePosShell();
   const auth = useAuthStore((s) => s.auth);
   const vertical = auth?.store.vertical?.id ?? 'clothing';
-  const { Catalog, moduleId, source, reason } = useMemo(
+  const { Catalog: SlotCatalog, moduleId, source, reason } = useMemo(
     () => resolveSalesCatalog(vertical),
     [vertical]
   );
+  // The page re-renders on every tap of the cart; the catalog's own props
+  // ({ active, stockEpoch }) do not change with it, so the grid — a shop's
+  // whole range of tiles — is not redrawn for each line added.
+  const Catalog = useMemo(() => memo(SlotCatalog), [SlotCatalog]);
 
   useEffect(() => {
     // Worth one line: this is how anyone finds out a vertical's release never
