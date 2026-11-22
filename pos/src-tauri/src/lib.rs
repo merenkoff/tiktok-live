@@ -7,6 +7,7 @@ mod hardware;
 mod legacy_profile;
 mod module_remotes;
 mod update;
+mod window_controls;
 
 // WKWebView on macOS silently no-ops on the JS `window.print()` call (no
 // native print delegate wired up), so the PDF-fallback print path routes
@@ -47,6 +48,10 @@ pub fn run() {
             update::install_update,
             module_remotes::sync_module_remote,
             module_remotes::prune_module_remotes,
+            window_controls::window_minimize,
+            window_controls::window_toggle_fullscreen,
+            window_controls::window_is_fullscreen,
+            window_controls::window_close,
             print_webview
         ])
         .setup(|_app| {
