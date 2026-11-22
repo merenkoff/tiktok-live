@@ -36,6 +36,12 @@ export async function registerPosPlugin(fastify: FastifyInstance): Promise<void>
     root: POS_UPLOADS_DIR,
     prefix: `${POS_UPLOADS_PREFIX}/`,
     decorateReply: false,
+    // Every upload is a fresh `<uuid>.<ext>` and its thumbnail is derived from
+    // that name, so a URL never changes what it points at: the till and the
+    // guest's phone may keep a picture a year without asking again. (Before,
+    // the default `max-age=0` had every tile re-validated on every draw.)
+    maxAge: '365d',
+    immutable: true,
     // Nothing under a dot directory leaves through here: the volume also holds
     // the closed store of module bundles (`.module-bundles`, POS_OPENCORE.md
     // §8), which only the licence-gated `/api/modules/…` may hand out.

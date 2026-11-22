@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { formatUah } from '../../lib/money';
 // Through the barrel, NOT `../../lib/urls`: this component is re-exported by
 // `@pos/platform/ui`, which every remote bundles locally — and a bundled copy
@@ -13,6 +13,7 @@ import { formatUah } from '../../lib/money';
 // `@pos/platform` is external in a remote, so this is always the host's.
 import { assetUrl } from '@pos/platform';
 import { MoreHorizontal } from '../../platform/glyphs';
+import { tileSources } from '../../lib/productThumb';
 
 interface Props {
   name: string;
@@ -32,6 +33,12 @@ interface Props {
    */
   priceUnit?: string;
   imageUrl?: string | null;
+  /**
+   * The photo's small copy (`CatalogItem.thumb_url`, 264 px WebP). Absent — a
+   * module released before it — the tile derives it from `imageUrl` itself
+   * (`thumbOf`); either way a broken thumbnail falls back to the photo.
+   */
+  thumbUrl?: string | null;
   stock?: number;
   onClick: () => void;
   disabled?: boolean;
@@ -60,13 +67,14 @@ interface Props {
   testId?: string;
 }
 
-export function ProductTile({
+export const ProductTile = memo(function ProductTile({
   name,
   subtitle,
   priceCents,
   compareAtCents,
   priceUnit,
   imageUrl,
+  thumbUrl,
   stock,
   onClick,
   disabled,
@@ -75,8 +83,12 @@ export function ProductTile({
   badge,
   testId,
 }: Props) {
-  const [broken, setBroken] = useState(false);
-  const src = !broken ? assetUrl(imageUrl) : null;
+  const sources = tileSources(imageUrl, thumbUrl);
+  // How many sources failed so far; reset when the product's photo changes.
+  const [failed, setFailed] = useState<{ key: string; count: number }>({ key: '', count: 0 });
+  const key = sources.join('|');
+  const misses = failed.key === key ? failed.count : 0;
+  const src = misses < sources.length ? assetUrl(sources[misses]) : null;
 
   // A Things-style card: the photo on top, the name and the price under it —
   // not over it, so neither fights the picture. Badges sit on the photo.
@@ -96,8 +108,12 @@ export function ProductTile({
           <img
             src={src}
             alt=""
+            width={264}
+            height={198}
+            loading="lazy"
+            decoding="async"
             className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${muted ? 'opacity-45' : ''}`}
-            onError={() => setBroken(true)}
+            onError={() => setFailed({ key, count: misses + 1 })}
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-sq-secondary text-xs px-2 font-medium pointer-events-none">
@@ -172,4 +188,4 @@ export function ProductTile({
       )}
     </div>
   );
-}
+});

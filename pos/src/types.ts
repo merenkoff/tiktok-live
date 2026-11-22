@@ -502,6 +502,12 @@ export interface CatalogItem {
   quantity: number;
   image_url: string | null;
   /**
+   * The photo's 264 px thumbnail, which the till's tile draws
+   * (`lib/productThumb.ts`). Absent from an older server or snapshot — the
+   * tile then derives it from `image_url`; null where there is none.
+   */
+  thumb_url?: string | null;
+  /**
    * What shape of product this variant belongs to. The till needs it to tell a
    * bouquet card from a rose — before this the only endpoint carrying it was
    * owner-only, so a cashier could not.

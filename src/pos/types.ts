@@ -277,6 +277,12 @@ export interface CatalogItem {
   price_per: number;
   quantity: number;
   image_url: string | null;
+  /**
+   * The 264 px WebP thumbnail the till's tile draws (`uploads.service.ts`
+   * `thumbUrlOf`), or null where there is none — a demo SVG, an https
+   * picture, a photo whose thumbnail is still being made.
+   */
+  thumb_url: string | null;
   kind: ProductKind;
   stock_mode: ProductStockMode;
   /**

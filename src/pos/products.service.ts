@@ -4,6 +4,7 @@
 
 // src/pos/products.service.ts
 
+import { thumbUrlOf } from './uploads.service.js';
 import { pool } from '../db.js';
 import { buildInternalBarcode } from './gtin/internal-code.js';
 import { skuSeries, type SkuSeries } from './sku-series.js';
@@ -1461,6 +1462,8 @@ export async function getCatalog(
       row.compare_at_cents == null ? null : Number(row.compare_at_cents),
     quantity: Number(row.quantity),
     image_url: row.image_url,
+    // The tile draws the small copy; the original stays for the product card.
+    thumb_url: thumbUrlOf(row.image_url),
     kind: (row.kind === 'composite' ? 'composite' : 'simple') as ProductKind,
     stock_mode: (row.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     one_off: Boolean(row.one_off),
