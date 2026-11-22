@@ -193,4 +193,13 @@ describe('roundTicketOf — a table\'s round on its station\'s printer', () => {
     expect(ticket.station).toBeNull();
     expect(ticket.subtitle).toBe('Раунд 2');
   });
+
+  it('a cancel job is the same ticket marked cancelled; a fire job or an older server\'s carries no mark', () => {
+    const cancelled = roundTicketOf({ ...job, kind: 'cancel' }, () => '20:12');
+    expect(cancelled.cancelled).toBe(true);
+    expect(cancelled.order_label).toBe('Стіл 5');
+    expect(cancelled.items.map((i) => i.name)).toEqual(['Латте', 'Бограч']);
+    expect(roundTicketOf({ ...job, kind: 'fire' }, () => '20:12')).not.toHaveProperty('cancelled');
+    expect(roundTicketOf(job, () => '20:12')).not.toHaveProperty('cancelled');
+  });
 });

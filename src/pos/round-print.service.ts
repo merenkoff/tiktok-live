@@ -15,8 +15,10 @@
 //     confirm within two minutes (printer jammed, app closed) gives it back;
 //   * a job older than twelve hours is dropped — yesterday's dinner is not
 //     worth surprising the morning cook with;
-// and two of its own:
+// and three of its own:
 //   * a round cancelled before it printed is never printed;
+//   * one cancelled after its ticket was printed or taken leaves a second job,
+//     `kind = 'cancel'` (migration 110), printed as «СКАСОВАНО» with its lines;
 //   * the ticket carries no prices: it is not a receipt.
 
 import { pool } from '../db.js';
@@ -25,7 +27,9 @@ import { STATIONS_SQL } from './kitchen.service.js';
 import { parseLineModifierSnapshot } from './modifiers.service.js';
 import type { TagStation } from './tags.service.js';
 
-const LEASE = `INTERVAL '2 minutes'`;
+/** How long a taken job stays the desktop's before it is handed out again. */
+export const ROUND_PRINT_LEASE = `INTERVAL '2 minutes'`;
+const LEASE = ROUND_PRINT_LEASE;
 const MAX_AGE = `INTERVAL '12 hours'`;
 const BATCH = 10;
 
@@ -33,6 +37,13 @@ export const ROUND_PRINT_STATIONS: readonly TagStation[] = ['kitchen', 'bar'];
 
 export function isRoundPrintStation(value: unknown): value is TagStation {
   return value === 'kitchen' || value === 'bar';
+}
+
+/** The ticket that fires a round, or the one that takes it back. */
+export type RoundPrintKind = 'fire' | 'cancel';
+
+export function isRoundPrintKind(value: unknown): value is RoundPrintKind {
+  return value === 'fire' || value === 'cancel';
 }
 
 export interface RoundPrintItem {
@@ -47,6 +58,8 @@ export interface RoundPrintItem {
 
 export interface RoundPrintJob {
   round_id: number;
+  /** `cancel`: print «СКАСОВАНО» — the kitchen already has this round on paper. */
+  kind: RoundPrintKind;
   /** Which station's printer the ticket goes to. */
   station: TagStation;
   /** The ticket's heading — null when the store routes nothing by station. */
@@ -62,35 +75,50 @@ export interface RoundPrintJob {
   items: RoundPrintItem[];
 }
 
-/** Take the round tickets waiting for this device's stations, oldest first. */
+/**
+ * Take the round tickets waiting for this device's stations, oldest first.
+ * `kinds` is what the desktop can print: a desktop before 2.9.3 asks for none
+ * and gets only `fire` — it would print a `cancel` job as one more order.
+ */
 export async function claimRoundPrintJobs(
   storeId: number,
   deviceId: string,
-  stations: readonly TagStation[]
+  stations: readonly TagStation[],
+  kinds: readonly RoundPrintKind[] = ['fire']
 ): Promise<RoundPrintJob[]> {
-  if (stations.length === 0) return [];
+  if (stations.length === 0 || kinds.length === 0) return [];
   const claimed = await pool.query(
     `WITH picked AS (
-       SELECT p.round_id, p.station FROM pos_round_prints p
+       SELECT p.round_id, p.station, p.kind FROM pos_round_prints p
        JOIN pos_bill_rounds r ON r.id = p.round_id
        WHERE p.store_id = $1
          AND p.station = ANY($3::text[])
+         AND p.kind = ANY($4::text[])
          AND p.printed_at IS NULL
-         AND r.cancelled_at IS NULL
+         AND ((p.kind = 'fire' AND r.cancelled_at IS NULL)
+           OR (p.kind = 'cancel' AND r.cancelled_at IS NOT NULL))
          AND p.requested_at > NOW() - ${MAX_AGE}
          AND (p.claimed_at IS NULL OR p.claimed_at < NOW() - ${LEASE} OR p.claimed_by = $2)
-       ORDER BY p.requested_at, p.round_id, p.station
+       ORDER BY p.requested_at, p.round_id, p.station, p.kind DESC
        LIMIT ${BATCH}
        FOR UPDATE OF p SKIP LOCKED
      )
      UPDATE pos_round_prints p
         SET claimed_by = $2, claimed_at = NOW()
        FROM picked
-      WHERE p.round_id = picked.round_id AND p.station = picked.station
-     RETURNING p.round_id, p.station`,
-    [storeId, deviceId, stations]
+      WHERE p.round_id = picked.round_id AND p.station = picked.station AND p.kind = picked.kind
+     RETURNING p.round_id, p.station, p.kind, p.requested_at`,
+    [storeId, deviceId, stations, kinds]
   );
   if (claimed.rows.length === 0) return [];
+  // RETURNING follows no ORDER BY: put a round's fire before its cancel.
+  claimed.rows.sort(
+    (a, b) =>
+      new Date(a.requested_at).getTime() - new Date(b.requested_at).getTime() ||
+      Number(a.round_id) - Number(b.round_id) ||
+      String(a.station).localeCompare(String(b.station)) ||
+      (a.kind === b.kind ? 0 : a.kind === 'fire' ? -1 : 1)
+  );
 
   const roundIds = [...new Set(claimed.rows.map((row) => Number(row.round_id)))];
   const heads = await pool.query(
@@ -145,6 +173,7 @@ export async function claimRoundPrintJobs(
     }
     jobs.push({
       round_id: roundId,
+      kind: row.kind === 'cancel' ? 'cancel' : 'fire',
       station,
       heading: routed ? station : null,
       table_name: String(head.table_name),
@@ -159,13 +188,21 @@ export async function claimRoundPrintJobs(
   return jobs;
 }
 
-/** The desktop printed it. Idempotent: a second confirmation changes nothing. */
-export async function markRoundPrinted(storeId: number, roundId: number, station: TagStation): Promise<boolean> {
+/**
+ * The desktop printed it. Idempotent: a second confirmation changes nothing.
+ * `kind` defaults to `fire`, which is all a desktop before 2.9.3 confirms.
+ */
+export async function markRoundPrinted(
+  storeId: number,
+  roundId: number,
+  station: TagStation,
+  kind: RoundPrintKind = 'fire'
+): Promise<boolean> {
   const result = await pool.query(
     `UPDATE pos_round_prints SET printed_at = COALESCE(printed_at, NOW())
-      WHERE store_id = $1 AND round_id = $2 AND station = $3
+      WHERE store_id = $1 AND round_id = $2 AND station = $3 AND kind = $4
      RETURNING round_id`,
-    [storeId, roundId, station]
+    [storeId, roundId, station, kind]
   );
   return (result.rowCount ?? 0) > 0;
 }

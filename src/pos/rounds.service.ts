@@ -53,6 +53,7 @@ import type { PrepStatusRow } from './kitchen.service.js';
 import * as modifiers from './modifiers.service.js';
 import { customBouquetLabel } from './sales.service.js';
 import { newPourContext, undoRoundPours } from './bottles.service.js';
+import { ROUND_PRINT_LEASE } from './round-print.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -300,6 +301,25 @@ async function queueRoundPrints(client: PoolClient, storeId: number, roundId: nu
 }
 
 /**
+ * A paper «СКАСОВАНО» (migration 110) for every station that already has the
+ * round on paper — its ticket printed, or taken by a desktop within the lease
+ * and maybe coming out of the printer right now. A station whose ticket was
+ * never taken gets nothing: the queue skips a cancelled round, so the cook
+ * never saw it and needs no second slip to ignore.
+ */
+async function queueRoundCancelPrints(client: PoolClient, storeId: number, roundId: number): Promise<void> {
+  await client.query(
+    `INSERT INTO pos_round_prints (store_id, round_id, station, kind)
+     SELECT store_id, round_id, station, 'cancel'
+       FROM pos_round_prints
+      WHERE store_id = $1 AND round_id = $2 AND kind = 'fire'
+        AND (printed_at IS NOT NULL OR claimed_at > NOW() - ${ROUND_PRINT_LEASE})
+     ON CONFLICT DO NOTHING`,
+    [storeId, roundId]
+  );
+}
+
+/**
  * Take a round back: give the stock to the shelf and mark the round cancelled.
  *
  * Refused once it is `served` (rule 4). The reversal replays the line's own
@@ -352,6 +372,7 @@ export async function cancelRound(params: {
       `UPDATE pos_bill_rounds SET cancelled_at = NOW(), cancelled_by = $2 WHERE id = $1`,
       [params.roundId, params.staffId]
     );
+    await queueRoundCancelPrints(client, params.storeId, params.roundId);
     // Nor was it poured (ДК5-Б): the millilitres go back into their bottles,
     // and its pours stop waiting for the bar.
     await undoRoundPours(client, params.storeId, params.roundId);

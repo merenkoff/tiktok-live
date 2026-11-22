@@ -9,6 +9,10 @@
 //! the answers and the kitchen note indented under it. The host routes one
 //! ticket per station (`lib/kitchenTicket.ts`); this side only draws it.
 //!
+//! A round taken back after its ticket went out prints the same ticket under
+//! «СКАСОВАНО» in reverse print and «Не готувати» (`cancelled`), so the cook
+//! sees at a glance which slip on the rail to tear off.
+//!
 //! Same ESC/POS pipeline as the receipt (`receipt.rs`): Win-1251 page code,
 //! raw job to a named OS printer. Paper carries only Win-1251, so the note
 //! marker is a plain `*`, never the «✎» the screen shows.
@@ -60,6 +64,10 @@ pub struct KitchenTicketData {
     #[serde(default)]
     pub receipt_number: Option<String>,
     pub items: Vec<KitchenTicketItem>,
+    /// The round was taken back after this ticket was printed: «СКАСОВАНО»
+    /// on top, white on black, then «Не готувати» (TechDocs/POS_TABLES.md §11).
+    #[serde(default)]
+    pub cancelled: bool,
 }
 
 /// The profile-less form the tests use: Windows-1251 at its standard number, as
@@ -85,6 +93,21 @@ fn build_kitchen_ticket_with(
 
     printer.init().map_err(|e| e.to_string())?;
     printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
+
+    if ticket.cancelled {
+        // Before the number, louder than it: a cook scanning the rail must not
+        // take this for one more order of the same dishes.
+        printer.bold(true).map_err(|e| e.to_string())?;
+        printer.reverse(true).map_err(|e| e.to_string())?;
+        printer.size(2, 2).map_err(|e| e.to_string())?;
+        printer.writeln(" СКАСОВАНО ").map_err(|e| e.to_string())?;
+        printer.reset_size().map_err(|e| e.to_string())?;
+        printer.reverse(false).map_err(|e| e.to_string())?;
+        printer.size(1, 2).map_err(|e| e.to_string())?;
+        printer.writeln("Не готувати").map_err(|e| e.to_string())?;
+        printer.reset_size().map_err(|e| e.to_string())?;
+        printer.feed().map_err(|e| e.to_string())?;
+    }
 
     // The number, first and biggest: it is what the barista reads across the
     // counter and what the customer hears.
@@ -192,6 +215,7 @@ mod tests {
             staff_name: "Олена".into(),
             note: Some("з собою".into()),
             receipt_number: Some("ЧК-000017".into()),
+            cancelled: false,
             items: vec![
                 KitchenTicketItem {
                     name: "Латте".into(),
@@ -305,5 +329,32 @@ mod tests {
         assert!(contains(&bytes[label..subtitle], &[0x1B, 0x45, 0x00]));
         // A counter sale has none.
         assert!(!contains(&build_kitchen_ticket(&base(), CHARS_58MM).unwrap(), &win1251("Раунд")));
+    }
+
+    #[test]
+    fn a_cancelled_round_says_so_first_in_reverse_print_then_the_same_ticket() {
+        let mut ticket = base();
+        ticket.order_label = "Стіл 5".into();
+        ticket.cancelled = true;
+        let bytes = build_kitchen_ticket(&ticket, CHARS_58MM).unwrap();
+        // GS B 1 … GS B 0 around «СКАСОВАНО», before the table and the lines.
+        let reverse_on = position(&bytes, &[0x1D, 0x42, 0x01]);
+        let cancelled = position(&bytes, &win1251("СКАСОВАНО"));
+        let reverse_off = position(&bytes, &[0x1D, 0x42, 0x00]);
+        let dont = position(&bytes, &win1251("Не готувати"));
+        let label = position(&bytes, &win1251("Стіл 5"));
+        let first_item = position(&bytes, &win1251("2 x Латте M"));
+        assert!(reverse_on < cancelled && cancelled < reverse_off && reverse_off < dont);
+        assert!(dont < label && label < first_item);
+        assert!(contains(&bytes, &win1251("1 x Круасан")));
+        use crate::hardware::receipt::test_util::assert_paper_margins;
+        assert_paper_margins(&bytes);
+        // An ordinary ticket never says it, and an older host's payload parses as one.
+        let plain = build_kitchen_ticket(&base(), CHARS_58MM).unwrap();
+        assert!(!contains(&plain, &win1251("СКАСОВАНО")));
+        assert!(!contains(&plain, &[0x1D, 0x42, 0x01]));
+        let old: KitchenTicketData =
+            serde_json::from_value(serde_json::json!({ "order_label": "17", "items": [] })).unwrap();
+        assert!(!old.cancelled);
     }
 }

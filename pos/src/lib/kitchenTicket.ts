@@ -158,6 +158,7 @@ export function buildKitchenTickets(
  * where the store routes by station. No prices and no receipt number: a round
  * has no receipt yet. The caption is printed without the answers the round
  * appended to it, and the answers one per line, exactly as a counter sale's.
+ * A `cancel` job is the same ticket marked `cancelled` — «СКАСОВАНО» on top.
  */
 export function roundTicketOf(
   job: RoundPrintJob,
@@ -172,6 +173,7 @@ export function roundTicketOf(
     staff_name: job.staff_name,
     note: job.note,
     receipt_number: null,
+    ...(job.kind === 'cancel' ? { cancelled: true } : {}),
     items: job.items.map((item) => ({
       name: item.product_name,
       variant_label: bareVariantLabel(item.variant_label, item.modifiers),

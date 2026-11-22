@@ -9,8 +9,9 @@
 // phone — must come out of the kitchen's (or the bar's) printer, on the desktop
 // that holds it. What this pins: one job per station the round's lines are made
 // at, a store without stations getting one unheaded ticket, the lease, the
-// idempotent confirmation, a cancelled round never printing, and a replayed tap
-// never queuing twice.
+// idempotent confirmation, a cancelled round never printing, a round cancelled
+// after its ticket was printed or taken getting a «СКАСОВАНО» (migration 110)
+// only at those stations, and a replayed tap never queuing twice.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
@@ -75,17 +76,17 @@ describe.skipIf(!hasDb)('POS round print queue', () => {
       payload: clientUuid ? { client_uuid: clientUuid } : {},
     });
 
-  const queue = (store: TestStore, device: string | null, stations?: string) =>
+  const queue = (store: TestStore, device: string | null, stations?: string, kinds = 'fire,cancel') =>
     app.inject({
       method: 'GET',
-      url: `/api/pos/kitchen/print-queue${stations === undefined ? '' : `?stations=${stations}`}`,
+      url: `/api/pos/kitchen/print-queue?kinds=${kinds}${stations === undefined ? '' : `&stations=${stations}`}`,
       headers: { ...auth(store.sellerToken), ...(device ? { 'x-pos-device-id': device } : {}) },
     });
 
-  const printed = (store: TestStore, roundId: number, station: string) =>
+  const printed = (store: TestStore, roundId: number, station: string, kind?: string) =>
     app.inject({
       method: 'POST',
-      url: `/api/pos/kitchen/print-queue/${roundId}/${station}/printed`,
+      url: `/api/pos/kitchen/print-queue/${roundId}/${station}/printed${kind ? `?kind=${kind}` : ''}`,
       headers: auth(store.sellerToken),
     });
 
@@ -215,6 +216,76 @@ describe.skipIf(!hasDb)('POS round print queue', () => {
     await cancelRound({ storeId: routed.storeId, staffId: routed.ownerId, billId, roundId });
     const jobs = (await queue(routed, DEVICE_A, 'kitchen,bar')).json().jobs as Array<Record<string, any>>;
     expect(jobs.filter((j) => j.round_id === roundId)).toHaveLength(0);
+  });
+
+  it('a round cancelled after its ticket printed gets «СКАСОВАНО» at that station only', async () => {
+    await drain(routed);
+    const { billId, roundId } = await fireBill(routed, routedHall, [
+      { variant_id: soup, quantity: 1 },
+      { variant_id: coffee, quantity: 1 },
+    ]);
+    // The kitchen printed its ticket; the bar's was never taken.
+    const first = (await queue(routed, DEVICE_A, 'kitchen')).json().jobs as Array<Record<string, any>>;
+    expect(first.filter((j) => j.round_id === roundId).map((j) => j.kind)).toEqual(['fire']);
+    expect((await printed(routed, roundId, 'kitchen')).statusCode).toBe(200);
+
+    await cancelRound({ storeId: routed.storeId, staffId: routed.ownerId, billId, roundId });
+
+    const jobs = (await queue(routed, DEVICE_A, 'kitchen,bar')).json().jobs as Array<Record<string, any>>;
+    const mine = jobs.filter((j) => j.round_id === roundId);
+    expect(mine.map((j) => [j.station, j.kind])).toEqual([['kitchen', 'cancel']]);
+    expect(mine[0].items.map((i: any) => i.product_name)).toEqual(['Бограч']);
+
+    // Confirming the fire ticket again does not confirm the cancel one.
+    expect((await printed(routed, roundId, 'kitchen')).statusCode).toBe(200);
+    expect((await queue(routed, DEVICE_A, 'kitchen')).json().jobs.filter((j: any) => j.round_id === roundId)).toHaveLength(1);
+    expect((await printed(routed, roundId, 'kitchen', 'cancel')).statusCode).toBe(200);
+    expect((await printed(routed, roundId, 'kitchen', 'cancel')).statusCode).toBe(200);
+    expect((await queue(routed, DEVICE_A, 'kitchen,bar')).json().jobs.filter((j: any) => j.round_id === roundId)).toHaveLength(0);
+    expect((await printed(routed, roundId, 'bar', 'cancel')).statusCode).toBe(404);
+    expect((await printed(routed, roundId, 'kitchen', 'void')).statusCode).toBe(404);
+  });
+
+  it('a desktop that does not ask for «СКАСОВАНО» never gets it — it would print one more order', async () => {
+    await drain(routed);
+    const { billId, roundId } = await fireBill(routed, routedHall, [{ variant_id: soup, quantity: 1 }]);
+    expect((await queue(routed, DEVICE_A, 'kitchen')).json().jobs.filter((j: any) => j.round_id === roundId)).toHaveLength(1);
+    expect((await printed(routed, roundId, 'kitchen')).statusCode).toBe(200);
+    await cancelRound({ storeId: routed.storeId, staffId: routed.ownerId, billId, roundId });
+
+    // As a 2.9.2 desktop asks: no kinds at all.
+    const old = await app.inject({
+      method: 'GET',
+      url: '/api/pos/kitchen/print-queue?stations=kitchen',
+      headers: { ...auth(routed.sellerToken), 'x-pos-device-id': DEVICE_A },
+    });
+    expect(old.json().jobs.filter((j: any) => j.round_id === roundId)).toHaveLength(0);
+    // A 2.9.3 one gets it.
+    expect((await queue(routed, DEVICE_A, 'kitchen')).json().jobs.filter((j: any) => j.round_id === roundId)).toHaveLength(1);
+    expect((await queue(routed, DEVICE_A, 'kitchen', 'fire,void')).statusCode).toBe(400);
+  });
+
+  it('a ticket taken but not yet confirmed counts as on paper; a stale lease does not', async () => {
+    await drain(routed);
+    const { billId, roundId } = await fireBill(routed, routedHall, [
+      { variant_id: soup, quantity: 1 },
+      { variant_id: coffee, quantity: 1 },
+    ]);
+    expect((await queue(routed, DEVICE_A, 'kitchen,bar')).json().jobs.filter((j: any) => j.round_id === roundId)).toHaveLength(2);
+    // The bar's printer jammed three minutes ago and nobody took it since.
+    await pool.query(
+      `UPDATE pos_round_prints SET claimed_at = NOW() - INTERVAL '3 minutes' WHERE round_id = $1 AND station = 'bar'`,
+      [roundId]
+    );
+    await cancelRound({ storeId: routed.storeId, staffId: routed.ownerId, billId, roundId });
+    const rows = await pool.query(
+      `SELECT station, kind FROM pos_round_prints WHERE round_id = $1 ORDER BY station, kind`,
+      [roundId]
+    );
+    expect(rows.rows.map((r) => `${r.station}:${r.kind}`)).toEqual(['bar:fire', 'kitchen:cancel', 'kitchen:fire']);
+    // The cancel job is handed out like any other, the fire ones never again.
+    const jobs = (await queue(routed, DEVICE_B, 'kitchen,bar')).json().jobs as Array<Record<string, any>>;
+    expect(jobs.filter((j) => j.round_id === roundId).map((j) => j.kind)).toEqual(['cancel']);
   });
 
   it('the same tap twice queues the round once', async () => {

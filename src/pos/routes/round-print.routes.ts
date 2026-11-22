@@ -8,7 +8,8 @@
 // (`round-print.service.ts`, TechDocs/POS_TABLES.md §11). A core group: the
 // desktop polls it whenever its «Обладнання» has a kitchen printer, whatever
 // modules the store runs. Only the desktop sends a device id, and a job is
-// leased to the device that took it.
+// leased to the device that took it. A job is a round's ticket (`kind`
+// `fire`) or its «СКАСОВАНО» (`cancel`), confirmed with `?kind=cancel`.
 
 import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth } from '../core/auth.js';
@@ -33,7 +34,18 @@ export function registerRoundPrintRoutes(fastify: FastifyInstance): void {
       return reply.code(400).send({ error: 'Станція — «kitchen» або «bar»' });
     }
     const stations = [...new Set(asked as TagStation[])];
-    return { jobs: await roundPrints.claimRoundPrintJobs(auth.storeId, deviceId, stations) };
+    // What the desktop can print. A desktop before 2.9.3 sends none and gets
+    // only the fire tickets: it would print «СКАСОВАНО» as one more order.
+    const rawKinds = String((request.query as { kinds?: unknown }).kinds ?? '').trim();
+    const kinds = rawKinds ? rawKinds.split(',').map((s) => s.trim()) : ['fire'];
+    if (!kinds.every(roundPrints.isRoundPrintKind)) {
+      return reply.code(400).send({ error: 'Вид тікета — «fire» або «cancel»' });
+    }
+    return {
+      jobs: await roundPrints.claimRoundPrintJobs(auth.storeId, deviceId, stations, [
+        ...new Set(kinds as roundPrints.RoundPrintKind[]),
+      ]),
+    };
   });
 
   fastify.post('/kitchen/print-queue/:roundId/:station/printed', async (request, reply) => {
@@ -41,10 +53,17 @@ export function registerRoundPrintRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const params = request.params as { roundId: string; station: string };
     const roundId = Number(params.roundId);
-    if (!Number.isInteger(roundId) || roundId <= 0 || !roundPrints.isRoundPrintStation(params.station)) {
+    // A desktop before 2.9.3 sends no kind: it only ever prints the fire ticket.
+    const kind = (request.query as { kind?: unknown }).kind ?? 'fire';
+    if (
+      !Number.isInteger(roundId) ||
+      roundId <= 0 ||
+      !roundPrints.isRoundPrintStation(params.station) ||
+      !roundPrints.isRoundPrintKind(kind)
+    ) {
       return reply.code(404).send({ error: 'Тікет не знайдено' });
     }
-    const ok = await roundPrints.markRoundPrinted(auth.storeId, roundId, params.station);
+    const ok = await roundPrints.markRoundPrinted(auth.storeId, roundId, params.station, kind);
     if (!ok) return reply.code(404).send({ error: 'Тікет не знайдено' });
     return { ok: true };
   });
