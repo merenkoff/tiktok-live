@@ -201,12 +201,22 @@ GTK fullscreen Tauri працює на обох. Огляд GNOME (Super) ОС �
 
 Не прибирати logout. Owner — кнопка «Вихід» у rail (і довгий тап на мобільній навігації). Після виходу PIN на пристрої лишається; потрібен повторний ввід.
 
+### Вікно каси: згорнути, у вікні, закрити (2.9.3)
+
+Релізна каса відкривається на весь екран, без рамки, і закрити вікно не можна (`lib.rs`) — на Windows і Linux з неї не було виходу, крім диспетчера задач. Тепер **на екрані входу** (і лише там: після входу каса знову кіоск) зверху намальовано три кнопки, схожі на системні (`components/WindowControls.tsx`, платформа за `navigator.userAgent` — `lib/desktopWindow.ts`):
+
+- **macOS** — «світлофор» ліворуч: червона «закрити», жовта «сховати», зелена «у вікні / на весь екран»; значки з'являються під курсором;
+- **Windows** — праворуч три кнопки 46×32, як у Windows 11: «—», «▢» / «❐», «✕» з червоним `#c42b1c` під курсором;
+- **Linux** — праворуч круглі сірі кнопки GNOME (Adwaita).
+
+Вони викликають чотири команди (`src-tauri/src/window_controls.rs`): `window_minimize` (на macOS повноекранне вікно не згортається, тож програма ховається, як Cmd+H), `window_toggle_fullscreen` (з повного екрана — звичайне вікно з рамкою системи, яке можна рухати, міняти розмір і закрити; назад — кіоск), `window_is_fullscreen`, `window_close` (`app.exit(0)`: черга продажів у IndexedDB не губиться, сесії на екрані входу немає). Це команди, а не `core:window:*` — права вікна лишаються одним дозволом ([POS_MODULE_TAURI_CAPABILITIES.md](POS_MODULE_TAURI_CAPABILITIES.md) §1, §7).
+
 Камера (`html5-qrcode`) залежить від webview; на Linux WebKit буває гірше, ніж Chrome. USB-сканер як клавіатура працює без native API.
 
 ## Файли оболонки
 
 - [`pos/src-tauri/tauri.conf.json`](../pos/src-tauri/tauri.conf.json) — вікно «LiveShop POS» min 1024×700, CSP (`connect-src` на API, `media-src` для камери)
-- [`pos/src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs) — у release: fullscreen, без рамки
+- [`pos/src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs) — у release: fullscreen, без рамки; кнопки вікна на вході — [`window_controls.rs`](../pos/src-tauri/src/window_controls.rs)
 - identifier: `shop.the-live.pos` (до 2.7.x — `shop.cloth.pos`; перенесення тек — нижче)
 - [`pos/src-tauri/capabilities/default.json`](../pos/src-tauri/capabilities/default.json) — права вікна; що з них випливає для feature-модулів — [POS_MODULE_TAURI_CAPABILITIES.md](POS_MODULE_TAURI_CAPABILITIES.md)
 

@@ -48,6 +48,10 @@ const EXPECTED_COMMANDS = [
   'print_webview',
   'prune_module_remotes',
   'sync_module_remote',
+  'window_close',
+  'window_is_fullscreen',
+  'window_minimize',
+  'window_toggle_fullscreen',
 ];
 
 /** `"core:default"` or `{ identifier, allow?: [{url|path}] }` → a stable string. */

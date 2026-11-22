@@ -7,7 +7,9 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore, loadLastStoreSlug, usePosShell, OfflineAuthError } from '@pos/platform';
 import { isIos, isStandalone, useInstallPrompt } from '../lib/installPrompt';
+import { isTauri } from '@tauri-apps/api/core';
 import { AppIcon } from '../components/AppIcon';
+import { WindowControls } from '../components/WindowControls';
 
 function loginErrorMessage(error: unknown, mode: 'owner' | 'pin'): string {
   if (error instanceof OfflineAuthError) return error.message;
@@ -182,6 +184,9 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-sq-bg">
+      {/* The desktop till is a kiosk with no frame: the login screen is the one
+          place it offers the system's way out (TechDocs/POS_DESKTOP.md). */}
+      {shell === 'cashier' && isTauri() && <WindowControls />}
       <div className="w-full max-w-[420px] flex flex-col items-center gap-[22px] animate-fade-up">
         <div className="drop-shadow-[0_10px_18px_rgba(0,30,80,.2)]">
           <AppIcon size={84} />
