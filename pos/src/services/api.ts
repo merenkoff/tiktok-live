@@ -22,6 +22,7 @@ import type {
   ExchangeResult,
   RefundLineInput,
   RefundOptions,
+  RoundPrintJob,
   SaleDetail,
   SkuSeries,
   SplitQuote,
@@ -588,6 +589,23 @@ class PosApi {
   /** This device printed it; idempotent. */
   async markReceiptPrinted(saleId: number): Promise<void> {
     await this.client.post(`/sales/${saleId}/printed`);
+  }
+
+  /**
+   * The kitchen and bar tickets of a table's rounds waiting for this device's
+   * station printers (TechDocs/POS_TABLES.md §11) — taken on a two-minute
+   * lease. Needs `X-POS-Device-ID`, which only the desktop sends.
+   */
+  async roundPrintQueue(stations: TagStation[]): Promise<{ jobs: RoundPrintJob[] }> {
+    const { data } = await this.client.get<{ jobs: RoundPrintJob[] }>('/kitchen/print-queue', {
+      params: { stations: stations.join(',') },
+    });
+    return data;
+  }
+
+  /** This device printed the round's ticket for that station; idempotent. */
+  async markRoundPrinted(roundId: number, station: TagStation): Promise<void> {
+    await this.client.post(`/kitchen/print-queue/${roundId}/${station}/printed`);
   }
 
   /** What each receipt of a two-register cart will come to; writes nothing. */

@@ -24,6 +24,7 @@ import { registerLiveRoutes } from './routes/live.routes.js';
 import { registerKitchenRoutes } from './routes/kitchen.routes.js';
 import { registerBottleRoutes } from './routes/bottles.routes.js';
 import { registerReceiptPrintRoutes } from './routes/receipt-print.routes.js';
+import { registerRoundPrintRoutes } from './routes/round-print.routes.js';
 import { registerPrinterProfileRoutes } from './routes/printer-profiles.routes.js';
 import { registerTablesRoutes } from './routes/tables.routes.js';
 import { registerFiscalRoutes } from './routes/fiscal.routes.js';
@@ -81,6 +82,8 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // Table receipts on the bar's printer (ДК3-Г, Д13): a core group, polled by
   // the desktop that holds the «Чеки столів» printer.
   { moduleId: null, register: registerReceiptPrintRoutes },
+  // The kitchen and bar tickets of a table's rounds (TechDocs/POS_TABLES.md §11).
+  { moduleId: null, register: registerRoundPrintRoutes },
   // Shared printer profiles (TechDocs/POS_PRINTER_PROFILES.md): every store
   // prints, so a core group — the till reports, and reads what was approved.
   { moduleId: null, register: registerPrinterProfileRoutes },

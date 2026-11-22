@@ -249,11 +249,13 @@ describe('the guest page', () => {
     expect(html).toContain('Склад і алергени вказує заклад. Якщо у вас алергія — скажіть офіціанту.');
   });
 
-  it('is the logo and the name, with no link and no call to buy, where the store has it', () => {
+  it('is the logo and the name, one link to the program\'s page, where the store has it', () => {
     const html = renderMenuPage(menuOf(dish()), 'tok_12345678', null, { attribution: true });
     const footer = html.slice(html.indexOf('<footer class="foot">'), html.indexOf('</footer>'));
-    expect(footer).toContain('<p class="attr"><img src="/menu-assets/liveshop.svg" width="20" height="20" alt="">The Live Shop</p>');
-    expect(footer).not.toContain('<a ');
+    expect(footer).toMatch(
+      /<p class="attr"><a href="[^"]*\/pos\/kafe" rel="noopener"><img src="\/menu-assets\/liveshop\.svg" width="20" height="20" alt="">The Live Shop<\/a><\/p>/
+    );
+    expect(footer.match(/<a /g)).toHaveLength(1);
     expect(footer).not.toContain('Меню працює на');
   });
 

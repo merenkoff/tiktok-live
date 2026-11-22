@@ -729,7 +729,7 @@ export function HardwarePage() {
           <StationPrinterSection
             station="kitchen"
             title="Принтер кухні"
-            hint="Тікет кожного замовлення: без цін, з номером на весь рулон. Без нього тікети не друкуються."
+            hint="Тікет кожного замовлення: без цін, з номером на весь рулон. Сюди ж друкуються раунди зі столів — з будь-якого планшета чи каси, поки цей комп'ютер увімкнений. Без нього тікети не друкуються."
             printers={printers}
             selected={stationPrinters.kitchen}
             paperWidth={stationPaper.kitchen}

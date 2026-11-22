@@ -44,6 +44,10 @@ pub struct KitchenTicketData {
     /// «КУХНЯ» / «БАР» — absent when the store routes nothing by station.
     #[serde(default)]
     pub station: Option<String>,
+    /// Under the number, ordinary size: a table's round says «Раунд 2 ·
+    /// Тераса» there (TechDocs/POS_TABLES.md §11). Absent on a counter sale.
+    #[serde(default)]
+    pub subtitle: Option<String>,
     /// Already formatted by the host — the time the sale was rung.
     #[serde(default)]
     pub created_at: String,
@@ -88,6 +92,12 @@ fn build_kitchen_ticket_with(
     printer.size(3, 3).map_err(|e| e.to_string())?;
     printer.writeln(&ticket.order_label).map_err(|e| e.to_string())?;
     printer.reset_size().map_err(|e| e.to_string())?;
+    if let Some(subtitle) = ticket.subtitle.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        // Ordinary weight too: it says where, the label above says what to call.
+        printer.bold(false).map_err(|e| e.to_string())?;
+        printer.writeln(subtitle).map_err(|e| e.to_string())?;
+        printer.bold(true).map_err(|e| e.to_string())?;
+    }
 
     if let Some(station) = ticket.station.as_deref().filter(|s| !s.trim().is_empty()) {
         printer.size(1, 2).map_err(|e| e.to_string())?;
@@ -177,6 +187,7 @@ mod tests {
         KitchenTicketData {
             order_label: "17".into(),
             station: Some("БАР".into()),
+            subtitle: None,
             created_at: "14:59".into(),
             staff_name: "Олена".into(),
             note: Some("з собою".into()),
@@ -277,5 +288,22 @@ mod tests {
         let bytes = build_kitchen_ticket(&base(), CHARS_58MM).unwrap();
         assert_paper_margins(&bytes);
         assert_no_attribution(&bytes);
+    }
+
+    #[test]
+    fn a_tables_round_says_its_round_and_hall_under_the_table_in_ordinary_size() {
+        let mut ticket = base();
+        ticket.order_label = "Стіл 5".into();
+        ticket.subtitle = Some("Раунд 2 · Тераса".into());
+        let bytes = build_kitchen_ticket(&ticket, CHARS_58MM).unwrap();
+        let label = position(&bytes, &win1251("Стіл 5"));
+        let subtitle = position(&bytes, &win1251("Раунд 2"));
+        let station = position(&bytes, &win1251("БАР"));
+        assert!(label < subtitle && subtitle < station);
+        // Back to the ordinary size and weight before the subtitle.
+        assert!(contains(&bytes[label..subtitle], &[0x1D, 0x21, 0x00]));
+        assert!(contains(&bytes[label..subtitle], &[0x1B, 0x45, 0x00]));
+        // A counter sale has none.
+        assert!(!contains(&build_kitchen_ticket(&base(), CHARS_58MM).unwrap(), &win1251("Раунд")));
     }
 }

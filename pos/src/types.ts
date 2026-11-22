@@ -972,6 +972,37 @@ export interface PosTag {
 /** `pos_tags.station`: where the kitchen ticket for a tagged product goes. */
 export type TagStation = 'kitchen' | 'bar';
 
+/**
+ * One station's ticket of a table's round, from the server's print queue
+ * (`GET /kitchen/print-queue`, TechDocs/POS_TABLES.md §11). No prices: it is
+ * not a receipt.
+ */
+export interface RoundPrintJob {
+  round_id: number;
+  /** Which station's printer it goes to. */
+  station: TagStation;
+  /** The ticket's heading — null when the store routes nothing by station. */
+  heading: TagStation | null;
+  table_name: string;
+  hall_name: string;
+  round_seq: number;
+  /** ISO — when the round was fired. */
+  fired_at: string;
+  /** Who fired it, or «Гість · QR-меню». */
+  staff_name: string;
+  /** The bill's own note. */
+  note: string | null;
+  items: Array<{
+    product_name: string;
+    /** The caption the round fixed — «M · вівсяне». */
+    variant_label: string;
+    quantity: number;
+    /** The answers, by name. */
+    modifiers: string[];
+    note: string | null;
+  }>;
+}
+
 // ── ПРРО fiscalisation ──────────────────────────────────────────────────────
 // Everything here is optional: an older cached `pos_auth`, the synthetic
 // offline receipt, and every non-fiscalising store must all still typecheck.

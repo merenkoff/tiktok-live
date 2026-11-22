@@ -217,6 +217,10 @@ export const POS_MIGRATIONS = [
   // the last lines of every receipt, a small line under a price tag, the logo
   // in the guest menu's footer (TechDocs/POS_LICENSING.md).
   '108_pos_store_attribution.sql',
+  // The print queue of a table's rounds: one row per station a fired round's
+  // lines are made at, taken by the desktop that holds that station's printer
+  // (TechDocs/POS_TABLES.md §11).
+  '109_pos_round_prints.sql',
 ] as const;
 
 export function readMigration(file: string): string {

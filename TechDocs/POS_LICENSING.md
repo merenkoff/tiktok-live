@@ -415,7 +415,7 @@ UTC?) → справжні адреси звідти ж → чиї вони (х�
 |---|---|---|
 | Чеки (продаж, повернення, з текстом провайдера), передчек, квитанції «під запис», акт про видачу коштів | останні рядки після всіх реквізитів, фіскального номера й QR, по центру, основним шрифтом: «Каса: The Live Shop» / «the-live.shop» | Rust `TextPrinter::attribution` (`encoding.rs`), поле `attribution` у `ReceiptData`/`PrecheckData`/`SlipData`; веб — `ReceiptPrintable`, `ActPrintable`; картинка з телефону — `receiptTrailer` під QR |
 | Цінник | дрібне «the-live.shop» останнім рядком; на етикетці — лише якщо є рядок (з вільного місця або зі штрихів до `LABEL_MIN_BAR_MM`), інакше без нього: форма його **допускає**, не вимагає | `PriceTagsPrintable`, `labelLayout(spec, { attribution })` |
-| Гостьове QR-меню | у підвалі логотип і «The Live Shop», без посилання й закликів; без прапорця — старий рядок «Меню працює на The Live Shop POS» | `render.ts` `footerCredit`, `public/menu-assets/liveshop.svg` |
+| Гостьове QR-меню | у підвалі логотип і «The Live Shop» — одне посилання на сторінку програми (`/pos/kafe`, як і старий рядок; слово власника 2026-11-22), без закликів; без прапорця — старий рядок «Меню працює на The Live Shop POS» | `render.ts` `footerCredit`, `public/menu-assets/liveshop.svg` |
 
 Кухонний тікет і тестовий аркуш кодування атрибуції не мають (гість їх не отримує). Каса читає
 прапорець із логіну (`store.attribution`), а друк — із закешованого `pos_auth`
