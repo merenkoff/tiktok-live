@@ -25,7 +25,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, Trash2 } from '@pos/platform/ui';
 import { api, assetUrl } from '@pos/platform';
-import { downscaleImage } from '../../../lib/downscaleImage';
+import { downscaleImage } from '@host/lib/downscaleImage';
 
 /**
  * Long edge of the stored picture.
