@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import type { ReceiptData, ReceiptVatLine } from '../lib/printer';
+import { paymentWords, withCurrency } from '../lib/paymentWords';
 
 function money(cents: number) {
   return (cents / 100).toFixed(2);
@@ -11,14 +12,6 @@ function money(cents: number) {
 /** Рядок 23: the rounding with its sign — it goes both ways (НБУ № 25). */
 function signedMoney(cents: number) {
   return `${cents < 0 ? '-' : '+'}${money(Math.abs(cents))}`;
-}
-
-/** Рядок 18 of Положення № 13: «ГОТІВКА» / «БЕЗГОТІВКОВА» / «ІНШЕ», detail in brackets. */
-function paymentLabel(method: string) {
-  if (method === 'cash') return 'ГОТІВКА';
-  if (method === 'card') return 'БЕЗГОТІВКОВА (картка)';
-  if (method === 'qr') return 'БЕЗГОТІВКОВА (QR)';
-  return `ІНШЕ (${method})`;
 }
 
 /** Рядки 21–22: «ПДВ А 20%», «Акциз Г 5%» — the tax's own name, «ПДВ» when none. */
@@ -138,19 +131,29 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
       ) : null}
       <div className="receipt-print-row receipt-print-total">
         <span>{receipt.kind === 'refund' ? 'ДО ПОВЕРНЕННЯ' : 'ДО СПЛАТИ'}</span>
-        <span>{money(receipt.total_cents + rounding)}</span>
+        {/* Рядок 24: «до сплати, валюта». */}
+        <span>{withCurrency(money(receipt.total_cents + rounding))}</span>
       </div>
       <hr />
-      {receipt.payments.map((p, i) => (
-        <div key={i} className="receipt-print-row">
-          <span>{paymentLabel(p.method)}</span>
-          <span>{money(p.amount_cents)}</span>
-        </div>
-      ))}
+      {/* Рядок 18 — the form, its sum and the currency; рядок 19 — the means,
+          on its own line under it (Положення № 13 after наказ № 601). */}
+      {receipt.payments.map((p, i) => {
+        const words = paymentWords(p.method);
+        return (
+          <div key={i} className="receipt-print-payment">
+            <div className="receipt-print-row">
+              <span className="receipt-print-form">{words.form}</span>
+              <span>{withCurrency(money(p.amount_cents))}</span>
+            </div>
+            <p className="receipt-print-means">{words.means}</p>
+          </div>
+        );
+      })}
       {receipt.change_cents && receipt.change_cents > 0 ? (
         <div className="receipt-print-row">
           <span>РЕШТА</span>
-          <span>{money(receipt.change_cents)}</span>
+          {/* Рядок 25: «решта, валюта». */}
+          <span>{withCurrency(money(receipt.change_cents))}</span>
         </div>
       ) : null}
       {fiscal && (

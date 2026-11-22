@@ -358,6 +358,20 @@ body {
     font-size: 10px;
   }
 
+  /* Рядки 18–19 of Положення № 13: the form of payment in capitals and bold,
+     the means of payment on its own line under it, as Cashalot prints them. */
+  .receipt-print-payment {
+    margin-top: 2px;
+  }
+
+  .receipt-print-form {
+    font-weight: bold;
+  }
+
+  .receipt-print-means {
+    margin: 0;
+  }
+
   .receipt-print-total {
     font-weight: bold;
   }

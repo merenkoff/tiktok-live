@@ -59,12 +59,37 @@ describe('receiptLines', () => {
     expect(lines).toContain('Чек R-000042');
     expect(lines).toContain('Сукня Рожевий · 98-104');
     expect(lines.some((l) => l.startsWith('  2 x 450.00') && l.endsWith('900.00 Б'))).toBe(true);
-    const order = ['СУМА', 'ДО СПЛАТИ', 'ГОТІВКА', 'РЕШТА', 'Касир: Олена'].map((label) =>
+    const order = ['СУМА', 'ДО СПЛАТИ', 'ГОТІВКА', 'Готівкові кошти', 'РЕШТА', 'Касир: Олена'].map((label) =>
       lines.findIndex((l) => l.startsWith(label))
     );
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(lines.every((l) => l.length <= 32)).toBe(true);
+    // Рядки 18, 24, 25 carry the currency (Положення № 13 after наказ № 601).
+    expect(lines.some((l) => l.startsWith('ГОТІВКА') && l.endsWith('1000.00 ГРН'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('ДО СПЛАТИ') && l.endsWith('900.00 ГРН'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('РЕШТА') && l.endsWith('100.00 ГРН'))).toBe(true);
+  });
+
+  it('prints a form and a means for each part of a mixed payment', () => {
+    const lines = text(
+      receiptLines(
+        receipt({
+          payments: [
+            { method: 'card', amount_cents: 60000 },
+            { method: 'qr', amount_cents: 30000 },
+          ],
+          change_cents: null,
+        }),
+        32
+      )
+    );
+    const card = lines.findIndex((l) => l.startsWith('БЕЗГОТІВКОВА') && l.endsWith('600.00 ГРН'));
+    const qr = lines.findIndex((l) => l.startsWith('БЕЗГОТІВКОВА') && l.endsWith('300.00 ГРН'));
+    expect(card).toBeGreaterThan(-1);
+    expect(lines[card + 1]).toBe('Картка');
+    expect(qr).toBe(card + 2);
+    expect(lines[qr + 1]).toBe('Переказ за QR-кодом');
   });
 
   it('carries the fiscal block of a registered receipt', () => {
@@ -92,7 +117,7 @@ describe('receiptLines', () => {
   it('prints the rounding and what was due after it', () => {
     const lines = text(receiptLines(receipt({ total_cents: 90020, subtotal_cents: 90020, rounding_cents: -20 }), 32));
     expect(lines.some((l) => l.startsWith('ЗАОКРУГЛЕННЯ') && l.endsWith('-0.20'))).toBe(true);
-    expect(lines.some((l) => l.startsWith('ДО СПЛАТИ') && l.endsWith('900.00'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('ДО СПЛАТИ') && l.endsWith('900.00 ГРН'))).toBe(true);
   });
 
   it('takes the provider’s own text as the receipt', () => {

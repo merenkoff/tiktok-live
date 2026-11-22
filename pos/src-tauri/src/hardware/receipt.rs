@@ -238,14 +238,26 @@ pub(crate) fn two_col(width: usize, left: &str, right: &str) -> String {
     format!("{left}{}{right}", " ".repeat(space))
 }
 
-/// Рядок 18: the regulation knows three forms of payment — «ГОТІВКА»,
-/// «БЕЗГОТІВКОВА», «ІНШЕ»; the bracket keeps the detail the cashier had.
-fn payment_label(method: &str) -> String {
+/// The currency printed after a sum in rows 18, 24 and 25 of Положення № 13.
+const CURRENCY: &str = "ГРН";
+
+/// «206.08 ГРН».
+fn with_currency(cents: i64) -> String {
+    format!("{} {CURRENCY}", money(cents))
+}
+
+/// Рядки 18 and 19 of Положення № 13 after наказ Мінфіну № 601 (in force
+/// 01.03.2025): the form — the regulation's own three words «ГОТІВКА»,
+/// «БЕЗГОТІВКОВА», «ІНШЕ» — and under it the means of payment, which the
+/// regulation does not word; we print what Cashalot prints in its examples.
+/// The same table lives in `pos/src/lib/paymentWords.ts` for the HTML and
+/// phone receipts.
+fn payment_form(method: &str) -> (&'static str, String) {
     match method {
-        "cash" => "ГОТІВКА".into(),
-        "card" => "БЕЗГОТІВКОВА (картка)".into(),
-        "qr" => "БЕЗГОТІВКОВА (QR)".into(),
-        other => format!("ІНШЕ ({other})"),
+        "cash" => ("ГОТІВКА", "Готівкові кошти".into()),
+        "card" => ("БЕЗГОТІВКОВА", "Картка".into()),
+        "qr" => ("БЕЗГОТІВКОВА", "Переказ за QR-кодом".into()),
+        other => ("ІНШЕ", other.to_string()),
     }
 }
 
@@ -437,25 +449,32 @@ fn build_ticket_with(
     } else {
         "ДО СПЛАТИ"
     };
+    // Рядок 24: «до сплати, валюта».
     printer
         .writeln(&two_col(
             width,
             total_label,
-            &money(receipt.total_cents + rounding.unwrap_or(0)),
+            &with_currency(receipt.total_cents + rounding.unwrap_or(0)),
         ))
         .map_err(|e| e.to_string())?;
     printer.bold(false).map_err(|e| e.to_string())?;
     printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
 
+    // Рядок 18 (the form, its sum, the currency), then рядок 19 (the means)
+    // on its own line, once per payment.
     for payment in &receipt.payments {
+        let (form, means) = payment_form(&payment.method);
+        printer.bold(true).map_err(|e| e.to_string())?;
         printer
-            .writeln(&two_col(width, &payment_label(&payment.method), &money(payment.amount_cents)))
+            .writeln(&two_col(width, form, &with_currency(payment.amount_cents)))
             .map_err(|e| e.to_string())?;
+        printer.bold(false).map_err(|e| e.to_string())?;
+        printer.writeln(&means).map_err(|e| e.to_string())?;
     }
-    // Рядок 25.
+    // Рядок 25: «решта, валюта».
     if let Some(change) = receipt.change_cents.filter(|c| *c > 0) {
         printer
-            .writeln(&two_col(width, "РЕШТА", &money(change)))
+            .writeln(&two_col(width, "РЕШТА", &with_currency(change)))
             .map_err(|e| e.to_string())?;
     }
 
@@ -936,9 +955,41 @@ mod tests {
         assert!(contains(&bytes, &win1251("ПДВ А 20%")));
         assert!(contains(&bytes, b"16.67"));
         assert!(contains(&bytes, &win1251("ГОТІВКА")));
+        assert!(contains(&bytes, &win1251("150.00 ГРН")));
+        assert!(contains(&bytes, &win1251("Готівкові кошти")));
         assert!(contains(&bytes, &win1251("РЕШТА")));
-        assert!(contains(&bytes, b"50.00"));
+        assert!(contains(&bytes, &win1251("50.00 ГРН")));
         assert!(contains(&bytes, &win1251("ДО СПЛАТИ")));
+        assert!(contains(&bytes, &win1251("100.00 ГРН")));
+        // The means goes under its form, the change after both.
+        assert!(after(&bytes, "ГОТІВКА") < after(&bytes, "Готівкові кошти"));
+        assert!(after(&bytes, "Готівкові кошти") < after(&bytes, "РЕШТА"));
+    }
+
+    #[test]
+    fn a_mixed_payment_prints_a_form_and_a_means_for_each_part() {
+        let mut receipt = base();
+        receipt.payments = vec![
+            ReceiptPayment { method: "card".into(), amount_cents: 6000 },
+            ReceiptPayment { method: "qr".into(), amount_cents: 4000 },
+        ];
+        let bytes = build_ticket(&receipt, CHARS_80MM).unwrap();
+        assert!(contains(&bytes, &win1251("60.00 ГРН")));
+        assert!(contains(&bytes, &win1251("Картка")));
+        assert!(contains(&bytes, &win1251("40.00 ГРН")));
+        assert!(contains(&bytes, &win1251("Переказ за QR-кодом")));
+        // No bracketed detail any more, and no «Готівкові кошти» on a cashless receipt.
+        assert!(!contains(&bytes, &win1251("(картка)")));
+        assert!(!contains(&bytes, &win1251("Готівкові кошти")));
+        assert!(after(&bytes, "Картка") < after(&bytes, "Переказ за QR-кодом"));
+    }
+
+    #[test]
+    fn payment_words_follow_the_regulation_and_cashalots_examples() {
+        assert_eq!(payment_form("cash"), ("ГОТІВКА", "Готівкові кошти".to_string()));
+        assert_eq!(payment_form("card"), ("БЕЗГОТІВКОВА", "Картка".to_string()));
+        assert_eq!(payment_form("qr"), ("БЕЗГОТІВКОВА", "Переказ за QR-кодом".to_string()));
+        assert_eq!(payment_form("voucher"), ("ІНШЕ", "voucher".to_string()));
     }
 
     #[test]
@@ -1087,9 +1138,9 @@ mod tests {
 
     #[test]
     fn card_and_qr_are_cashless() {
-        assert_eq!(payment_label("card"), "БЕЗГОТІВКОВА (картка)");
-        assert_eq!(payment_label("qr"), "БЕЗГОТІВКОВА (QR)");
-        assert_eq!(payment_label("cash"), "ГОТІВКА");
-        assert_eq!(payment_label("bonus"), "ІНШЕ (bonus)");
+        assert_eq!(payment_form("card").0, "БЕЗГОТІВКОВА");
+        assert_eq!(payment_form("qr").0, "БЕЗГОТІВКОВА");
+        assert_eq!(payment_form("cash").0, "ГОТІВКА");
+        assert_eq!(payment_form("bonus"), ("ІНШЕ", "bonus".to_string()));
     }
 }

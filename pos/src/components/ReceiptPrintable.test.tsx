@@ -124,10 +124,15 @@ describe('ReceiptPrintable', () => {
     expect(screen.getByText('100.00 А')).toBeInTheDocument();
     expect(screen.getByText('ПДВ А 20%')).toBeInTheDocument();
     expect(screen.getByText('16.67')).toBeInTheDocument();
+    // Рядок 18: the form, its sum and the currency; рядок 19: the means under it.
     expect(screen.getByText('ГОТІВКА')).toBeInTheDocument();
+    expect(screen.getByText('150.00 ГРН')).toBeInTheDocument();
+    expect(screen.getByText('Готівкові кошти')).toBeInTheDocument();
+    // Рядок 25: «решта, валюта»; рядок 24: «до сплати, валюта».
     expect(screen.getByText('РЕШТА')).toBeInTheDocument();
-    expect(screen.getByText('50.00')).toBeInTheDocument();
+    expect(screen.getByText('50.00 ГРН')).toBeInTheDocument();
     expect(screen.getByText('ДО СПЛАТИ')).toBeInTheDocument();
+    expect(screen.getByText('100.00 ГРН')).toBeInTheDocument();
   });
 
   it('marks an offline receipt and prints the register number and producer', () => {
@@ -166,8 +171,12 @@ describe('ReceiptPrintable', () => {
         })}
       />
     );
-    expect(screen.getByText('БЕЗГОТІВКОВА (картка)')).toBeInTheDocument();
-    expect(screen.getByText('БЕЗГОТІВКОВА (QR)')).toBeInTheDocument();
+    // One form row and one means row per payment, no bracketed detail.
+    expect(screen.getAllByText('БЕЗГОТІВКОВА')).toHaveLength(2);
+    expect(screen.getByText('Картка')).toBeInTheDocument();
+    expect(screen.getByText('Переказ за QR-кодом')).toBeInTheDocument();
+    expect(screen.getAllByText('50.00 ГРН')).toHaveLength(2);
+    expect(screen.queryByText('Готівкові кошти')).toBeNull();
   });
 
   it('prints «ЗАОКРУГЛЕННЯ» after the VAT line and the rounded «ДО СПЛАТИ» (Положення № 13 розд. II п. 9)', () => {
@@ -185,7 +194,7 @@ describe('ReceiptPrintable', () => {
     );
     const text = container.textContent ?? '';
     expect(screen.getByTestId('receipt-rounding')).toHaveTextContent('ЗАОКРУГЛЕННЯ-0.23');
-    expect(text).toContain('ДО СПЛАТИ221.00');
+    expect(text).toContain('ДО СПЛАТИ221.00 ГРН');
     expect(text.indexOf('ПДВ А 20%')).toBeLessThan(text.indexOf('ЗАОКРУГЛЕННЯ'));
     expect(text.indexOf('ЗАОКРУГЛЕННЯ')).toBeLessThan(text.indexOf('ДО СПЛАТИ'));
     // No discount: «СУМА» already is the sum before rounding.
@@ -204,7 +213,7 @@ describe('ReceiptPrintable', () => {
       />
     );
     expect(container.textContent).toContain('УСЬОГО221.23');
-    expect(container.textContent).toContain('ДО СПЛАТИ221.00');
+    expect(container.textContent).toContain('ДО СПЛАТИ221.00 ГРН');
   });
 
   it('prints no rounding row when nothing was rounded', () => {
