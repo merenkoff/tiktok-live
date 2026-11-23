@@ -227,6 +227,8 @@ export const POS_MIGRATIONS = [
   // The till's sections a staff member may not open (`pos_staff.blocked_sections`),
   // set by the owner on «Співробітники» (TechDocs/POS_STAFF_SECTIONS.md).
   '111_pos_staff_sections.sql',
+  // «На головному екрані каси»: the products the till shows before any folder.
+  '112_pos_till_home.sql',
 ] as const;
 
 export function readMigration(file: string): string {

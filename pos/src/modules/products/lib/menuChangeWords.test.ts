@@ -16,6 +16,7 @@ describe('menu change words', () => {
     expect(describeChange({ field: 'allergens', from: [], to: ['milk', 'gluten'] })).toBe('Алергени: — → Молоко, Глютен');
     expect(describeChange({ field: 'menu_labels', from: ['hit'], to: [] })).toBe('Позначки в QR-меню: Хіт → —');
     expect(describeChange({ field: 'menu_hidden', from: false, to: true })).toBe('Не показувати в QR-меню: ні → так');
+    expect(describeChange({ field: 'till_home', from: false, to: true })).toBe('На головному екрані каси: ні → так');
     expect(describeChange({ field: 'strength_tenths', from: null, to: 45 })).toBe('Міцність: — → 4,5 %');
     expect(describeChange({ field: 'tags', from: ['Кава'], to: ['Кава', 'Сезон'] })).toBe('Мітки: Кава → Кава, Сезон');
   });

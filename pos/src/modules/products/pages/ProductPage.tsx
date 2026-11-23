@@ -63,6 +63,7 @@ import { recipeWords } from '../lib/guestComposition';
 import { allergenHints } from '../lib/allergenHints';
 import { guestDishUrl, readCorkageProductId, readGuestMenuUrl } from '../data/guestMenuApi';
 import { useLeaveGuard } from '../lib/useLeaveGuard';
+import { offersTillHome } from '../lib/tillHomeOffer';
 
 /** What the list hands over so «← Товари» lands on the same search and tag. */
 interface CardLocationState {
@@ -654,6 +655,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                 techCards={techCards}
                 variants={draft.variants}
                 askMenuHidden={scope.askDishFacts}
+                askTillHome={offersTillHome(vertical.id)}
                 registers={registers}
                 askExcise={!menuOnly && fiscal?.enabled === true}
                 corkage={mode === 'edit' && corkageId === productId}

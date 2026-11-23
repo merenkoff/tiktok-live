@@ -109,6 +109,11 @@ export const cashierApi = {
      * desktop stock count of a café finds its milk too.
      */
     include_unsellable?: boolean;
+    /** The till's home screen (migration 112) — the snapshot carries what it needs. */
+    home?: boolean;
+    /** A page of cards, read the same way online and from the snapshot. */
+    limit?: number;
+    offset?: number;
   }): Promise<CatalogItem[]> {
     return isOfflineReadsEnabled() ? repo.getCatalog(opts) : api.getCatalog(opts);
   },

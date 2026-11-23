@@ -332,6 +332,28 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // «На головну» / «Прибрати з головної» for the cards ticked in the list
+  // (migration 112). The menu journal records each card that changed.
+  fastify.post('/products/till-home', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
+    if (!auth) return;
+    const body = (request.body ?? {}) as { product_ids?: unknown; on?: unknown };
+    if (!Array.isArray(body.product_ids) || body.product_ids.length === 0 || typeof body.on !== 'boolean') {
+      return reply.code(400).send({ error: 'Потрібні product_ids (список) і on (так/ні)' });
+    }
+    if (body.product_ids.length > 1000) {
+      return reply.code(400).send({ error: 'Не більше 1000 товарів за раз' });
+    }
+    const ids = body.product_ids.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    const changed = await withMenuJournal(
+      auth,
+      ids,
+      () => productsService.setTillHome(auth.storeId, ids, body.on as boolean),
+      (result) => result
+    );
+    return { changed: changed.length, product_ids: changed };
+  });
+
   // The archive's way back (the list's «Архів» filter → «Повернути»).
   fastify.post('/products/:id/restore', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });

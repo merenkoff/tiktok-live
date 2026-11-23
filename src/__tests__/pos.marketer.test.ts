@@ -49,6 +49,7 @@ const OPEN = new Set([
   'PATCH /variants/:id',
   'POST /products/:id/archive',
   'POST /products/:id/restore',
+  'POST /products/till-home',
   'POST /variants/:id/archive',
   'PUT /products/:id/tags',
   'GET /tags',

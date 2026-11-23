@@ -37,7 +37,7 @@ export function tagFilterIds(tags: PosTag[], tagId: number): number[] {
 export function filterCatalog(
   all: CatalogItem[],
   tags: PosTag[],
-  opts?: { q?: string; barcode?: string; tag_id?: number; include_unsellable?: boolean },
+  opts?: { q?: string; barcode?: string; tag_id?: number; include_unsellable?: boolean; home?: boolean },
   /**
    * Attribute keys the store's vertical marks searchable. Mirrors the server's
    * `searchableAttributeKeys` — the offline till must find what the online one
@@ -67,5 +67,30 @@ export function filterCatalog(
     next = next.filter((item) => (item.tag_ids ?? []).some((id) => ids.has(id)));
   }
 
+  // The till's home screen (migration 112): what the owner ticked and what
+  // sells most — the server's `?home=1`, from the snapshot.
+  if (opts?.home) {
+    next = next.filter((item) => item.till_home === true || item.popular_rank != null);
+  }
+
   return next;
+}
+
+/**
+ * `limit` cards from the `offset`-th of rows already in catalogue order — the
+ * server's page of products, never a cut through one card's variants.
+ */
+export function pageOfCards(rows: CatalogItem[], offset: number, limit: number): CatalogItem[] {
+  const out: CatalogItem[] = [];
+  let card = -1;
+  let last: number | null = null;
+  for (const row of rows) {
+    if (row.product_id !== last) {
+      card += 1;
+      last = row.product_id;
+    }
+    if (card >= offset + limit) break;
+    if (card >= offset) out.push(row);
+  }
+  return out;
 }

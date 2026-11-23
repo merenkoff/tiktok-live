@@ -9,6 +9,17 @@
 import { api } from '@pos/platform';
 import type { Product } from '@pos/platform';
 
+/**
+ * «На головну» / «Прибрати з головної» for the ticked cards (migration 112).
+ * Archived cards and cards already so are left alone; `changed` counts the rest.
+ */
+export function setTillHome(productIds: number[], on: boolean): Promise<{ changed: number; product_ids: number[] }> {
+  return api.posRequest<{ changed: number; product_ids: number[] }>('post', '/products/till-home', {
+    product_ids: productIds,
+    on,
+  });
+}
+
 /** Back from the archive: the card and every variant on it (`POST /products/:id/restore`). */
 export function restoreProduct(productId: number): Promise<Product> {
   // Called as a METHOD of `api`, never detached: it reaches its axios client through `this`.

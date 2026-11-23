@@ -158,6 +158,11 @@ export interface CreateProductInput {
    */
   menu_hidden?: boolean;
   /**
+   * On the till's home screen (migration 112): the cashier sees it before any
+   * folder. Nothing ticked means the home screen is what sells most.
+   */
+  till_home?: boolean;
+  /**
    * The store register this product is sold through (migration 089, ДК2):
    * null or 1 = register 1, 2 = the second ФОП's register. Honoured only
    * while that register is switched on (`fiscal/routing.ts`).
@@ -439,6 +444,7 @@ export async function listProducts(storeId: number, onlyIds?: readonly number[])
     stock_mode: (p.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     sellable: p.sellable !== false,
     menu_hidden: p.menu_hidden === true,
+    till_home: p.till_home === true,
     fiscal_register: p.fiscal_register == null ? null : Number(p.fiscal_register),
     fiscal_excise: p.fiscal_excise === true,
     excise_per_unit: p.excise_per_unit === true,
@@ -560,9 +566,10 @@ export async function createProductInTx(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
         kind, stock_mode, one_off, sellable, composition, allergens, menu_hidden, menu_labels,
-        kcal, strength_tenths, prep_minutes, fiscal_register, fiscal_excise, excise_per_unit, fiscal_uktzed)
+        kcal, strength_tenths, prep_minutes, fiscal_register, fiscal_excise, excise_per_unit, fiscal_uktzed,
+        till_home)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13, $14::text[], $15, $16, $17,
-             $18, $19, $20, $21)
+             $18, $19, $20, $21, $22)
      RETURNING id`,
     [
       storeId,
@@ -586,6 +593,7 @@ export async function createProductInTx(
       input.fiscal_excise === true,
       input.excise_per_unit === true,
       normalizeUktzed(input.fiscal_uktzed),
+      input.till_home === true,
     ]
   );
   const productId = Number(productResult.rows[0].id);
@@ -727,6 +735,7 @@ export async function updateProduct(
       | 'stock_mode'
       | 'sellable'
       | 'menu_hidden'
+      | 'till_home'
       | 'fiscal_register'
       | 'fiscal_excise'
       | 'excise_per_unit'
@@ -807,6 +816,10 @@ export async function updateProduct(
     if (input.menu_hidden !== undefined) {
       sets.push(`menu_hidden = $${i++}`);
       values.push(Boolean(input.menu_hidden));
+    }
+    if (input.till_home !== undefined) {
+      sets.push(`till_home = $${i++}`);
+      values.push(Boolean(input.till_home));
     }
     if (input.fiscal_register !== undefined) {
       sets.push(`fiscal_register = $${i++}`);
@@ -1128,6 +1141,64 @@ export async function restoreProduct(storeId: number, productId: number) {
   return getProduct(storeId, productId);
 }
 
+/**
+ * «На головну» / «Прибрати з головної» for many cards at once (migration 112).
+ * Another store's ids and archived cards are left alone; the answer is the ids
+ * that actually changed, which is what the menu journal records.
+ */
+export async function setTillHome(
+  storeId: number,
+  productIds: readonly number[],
+  on: boolean
+): Promise<number[]> {
+  const ids = [...new Set(productIds.map(Number))].filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length === 0) return [];
+  const result = await pool.query(
+    `UPDATE pos_products SET till_home = $3, updated_at = NOW()
+     WHERE store_id = $1 AND id = ANY($2::bigint[]) AND is_active AND till_home <> $3
+     RETURNING id`,
+    [storeId, ids, on]
+  );
+  return result.rows.map((row) => Number(row.id));
+}
+
+/** How many of the store's sellers the till's home screen ranks (`popularRanks`). */
+export const POPULAR_LIMIT = 24;
+/** Over how many days of the store's calendar, today included. */
+export const POPULAR_DAYS = 30;
+
+/**
+ * What sold most in the last 30 days of the store's calendar, 1 = most — the
+ * till's home screen while the owner has ticked nothing (migration 112).
+ * Counted the way «Популярні товари» count: purchases, a weighing being one,
+ * refunded units not counted, voided receipts not at all; a tie goes to what
+ * sold last. Only live cards on the menu are ranked.
+ */
+export async function popularRanks(
+  storeId: number,
+  clock: { timezone: string; today: string }
+): Promise<Map<number, number>> {
+  const purchases = `SUM(CASE WHEN si.price_per > 1 THEN (si.quantity > si.refunded_quantity)::int
+                              ELSE si.quantity - si.refunded_quantity END)`;
+  const result = await pool.query(
+    `SELECT v.product_id
+     FROM pos_sale_items si
+     JOIN pos_sales s ON s.id = si.sale_id
+     JOIN pos_variants v ON v.id = si.variant_id
+     JOIN pos_products p ON p.id = v.product_id
+     WHERE s.store_id = $1
+       AND s.status <> 'voided'
+       AND s.created_at >= (($2::date - ($4::int - 1))::timestamp AT TIME ZONE $3)
+       AND p.is_active AND p.sellable AND NOT p.one_off
+     GROUP BY v.product_id
+     HAVING ${purchases} > 0
+     ORDER BY ${purchases} DESC, MAX(s.created_at) DESC, v.product_id
+     LIMIT $5`,
+    [storeId, clock.today, clock.timezone, POPULAR_DAYS, POPULAR_LIMIT]
+  );
+  return new Map(result.rows.map((row, i) => [Number(row.product_id), i + 1]));
+}
+
 export async function archiveVariant(storeId: number, variantId: number) {
   const result = await pool.query(
     `UPDATE pos_variants
@@ -1224,6 +1295,9 @@ function dateOnly(value: unknown): string | null {
   return String(value).slice(0, 10);
 }
 
+/** The most cards one page of the till's catalogue may ask for. */
+export const CATALOG_PAGE_MAX = 500;
+
 export async function getCatalog(
   storeId: number,
   opts: {
@@ -1240,6 +1314,19 @@ export async function getCatalog(
     includeUnsellable?: boolean;
     /** The store's vertical, when the caller already has it. Read otherwise. */
     vertical?: VerticalDefinition;
+    /**
+     * The till's home screen (migration 112): the ticked products and the
+     * ranked sellers, every variant of each, uncapped. The till chooses
+     * between the two itself, offline as online.
+     */
+    home?: boolean;
+    /**
+     * A page of PRODUCTS, never a cut through one: `limit` cards from the
+     * `offset`-th, in the catalogue's order. Without `limit` the answer keeps
+     * the old 200-variant cap an older till expects.
+     */
+    limit?: number;
+    offset?: number;
   } = {}
 ): Promise<CatalogItem[]> {
   // One read for the vertical and «today»: the stop-list below is a day.
@@ -1311,7 +1398,36 @@ export async function getCatalog(
     }
   }
 
-  const limit = snapshot ? 10000 : 200;
+  // Read for the two answers a till builds its home screen from — the
+  // snapshot and `home` — and left out of every other (a scan, a folder), so
+  // a scan costs no aggregate over 30 days of sales.
+  const ranks = snapshot || opts.home ? await popularRanks(storeId, clock) : new Map<number, number>();
+  if (!snapshot && opts.home) {
+    params.push([...ranks.keys()]);
+    conditions.push(`(p.till_home OR p.id = ANY($${params.length}::bigint[]))`);
+  }
+
+  const paged = !snapshot && !opts.home && opts.limit != null;
+  if (paged) {
+    const pageSize = Math.min(Math.max(Math.trunc(Number(opts.limit)) || 1, 1), CATALOG_PAGE_MAX);
+    const offset = Math.max(Math.trunc(Number(opts.offset ?? 0)) || 0, 0);
+    // Which cards, first; then every variant of them. The conditions name only
+    // `p` and `v`, so the same WHERE serves both reads.
+    const page = await pool.query(
+      `SELECT p.id
+       FROM pos_variants v
+       JOIN pos_products p ON p.id = v.product_id
+       WHERE ${conditions.join(' AND ')}
+       GROUP BY p.id, p.name
+       ORDER BY p.name ASC, p.id ASC
+       LIMIT ${pageSize} OFFSET ${offset}`,
+      params
+    );
+    params.push(page.rows.map((row) => Number(row.id)));
+    conditions.push(`p.id = ANY($${params.length}::bigint[])`);
+  }
+
+  const limit = snapshot || opts.home || paged ? 10000 : 200;
 
   const result = await pool.query(
     `SELECT
@@ -1369,6 +1485,7 @@ export async function getCatalog(
        -- are composite+own, and only the one-off may be written off from here.
        p.one_off,
        p.sellable,
+       p.till_home,
        p.fiscal_register,
        p.fiscal_excise,
        p.excise_per_unit,
@@ -1468,6 +1585,11 @@ export async function getCatalog(
     stock_mode: (row.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     one_off: Boolean(row.one_off),
     sellable: row.sellable !== false,
+    // The till's home screen (migration 112): ticked by the owner, or among
+    // the 30 days' best sellers — both ride into the offline snapshot. The
+    // rank is read only for the snapshot and `home`; elsewhere it is null.
+    till_home: row.till_home === true,
+    popular_rank: ranks.get(Number(row.product_id)) ?? null,
     // Which register the line goes to (ДК2) — what a till splits a cart by.
     fiscal_register: registerOf(row),
     // Excise goods (ДК4-Б): a till asks for a stamp per unit before payment.

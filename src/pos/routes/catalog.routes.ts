@@ -18,6 +18,9 @@ export function registerCatalogRoutes(fastify: FastifyInstance): void {
       all?: string;
       snapshot?: string;
       include_unsellable?: string;
+      home?: string;
+      limit?: string;
+      offset?: string;
     };
     return productsService.getCatalog(auth.storeId, {
       q: query.q,
@@ -26,6 +29,10 @@ export function registerCatalogRoutes(fastify: FastifyInstance): void {
       snapshot: query.all === '1' || query.snapshot === '1',
       // The stock count counts ingredients; the sell screen never sees them.
       includeUnsellable: query.include_unsellable === '1',
+      // The till's home screen (migration 112) and a page of «Усі товари».
+      home: query.home === '1',
+      limit: query.limit ? Number(query.limit) : undefined,
+      offset: query.offset ? Number(query.offset) : undefined,
       // Already on the session — saves the service a round trip, and the
       // search needs it to know which attributes are searchable.
       vertical: getVertical(auth.vertical),

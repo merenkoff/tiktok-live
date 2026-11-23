@@ -34,7 +34,9 @@ import { tileCompareAt } from './lib/tilePrice';
 import { useProgressiveList } from '../../hooks/useProgressiveList';
 
 export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
-  const catalog = useSalesCatalog();
+  // The home screen (migration 112): folders and the owner's cards first,
+  // «Усі товари» one chip away.
+  const catalog = useSalesCatalog({ home: true });
   const addItem = useCartStore((s) => s.addItem);
   const addWeighed = useCartStore((s) => s.addWeighed);
   const setBanner = useCartStore((s) => s.setBanner);
@@ -120,6 +122,7 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
             backLabel={catalog.backLabel}
             onSelect={catalog.selectCatalogBarTag}
             onBack={catalog.goBackOne}
+            onAll={catalog.showAll}
           />
         )}
       </div>
@@ -136,6 +139,12 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
               onClick={() => catalog.enterTag(folder)}
             />
           ))}
+
+          {catalog.home && catalog.grouped.length > 0 && (
+            <h2 className="col-span-full pt-1 text-[13px] font-semibold text-sq-secondary" data-testid="catalog-home-title">
+              {catalog.home.title}
+            </h2>
+          )}
 
           {tiles.visible.map(([productId, variants]) => {
             const first = variants[0];
@@ -165,6 +174,19 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
           })}
         </div>
         {tiles.hasMore && <div ref={tiles.sentinelRef} className="h-px" aria-hidden data-testid="catalog-more" />}
+        {/* Every tile drawn and the server has more cards: the next page on a tap. */}
+        {!tiles.hasMore && catalog.hasMore && (
+          <div className="pt-4 flex justify-center">
+            <button
+              type="button"
+              className="sq-btn-quiet"
+              disabled={catalog.loading}
+              onClick={() => void catalog.loadMore()}
+            >
+              {catalog.loading ? 'Завантаження…' : 'Показати ще'}
+            </button>
+          </div>
+        )}
         {!catalog.loading && catalog.folderTiles.length === 0 && catalog.grouped.length === 0 && (
           <div className="rounded-sq border border-dashed border-sq-divider p-8 text-center text-sq-muted text-sm mt-4">
             Порожньо

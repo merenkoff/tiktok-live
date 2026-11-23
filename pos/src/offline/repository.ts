@@ -38,7 +38,7 @@ import { buildTaxUrl } from '../lib/taxUrl';
 export type RefundedSaleRow = LocalSaleRow & {
   refund_fiscal?: import('../types').FiscalActionResult | null;
 };
-import { filterCatalog } from './catalog-filter';
+import { filterCatalog, pageOfCards } from './catalog-filter';
 import { orderCatalog } from '../lib/variantOrder';
 import { customBouquetLabel, priceOfComponents } from '../lib/bouquet';
 import { advanceLocalOrderNo, deviceLocalDay, type LocalOrderCounter } from '../lib/localOrderNo';
@@ -158,12 +158,18 @@ export async function getCatalog(opts?: {
   searchKeys?: readonly string[];
   /** Also the rows that are not on the menu — the stock count asks for them. */
   include_unsellable?: boolean;
+  /** The till's home screen (migration 112). */
+  home?: boolean;
+  /** A page of cards, as the server pages them. */
+  limit?: number;
+  offset?: number;
 }): Promise<CatalogItem[]> {
   await ensureSnapshot();
   const [items, tags] = await Promise.all([db.catalog.toArray(), getCachedTags()]);
   // IndexedDB hands rows back by `variant_id`; the sell screen wants a card's
   // variants together and in size order, as the online catalogue sends them.
-  return withCachedImages(orderCatalog(filterCatalog(items, tags, opts, opts?.searchKeys ?? [])));
+  const ordered = orderCatalog(filterCatalog(items, tags, opts, opts?.searchKeys ?? []));
+  return withCachedImages(opts?.limit != null && !opts.home ? pageOfCards(ordered, opts.offset ?? 0, opts.limit) : ordered);
 }
 
 function normalizePhone(phone: string): string {

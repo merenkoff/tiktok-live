@@ -20,6 +20,7 @@ type Fields = Pick<
   | 'name'
   | 'sellable'
   | 'menuHidden'
+  | 'tillHome'
   | 'fiscalRegister'
   | 'fiscalExcise'
   | 'excisePerUnit'
@@ -42,6 +43,31 @@ export function SellableField({ checked, onChange }: { checked: boolean; onChang
         Продається на касі
         <span className="block text-[13px] text-sq-muted">
           Вимкніть для інгредієнта чи заготовки: склад і рецепти його бачать, екран продажу — ні
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * «На головному екрані каси» (migration 112): the cashier finds the card the
+ * moment the till opens, before any folder. Where nothing is ticked the home
+ * screen is what sold most in 30 days, so the hint says so.
+ */
+export function TillHomeField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2.5 text-[15px] text-sq-text cursor-pointer sm:col-span-2">
+      <input
+        type="checkbox"
+        className={`${checkboxClass} mt-1`}
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        data-testid="till-home"
+      />
+      <span>
+        На головному екрані каси
+        <span className="block text-[13px] text-sq-muted">
+          Касир побачить товар одразу, без папок. Поки нічого не позначено, там товари, що продаються найчастіше
         </span>
       </span>
     </label>
@@ -193,6 +219,7 @@ export function ProductSide({
   techCards,
   variants,
   askMenuHidden = false,
+  askTillHome = false,
   registers = [],
   askExcise = false,
   corkage = false,
@@ -203,6 +230,8 @@ export function ProductSide({
   onPatch: (patch: Partial<Fields>) => void;
   /** Offer «Не показувати в QR-меню» — only where the store has a guest menu. */
   askMenuHidden?: boolean;
+  /** Offer «На головному екрані каси» — where the till's catalog has a home screen. */
+  askTillHome?: boolean;
   /** The store's registers; empty (one register) asks nothing. */
   registers?: RegisterChoice[];
   /** Ask the excise questions — in a store that fiscalises (Д17). */
@@ -247,6 +276,9 @@ export function ProductSide({
           </p>
         )}
         {!menuOnly && <SellableField checked={value.sellable} onChange={(sellable) => onPatch({ sellable })} />}
+        {askTillHome && value.sellable && (
+          <TillHomeField checked={value.tillHome} onChange={(tillHome) => onPatch({ tillHome })} />
+        )}
         {askMenuHidden && (
           <MenuHiddenField checked={value.menuHidden} onChange={(menuHidden) => onPatch({ menuHidden })} />
         )}

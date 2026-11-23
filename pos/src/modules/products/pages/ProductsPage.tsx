@@ -18,6 +18,7 @@ import {
   Camera,
   ClipboardList,
   FileText,
+  Home,
   Inbox,
   LayoutGrid,
   Package,
@@ -31,7 +32,8 @@ import {
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { MarkdownDialog } from '../components/MarkdownDialog';
 import { countPhrase } from '../data/markdownsApi';
-import { restoreProduct } from '../data/productsApi';
+import { restoreProduct, setTillHome } from '../data/productsApi';
+import { offersTillHome } from '../lib/tillHomeOffer';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
 import { ProductRow } from '../components/ProductRow';
 import { TagColorSwatches } from '../components/TagColorSwatches';
@@ -60,6 +62,7 @@ export function ProductsPage() {
   const [markdownOpen, setMarkdownOpen] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<Product | null>(null);
+  const [homeBusy, setHomeBusy] = useState(false);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -143,6 +146,7 @@ export function ProductsPage() {
     // labelled «Новинка» or «Хіт» stays so until someone opens it.
     if (filterTag === 'label_new') return hasLabel(p, 'new');
     if (filterTag === 'label_hit') return hasLabel(p, 'hit');
+    if (filterTag === 'till_home') return p.till_home === true;
     if (filterTag === 'all') return true;
     return p.tag_ids?.includes(filterTag);
   });
@@ -155,6 +159,9 @@ export function ProductsPage() {
   const archivedCount = listed.filter((p) => !p.is_active).length;
   const newCount = live.filter((p) => hasLabel(p, 'new')).length;
   const hitCount = live.filter((p) => hasLabel(p, 'hit')).length;
+  // The till's home screen (migration 112) — only where the till draws one.
+  const showTillHome = !menuOnly && offersTillHome(vertical.id);
+  const tillHomeCount = live.filter((p) => p.till_home === true).length;
   // Only a kitchen has a guest menu to label dishes on; a boutique's list keeps its four rows.
   const showLabelRows = vertical.dishFacts !== false;
 
@@ -210,6 +217,24 @@ export function ProductsPage() {
       await reload();
     } catch {
       setError('Не вдалося призначити мітку');
+    }
+  }
+
+  /** «На головну» / «Прибрати з головної» for the ticked cards (migration 112). */
+  async function onBulkTillHome(on: boolean) {
+    if (selected.size === 0) return;
+    setHomeBusy(true);
+    setError(null);
+    try {
+      const { changed } = await setTillHome([...selected], on);
+      setSelected(new Set());
+      const cards = `${changed} ${ukPlural(changed, 'товар', 'товари', 'товарів')}`;
+      setFlash(on ? `На головний екран каси — ${cards}` : `З головного екрана каси прибрано ${cards}`);
+      await reload();
+    } catch {
+      setError(on ? 'Не вдалося додати на головний екран каси' : 'Не вдалося прибрати з головного екрана каси');
+    } finally {
+      setHomeBusy(false);
     }
   }
 
@@ -399,6 +424,16 @@ export function ProductsPage() {
                 />
               </>
             )}
+            {showTillHome && (
+              <FilterRow
+                active={filterTag === 'till_home'}
+                onClick={() => setFilterTag('till_home')}
+                icon={<Home size={20} className="text-sq-secondary" />}
+                label="На головній каси"
+                count={tillHomeCount}
+                testId="filter-till-home"
+              />
+            )}
             <FilterRow
               active={inArchive}
               onClick={() => setFilterTag('archived')}
@@ -540,6 +575,29 @@ export function ProductsPage() {
                   </button>
                 </>
               )}
+              {showTillHome && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void onBulkTillHome(true)}
+                    disabled={homeBusy}
+                    className="sq-btn-quiet"
+                    data-testid="bulk-till-home-on"
+                  >
+                    <Home size={20} />
+                    На головну
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onBulkTillHome(false)}
+                    disabled={homeBusy}
+                    className="sq-btn-quiet"
+                    data-testid="bulk-till-home-off"
+                  >
+                    Прибрати з головної
+                  </button>
+                </>
+              )}
               {/* Price tags count copies from the stock, and markdowns are money:
                   neither is the café marketer's (track МР). */}
               {!menuOnly && (
@@ -577,6 +635,14 @@ export function ProductsPage() {
               onClose={() => setTagsOpen(false)}
               onBarcodeGenerated={() => void reload()}
             />
+          )}
+
+          {filterTag === 'till_home' && (
+            <p className="text-[14px] text-sq-secondary px-1 leading-snug" data-testid="till-home-hint">
+              Ці товари касир бачить одразу, коли відкриває касу, — під папками, без пошуку.
+              {tillHomeCount === 0 &&
+                ' Поки нічого не позначено, на головній — 24 товари, що продаються найчастіше. Позначте товари галочками в списку й натисніть «На головну».'}
+            </p>
           )}
 
           {query.trim() !== '' && visible.length === 0 && (

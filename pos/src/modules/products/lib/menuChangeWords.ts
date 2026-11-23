@@ -25,6 +25,7 @@ const FIELDS: Record<string, { label: string; kind: Kind }> = {
   prep_minutes: { label: 'Готується, хв', kind: 'number' },
   image_url: { label: 'Фото', kind: 'text' },
   menu_hidden: { label: 'Не показувати в QR-меню', kind: 'bool' },
+  till_home: { label: 'На головному екрані каси', kind: 'bool' },
   sellable: { label: 'Продається на касі', kind: 'bool' },
   kind: { label: 'Тип товару', kind: 'kind' },
   stock_mode: { label: 'Склад складеного товару', kind: 'mode' },
