@@ -293,6 +293,25 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
     }
   });
 
+  it('does not revive an overdue shift the provider has already closed', async () => {
+    // A ghost: closed in the provider's cabinet, still open in our mirror. The
+    // cron used to reconcile it in closeShift and then put it back to 'open',
+    // failing every five minutes for days.
+    const c = await ctx();
+    await shifts.ensureOpenShift(c, signal());
+    await pool.query(
+      `UPDATE pos_fiscal_shifts SET auto_close_due_at = NOW() - interval '1 minute'
+       WHERE store_id = $1 AND status = 'open'`,
+      [store.storeId]
+    );
+    fake.shift = null;
+    resetRuntime();
+
+    expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 1, failed: 0 });
+    expect(await liveRows()).toHaveLength(0);
+    expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 0, failed: 0 });
+  });
+
   it('leaves a shift alone before its deadline', async () => {
     await shifts.ensureOpenShift(await ctx(), signal());
     expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 0, failed: 0 });

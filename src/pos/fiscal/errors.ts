@@ -202,12 +202,22 @@ export function cashierMessage(kind: FiscalErrorKind): string {
  *
  * Mirrors the `TL-…` codes the tiktok-live module produces: something the
  * cashier can read down the phone that identifies the cause exactly.
+ *
+ * A 2xx status says nothing about the cause: Cashalot answers a refusal with
+ * HTTP 200 and the reason in `ErrorCode`, which left support with
+ * `FS-UNKNOWN-200` and no name (2026-11-20). So the provider's code wins over
+ * a 2xx status; a non-2xx status still wins over the code.
  */
 export function supportCode(error: unknown): string {
   if (!isFiscalError(error)) return 'FS-INTERNAL';
   const parts = ['FS', error.kind.toUpperCase().replace(/_/g, '-')];
-  if (error.httpStatus) parts.push(String(error.httpStatus));
-  else if (error.providerCode) parts.push(error.providerCode.toUpperCase().slice(0, 16));
+  const status = error.httpStatus;
+  const statusSaysNothing = !status || (status >= 200 && status < 300);
+  if (error.providerCode && statusSaysNothing) {
+    parts.push(error.providerCode.toUpperCase().slice(0, 32));
+  } else if (status) {
+    parts.push(String(status));
+  }
   return parts.join('-');
 }
 

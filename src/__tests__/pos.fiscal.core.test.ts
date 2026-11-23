@@ -97,6 +97,17 @@ describe('fiscal error taxonomy', () => {
     expect(supportCode(new Error('boom'))).toBe('FS-INTERNAL');
   });
 
+  it('names the provider’s error when the status is a 2xx that says nothing', () => {
+    // Cashalot refuses with HTTP 200 and the reason in ErrorCode (2026-11-20).
+    expect(
+      supportCode(new FiscalError('x', 'unknown', { providerCode: 'InconsistentRegistrarState', httpStatus: 200 }))
+    ).toBe('FS-UNKNOWN-INCONSISTENTREGISTRARSTATE');
+    expect(supportCode(new FiscalError('x', 'unknown', { httpStatus: 200 }))).toBe('FS-UNKNOWN-200');
+    expect(
+      supportCode(new FiscalError('x', 'unavailable', { providerCode: 'gateway', httpStatus: 502 }))
+    ).toBe('FS-UNAVAILABLE-502');
+  });
+
   it('gives the cashier an instruction for every kind', () => {
     for (const kind of ALL_KINDS) {
       expect(cashierMessage(kind), kind).toBeTruthy();

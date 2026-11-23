@@ -461,8 +461,19 @@ export async function closeDueShifts(
       closed += 1;
       logger.info('Fiscal shift auto-closed', { storeId, shiftId: Number(row.id) });
     } catch (error) {
-      failed += 1;
       const fiscal = asFiscalError(error, 'Auto-close failed');
+      if (fiscal.kind === 'shift_closed') {
+        // The provider has no open shift, and `closeShift` has already marked
+        // our row closed. Putting it back to 'open' below is what kept a ghost
+        // shift retrying every five minutes for days (2026-11-20…24).
+        closed += 1;
+        logger.warn('Fiscal shift was already closed at the provider; mirror reconciled', {
+          storeId,
+          shiftId: Number(row.id),
+        });
+        continue;
+      }
+      failed += 1;
       // Back to 'open' so the next tick retries — except for a terminal cause,
       // which would just fail identically every five minutes.
       if (fiscal.kind === 'not_configured' || fiscal.kind === 'auth_rejected') {
