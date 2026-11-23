@@ -144,6 +144,14 @@ export function useSalesCatalog(options: SalesCatalogOptions = {}): SalesCatalog
   // a late one for a half-typed code used to land after the restore and leave
   // the grid filtered by it.
   const requestSeq = useRef(0);
+  /** No read starts after the screen is gone (the home screen's fallback is a second one). */
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const loadCatalog = useCallback(
     async (opts?: { q?: string; tag_id?: number; limit?: number; offset?: number }, append = false) => {
       const seq = ++requestSeq.current;
@@ -173,7 +181,7 @@ export function useSalesCatalog(options: SalesCatalogOptions = {}): SalesCatalog
     setLoading(true);
     try {
       const picked = pickTillHome(await cashierApi.getCatalog({ home: true, searchKeys }));
-      if (seq !== requestSeq.current) return;
+      if (seq !== requestSeq.current || !mounted.current) return;
       lastHomeKind = picked?.kind ?? 'none';
       setHomeKind(lastHomeKind);
       if (picked) {
@@ -223,8 +231,10 @@ export function useSalesCatalog(options: SalesCatalogOptions = {}): SalesCatalog
     void cashierApi.getTags().then(setTags);
   }, []);
 
+  // A failed read leaves the grid as it was: the till keeps selling from what
+  // it shows, and the next tap or sale reads again.
   useEffect(() => {
-    void loadCurrent();
+    void loadCurrent().catch(() => undefined);
   }, [loadCurrent]);
 
   const folderTiles = useMemo<PosTag[]>(() => {
