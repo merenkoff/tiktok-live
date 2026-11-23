@@ -147,11 +147,22 @@ function StationPrinterSection({
 }
 
 /**
- * «Чеки столів» (track ДК, Д13): the printer a table's paid receipts come out
- * of, whoever took the money — a waiter's tablet has none. This desktop then
- * takes them from the server's queue and prints each with its own ФОП.
+ * «Чеки з телефонів і столів» (track ДК, Д13; Т2): the printer a phone's
+ * receipts — and, in a café, a table's paid ones — come out of; a phone or a
+ * waiter's tablet has none. This desktop takes them from the server's queue
+ * and prints each with its own ФОП. Every vertical has phones, so every store
+ * sees it (it was the café's alone until 2026-11-23).
  */
-function TableReceiptPrinter({ printers, storeName }: { printers: PrinterInfo[]; storeName: string }) {
+function TableReceiptPrinter({
+  printers,
+  storeName,
+  cafe,
+}: {
+  printers: PrinterInfo[];
+  storeName: string;
+  /** A café also has tables whose receipts come out here. */
+  cafe: boolean;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const [paper, setPaper] = useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
   const [testing, setTesting] = useState(false);
@@ -183,8 +194,12 @@ function TableReceiptPrinter({ printers, storeName }: { printers: PrinterInfo[];
   return (
     <StationPrinterSection
       station="table-receipts"
-      title="Чеки столів"
-      hint="Фіскальні чеки оплачених рахунків столів друкуються тут, хто б не прийняв оплату — офіціант із планшета теж. Не обрано — не друкуються ніде."
+      title={cafe ? 'Чеки з телефонів і столів' : 'Чеки з телефонів'}
+      hint={
+        cafe
+          ? 'Чеки продажів з телефона чи планшета й оплачених рахунків столів друкуються тут, поки цей комп’ютер увімкнений. Чек з телефона чекає 10 хвилин: якщо комп’ютер був вимкнений, старі чеки не друкуються. Не обрано — не друкуються ніде.'
+          : 'Чеки продажів з телефона чи планшета друкуються тут, поки цей комп’ютер увімкнений. Чек чекає 10 хвилин: якщо комп’ютер був вимкнений, старі чеки не друкуються. Можна обрати той самий принтер, що й для чеків каси. Не обрано — не друкуються ніде.'
+      }
       printers={printers}
       selected={selected}
       paperWidth={paper}
@@ -753,9 +768,10 @@ export function HardwarePage() {
             testing={ticketTesting === 'bar'}
             testStatus={ticketStatus?.station === 'bar' ? ticketStatus.text : null}
           />
-          <TableReceiptPrinter printers={printers} storeName={storeName} />
         </>
       )}
+
+      <TableReceiptPrinter printers={printers} storeName={storeName} cafe={cafe} />
 
       {moduleStations.flatMap(({ value, moduleId }) =>
         value.map((station) => (

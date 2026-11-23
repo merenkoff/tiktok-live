@@ -27,6 +27,7 @@ import type {
   SkuSeries,
   SplitQuote,
   SplitSaleResult,
+  ReceiptPrintStatus,
   SaleItemInput,
   SalePaymentInput,
   StoreConfig,
@@ -550,6 +551,8 @@ class PosApi {
     open_bottles?: OpenBottleStamp[];
     /** «Покупцю є 18» answered for this receipt (migration 102); recorded, never required. */
     age_confirmed?: boolean;
+    /** Rung on a phone: print the receipt on the till's computer if it is on (Т2). */
+    print_on_till?: boolean;
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
     return data;
@@ -574,6 +577,8 @@ class PosApi {
     open_bottles?: OpenBottleStamp[];
     /** «Покупцю є 18» answered for the order (migration 102). */
     age_confirmed?: boolean;
+    /** Rung on a phone: each receipt prints on the till's computer (Т2). */
+    print_on_till?: boolean;
   }): Promise<SplitSaleResult> {
     const { data } = await this.client.post<SplitSaleResult>('/sales/complete', {
       ...payload,
@@ -595,6 +600,22 @@ class PosApi {
   /** This device printed it; idempotent. */
   async markReceiptPrinted(saleId: number): Promise<void> {
     await this.client.post(`/sales/${saleId}/printed`);
+  }
+
+  /**
+   * «Друкувати на касі» / «Друкувати ще раз» from a phone (TechDocs/POS_PHONE_TILL.md
+   * Т2): the receipt goes into the computer's print queue for ten minutes, a
+   * copy once one has printed. A 409 says in words why it cannot.
+   */
+  async requestReceiptPrint(saleId: number): Promise<ReceiptPrintStatus> {
+    const { data } = await this.client.post<ReceiptPrintStatus>(`/sales/${saleId}/print-request`);
+    return data;
+  }
+
+  /** Whether the computer printed a phone's receipt yet. */
+  async receiptPrintStatus(saleId: number): Promise<ReceiptPrintStatus> {
+    const { data } = await this.client.get<ReceiptPrintStatus>(`/sales/${saleId}/print-status`);
+    return data;
   }
 
   /**

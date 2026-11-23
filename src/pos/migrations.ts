@@ -229,6 +229,8 @@ export const POS_MIGRATIONS = [
   '111_pos_staff_sections.sql',
   // «На головному екрані каси»: the products the till shows before any folder.
   '112_pos_till_home.sql',
+  // A phone's receipt printed on the till's computer: ten minutes to live, and a copy flag.
+  '113_pos_print_from_phone.sql',
 ] as const;
 
 export function readMigration(file: string): string {

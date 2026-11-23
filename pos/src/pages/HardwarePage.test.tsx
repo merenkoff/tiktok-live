@@ -126,15 +126,26 @@ describe('HardwarePage station printers', () => {
     expect(setMeta).toHaveBeenCalledWith('printerEncoding:Kitchen-1', { table: 'cp866', esc_t: null });
   });
 
-  it('remembers the «Чеки столів» printer and prints a test receipt to it (track ДК, Д13)', async () => {
+  it('remembers the «Чеки з телефонів і столів» printer and prints a test receipt to it (track ДК, Д13; Т2)', async () => {
     signIn('cafe');
     renderWithProviders(<HardwarePage />, { shell: 'cashier' });
     const tables = screen.getByTestId('station-printer-table-receipts');
-    expect(tables).toHaveTextContent('Чеки столів');
+    expect(tables).toHaveTextContent('Чеки з телефонів і столів');
     fireEvent.click(await within(tables).findByText('Kitchen-1'));
     expect(setMeta).toHaveBeenCalledWith('tableReceiptPrinterName', 'Kitchen-1');
     fireEvent.click(within(tables).getByRole('button', { name: 'Тестовий чек' }));
     expect(await within(tables).findByText('Надіслано на друк')).toBeInTheDocument();
+  });
+
+  it('offers a clothing store the printer for receipts rung on a phone (Т2)', async () => {
+    signIn('clothing');
+    renderWithProviders(<HardwarePage />, { shell: 'cashier' });
+    const phones = screen.getByTestId('station-printer-table-receipts');
+    expect(phones).toHaveTextContent('Чеки з телефонів');
+    expect(phones).not.toHaveTextContent('столів');
+    expect(screen.queryByTestId('station-printer-kitchen')).toBeNull();
+    fireEvent.click(await within(phones).findByText('Kitchen-1'));
+    expect(setMeta).toHaveBeenCalledWith('tableReceiptPrinterName', 'Kitchen-1');
   });
 
   it('lets the bar follow the kitchen again by forgetting its own printer', async () => {

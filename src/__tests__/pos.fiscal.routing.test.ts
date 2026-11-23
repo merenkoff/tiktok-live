@@ -344,7 +344,7 @@ describe.skipIf(!hasDb)('POS fiscal: products go through their own register (Ð”Ð
     );
     expect((await take('other-desktop')).json().jobs.map((j: { id: number }) => j.id)).toEqual([saleIds[1]]);
 
-    // A sale rung at the counter is never queued.
+    // A sale rung at the counter is never queued (a phone asks with `print_on_till`, pos.print-on-till).
     const counter = await sell([{ variant_id: borscht, quantity: 1 }], 12_345);
     expect(counter.statusCode).toBe(201);
     const queued = await pool.query(`SELECT print_requested_at FROM pos_sales WHERE id = $1`, [counter.json().id]);

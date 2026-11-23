@@ -167,7 +167,10 @@ export const cashierApi = {
   ): Promise<SaleDetail> {
     if (isOfflinePosEnabled()) return repo.completeSale(payload, opts);
     assertWritable();
-    return api.completeSale({ ...payload, client_uuid: opts.clientUuid });
+    // Every till but the computer — a phone, a tablet, a browser — has no
+    // receipt printer of its own: its receipt prints on the computer if it is
+    // on (TechDocs/POS_PHONE_TILL.md Т2, the owner's word of 2026-11-23).
+    return api.completeSale({ ...payload, client_uuid: opts.clientUuid, print_on_till: true });
   },
 
   /**
@@ -193,7 +196,11 @@ export const cashierApi = {
   ): Promise<SplitSaleResult> {
     if (isOfflinePosEnabled()) return repo.completeSplitSale(payload, opts);
     assertWritable();
-    return api.completeSplitSale({ ...payload, client_uuid: opts.clientUuid ?? crypto.randomUUID() });
+    return api.completeSplitSale({
+      ...payload,
+      client_uuid: opts.clientUuid ?? crypto.randomUUID(),
+      print_on_till: true,
+    });
   },
 
   /** What each receipt of a two-register cart will come to (the card amount per terminal). */
