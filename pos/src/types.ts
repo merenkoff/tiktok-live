@@ -1692,6 +1692,21 @@ export interface SalesSummary {
  * ДК2-Б: `POST /sales/complete` with `split_registers: true`). Register 1's
  * receipt first; the change, if any, is on the last.
  */
+/**
+ * Where a receipt's paper stands in the computer's print queue (Т2): asked for
+ * when, printed when, and until when the computer may still print it.
+ */
+export interface ReceiptPrintStatus {
+  requested_at: string | null;
+  printed_at: string | null;
+  expires_at: string | null;
+  /**
+   * The computer with the printer: `online` — asked for receipts within half a
+   * minute; `offline` — not lately; `none` — never (absent from an older server).
+   */
+  till?: 'none' | 'online' | 'offline';
+}
+
 export interface SplitSaleResult {
   split: true;
   parts: SplitSalePart[];

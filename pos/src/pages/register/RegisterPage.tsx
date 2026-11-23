@@ -35,6 +35,7 @@ import {
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
 import { buildReceiptPayload, buildRefundReceiptPayload, fiscalBlockComplete } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
+import { usePrintOnTill } from '../../hooks/usePrintOnTill';
 import { getMeta } from '../../offline/db';
 import { printKitchenTickets } from '../../offline/kitchenTickets';
 import type { ExchangeResult, PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
@@ -1037,6 +1038,17 @@ export function RegisterPage() {
     [success, shell, auth]
   );
 
+  // …and its paper, on the computer's printer if the computer is on
+  // (TechDocs/POS_PHONE_TILL.md Т2): every receipt of the sale.
+  const tillPrintIds = useMemo(
+    () =>
+      success && shell !== 'cashier'
+        ? (splitParts && splitParts.length > 1 ? splitParts : [success]).map((sale) => sale.id)
+        : null,
+    [success, splitParts, shell]
+  );
+  const tillPrint = usePrintOnTill(tillPrintIds);
+
   /** The receipt on screen — or, of a cart rung as two receipts, the one the cashier pressed. */
   async function printSuccessReceipt(sale: SaleDetail | null = success) {
     if (!sale || !receiptPrinterName) return;
@@ -1313,6 +1325,31 @@ export function RegisterPage() {
                 taxUrl={fiscalDoc?.tax_url ?? null}
                 registered={!fiscalDoc || (fiscalDoc.status === 'done' && Boolean(fiscalDoc.tax_url))}
               />
+            )}
+            {tillPrint.state !== 'idle' && !cancelRung.result && (
+              <div
+                className="mt-4 w-full flex items-center justify-center gap-3 text-[15px]"
+                data-testid="till-print"
+                role="status"
+              >
+                <span className={tillPrint.state === 'printed' ? 'text-sq-success font-semibold' : 'text-sq-secondary'}>
+                  {tillPrint.state === 'waiting' && 'Друкується на касі…'}
+                  {tillPrint.state === 'printed' && '✓ Надруковано на касі'}
+                  {tillPrint.state === 'silent' && 'Каса не надрукувала — комп’ютер вимкнений?'}
+                  {tillPrint.state === 'offline' && 'Комп’ютер каси вимкнений — паперовий чек не друкується'}
+                  {tillPrint.state === 'refused' && tillPrint.refusal}
+                </span>
+                {(tillPrint.state === 'silent' || tillPrint.state === 'offline' || tillPrint.state === 'printed') && (
+                  <button
+                    type="button"
+                    className="font-semibold text-sq-blue disabled:opacity-50"
+                    disabled={tillPrint.busy}
+                    onClick={() => void tillPrint.again()}
+                  >
+                    Друкувати ще раз
+                  </button>
+                )}
+              </div>
             )}
             {cancelRung.result && (
               <p className="mt-5 w-full rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">

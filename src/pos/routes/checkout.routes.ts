@@ -34,6 +34,7 @@ import { formatUah } from '../core/money.js';
 import { FiscalRegisterMismatchError, registerLabels, registersOfLines } from '../fiscal/routing.js';
 import { normalizeModifierIds } from '../modifiers.service.js';
 import { ExciseError } from '../excise.js';
+import * as printQueue from '../receipt-print.service.js';
 import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
 import { errorMessage, readDeviceId } from './_shared.js';
@@ -195,6 +196,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       split_registers?: unknown;
       /** «Покупцю є 18» answered for this receipt (migration 102); recorded, never required. */
       age_confirmed?: unknown;
+      /**
+       * Rung on a phone: print the receipt on the till's computer if it is on
+       * (TechDocs/POS_PHONE_TILL.md Т2) — ten minutes in the print queue.
+       */
+      print_on_till?: unknown;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -336,6 +342,10 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       logger.error('Complete sale returned no row', { storeId: auth.storeId });
       return reply.code(500).send({ error: 'sale_not_readable' });
     }
+
+    // A phone's receipt waits in the queue for the computer; the queue prints
+    // it only once its document is registered, so asking before is safe.
+    if (body.print_on_till === true) await printQueue.queueReceipt(auth.storeId, sale.id);
 
     if (!gate.on) {
       await noteParkedCart(auth.storeId, body.parked_cart_id, sale.id);
@@ -1140,6 +1150,8 @@ async function completeSplit(
     open_bottles?: unknown;
     /** «Покупцю є 18» answered for this receipt (migration 102). */
     age_confirmed?: unknown;
+    /** Rung on a phone: each receipt prints on the till's computer (Т2). */
+    print_on_till?: unknown;
   },
   clientUuid: string | null
 ) {
@@ -1214,6 +1226,9 @@ async function completeSplit(
 
   if (result.parts[0]) {
     await noteParkedCart(auth.storeId, body.parked_cart_id, result.parts[0].sale.id);
+  }
+  if (body.print_on_till === true) {
+    for (const part of result.parts) await printQueue.queueReceipt(auth.storeId, part.sale.id);
   }
   return reply.code(201).send({ split: true, parts: result.parts, warning: result.warning });
 }

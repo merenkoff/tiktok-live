@@ -208,7 +208,8 @@ describe('cashierApi passthrough methods', () => {
     [
       'completeSale',
       () => cashierApi.completeSale({ items: [], payments: [] }),
-      { items: [], payments: [] },
+      // A till that is not the computer asks the computer to print (Т2).
+      { items: [], payments: [], print_on_till: true },
     ] as const,
     [
       'createCustomer',
@@ -362,7 +363,7 @@ describe('the tablet: reads from the mirror, writes to the server or nowhere', (
     await cashierApi.createCustomer({ name: 'Аня', phone: '+380' });
     await cashierApi.updateCustomer(7, { name: 'Аня' });
 
-    expect(api.completeSale).toHaveBeenCalledWith({ items: [], payments: [], client_uuid: 'u-1' });
+    expect(api.completeSale).toHaveBeenCalledWith({ items: [], payments: [], client_uuid: 'u-1', print_on_till: true });
     expect(api.createCustomer).toHaveBeenCalledWith({ name: 'Аня', phone: '+380' });
     expect(api.updateCustomer).toHaveBeenCalledWith(7, { name: 'Аня' });
     expect(repo.completeSale).not.toHaveBeenCalled();

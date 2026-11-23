@@ -421,7 +421,20 @@ test('on a phone the receipt is a QR to scan and a share sheet, not paper', asyn
   });
   await mockPosApi(page);
   const taxUrl = 'https://cabinet.tax.gov.ua/cashregs/check?id=TEST-77&fn=4000123456';
+  // Т2: the computer prints the phone's receipt, and the phone says so.
+  await page.route('**/api/pos/sales/7/print-status', (route) =>
+    route.fulfill({
+      json: {
+        requested_at: '2026-11-12T09:05:00.000Z',
+        printed_at: '2026-11-12T09:05:03.000Z',
+        expires_at: '2026-11-12T09:15:00.000Z',
+        till: 'online',
+      },
+    })
+  );
+  const sent: Array<Record<string, unknown>> = [];
   await page.route('**/api/pos/sales/complete', async (route) => {
+    sent.push(route.request().postDataJSON());
     await route.fulfill({
       status: 201,
       json: {
@@ -485,6 +498,9 @@ test('on a phone the receipt is a QR to scan and a share sheet, not paper', asyn
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared))
     .toEqual([{ title: 'Чек R-00007', text: expect.stringContaining(`Перевірити в Податковій: ${taxUrl}`) }]);
+  expect(sent[0].print_on_till).toBe(true);
+  await expect(page.getByTestId('till-print')).toHaveText(/Надруковано на касі/);
+
   // «Новий продаж» is on screen without scrolling, on a tall phone and on one
   // whose Safari bars take the bottom of the screen (iPhone 14 Plus / 15, 2026-11-23).
   const next = page.getByRole('button', { name: 'Новий продаж' });
