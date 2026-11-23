@@ -133,6 +133,7 @@ export async function buildCallCtx(
     clientName: FISCAL_CLIENT_NAME,
     clientVersion: FISCAL_CLIENT_VERSION,
     signal,
+    textWidth: ctx.settings.receipt_width,
   };
 }
 

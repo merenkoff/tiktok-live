@@ -655,7 +655,7 @@ export const checkboxProvider: FiscalProvider = {
       // Confirmed live: by the time /shifts/short reports CLOSED, z_report is
       // already fully populated (fiscal_code included) — the text render is
       // ready immediately after, no further polling needed.
-      const zReportText = final.z_report ? await getReportText(authed, final.z_report.id) : null;
+      const zReportText = final.z_report ? await getReportText(authed, final.z_report.id, ctx.textWidth) : null;
       return {
         providerShiftId: final.id,
         status: 'closed',
@@ -677,7 +677,7 @@ export const checkboxProvider: FiscalProvider = {
       // X-report's fiscal_code never populates (it is not transmitted to
       // DPS — only a Z-report is), and /text is ready immediately.
       const report = await createXReport(authed);
-      const text = await getReportText(authed, report.id);
+      const text = await getReportText(authed, report.id, ctx.textWidth);
       return { text, raw: report };
     } catch (error) {
       throw classifyCheckboxError(error);

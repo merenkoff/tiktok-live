@@ -303,6 +303,12 @@ test('the till: the test banner, the shift, a registered sale', async ({ page })
   await expect(page.getByRole('button', { name: 'Провести чек' })).toBeVisible();
   expect(sent.some((s) => s.path === '/fiscal/shift/open')).toBe(true);
 
+  // The X-report comes back as the provider's text, with paper under it.
+  await page.getByRole('button', { name: 'X-звіт' }).click();
+  const xReport = page.getByRole('region', { name: 'X-звіт' });
+  await expect(xReport).toContainText('X-ЗВІТ');
+  await expect(xReport.getByRole('button', { name: 'Друкувати' })).toBeEnabled();
+
   await page.goto('/register');
   await page.getByText(SHIRT.product_name).first().click();
   await page.getByRole('button', { name: /^Оплатити/ }).first().click();

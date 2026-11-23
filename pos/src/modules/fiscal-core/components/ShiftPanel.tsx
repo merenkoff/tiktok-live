@@ -4,7 +4,8 @@
 
 // pos/src/modules/fiscal-core/components/ShiftPanel.tsx
 //
-// The till's shift control: status, open/close, X-report. Shared across
+// The till's shift control: status, open/close, X-report, and paper for
+// either report (`ReportText`). Shared across
 // provider bundles because none of it is provider-specific — the backend
 // contract (`FiscalProvider.{getShift,openShift,closeShift,xReport}`) is
 // already provider-neutral.
@@ -12,6 +13,7 @@
 import { useState } from 'react';
 import { closeFiscalShift, fiscalXReport, openFiscalShift } from '../data/fiscalApi';
 import { FiscalErrorCard } from './FiscalErrorCard';
+import { ReportText } from './ReportText';
 import type { FiscalStatus } from '../types';
 
 export interface ShiftPanelProps {
@@ -126,19 +128,8 @@ export function ShiftPanel({ status, onChanged, registerNo = 1 }: ShiftPanelProp
 
       {Boolean(error) && <FiscalErrorCard error={error} />}
 
-      {xReportText && (
-        <pre className="max-h-64 overflow-auto rounded-card bg-sq-surface shadow-card p-4 font-mono text-[13px] whitespace-pre-wrap">
-          {xReportText}
-        </pre>
-      )}
-      {zReportText && (
-        <section className="rounded-card bg-sq-surface shadow-card p-5">
-          <p className="text-[13px] font-semibold text-sq-secondary">Z-звіт</p>
-          <pre className="mt-2 max-h-64 overflow-auto rounded-xl bg-sq-sidebar p-3 font-mono text-[13px] whitespace-pre-wrap">
-            {zReportText}
-          </pre>
-        </section>
-      )}
+      {xReportText && <ReportText title="X-звіт" text={xReportText} card />}
+      {zReportText && <ReportText title="Z-звіт" text={zReportText} card />}
     </div>
   );
 }
