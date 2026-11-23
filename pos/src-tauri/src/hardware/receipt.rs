@@ -168,6 +168,12 @@ pub struct ReceiptData {
     /// host reads it, never a module; absent from an older host.
     #[serde(default)]
     pub attribution: bool,
+    /// A receipt printed again — from «Чеки» or by «Друкувати ще раз» on a
+    /// phone — carries «КОПІЯ ЧЕКА» on top, so the second paper of one sale is
+    /// never read as a second sale. Nothing fiscal changes. Absent from an
+    /// older host.
+    #[serde(default)]
+    pub copy: bool,
 }
 
 /// Title and caption of the feedback QR — the same words the guest page's
@@ -293,6 +299,22 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     build_ticket_with(receipt, width, &PrinterEncoding::default())
 }
 
+/// «КОПІЯ ЧЕКА» over a receipt printed again: large enough that nobody
+/// takes the second paper of a sale for another sale.
+fn copy_mark(printer: &mut TextPrinter) -> Result<(), String> {
+    printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
+    printer.bold(true).map_err(|e| e.to_string())?;
+    printer.size(2, 2).map_err(|e| e.to_string())?;
+    printer.writeln(COPY_MARK).map_err(|e| e.to_string())?;
+    printer.reset_size().map_err(|e| e.to_string())?;
+    printer.bold(false).map_err(|e| e.to_string())?;
+    printer.feed().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// What a copy says on top (TS: `COPY_MARK` in `pos/src/lib/printer.ts`).
+pub(crate) const COPY_MARK: &str = "КОПІЯ ЧЕКА";
+
 fn build_ticket_with(
     receipt: &ReceiptData,
     width: usize,
@@ -310,6 +332,9 @@ fn build_ticket_with(
     let mut printer = TextPrinter::new(driver, encoding, width);
 
     printer.init().map_err(|e| e.to_string())?;
+    if receipt.copy {
+        copy_mark(&mut printer)?;
+    }
 
     // The provider already laid the receipt out at this roll's width (the
     // store's `receipt_width`); lines are exactly `width` chars like our own
@@ -747,6 +772,40 @@ mod tests {
             tax_url: Some("https://cabinet.tax.gov.ua/cashregs/check?id=TEST-fKbevQ".into()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn a_copy_says_so_on_top_and_an_original_does_not() {
+        let original = build_ticket(&base(), CHARS_58MM).unwrap();
+        assert!(!contains(&original, &win1251(COPY_MARK)));
+
+        let mut receipt = base();
+        receipt.copy = true;
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        let mark = bytes
+            .windows(win1251(COPY_MARK).len())
+            .position(|w| w == win1251(COPY_MARK).as_slice())
+            .expect("no copy mark");
+        let store = bytes
+            .windows(win1251("Demo").len())
+            .position(|w| w == win1251("Demo").as_slice())
+            .unwrap();
+        assert!(mark < store, "the mark is not above the store name");
+
+        // The provider's own text too: a second paper of it is still a copy.
+        receipt.provider_text = Some("=== ТЕСТОВИЙ ЧЕК ===\n".into());
+        let provider = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&provider, &win1251(COPY_MARK)));
+    }
+
+    #[test]
+    fn a_copy_mark_is_read_from_the_host_and_absent_from_an_older_one() {
+        let json = r#"{"store_name":"Demo","receipt_number":"R-1","created_at":"x","staff_name":"О",
+            "customer_name":null,"items":[],"subtotal_cents":0,"discount_cents":null,"total_cents":0,"payments":[]}"#;
+        let older: ReceiptData = serde_json::from_str(json).unwrap();
+        assert!(!older.copy);
+        let copy: ReceiptData = serde_json::from_str(&json.replace("\"payments\":[]", "\"payments\":[],\"copy\":true")).unwrap();
+        assert!(copy.copy);
     }
 
     #[test]

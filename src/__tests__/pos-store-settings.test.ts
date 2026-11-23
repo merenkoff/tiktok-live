@@ -50,6 +50,7 @@ describe.skipIf(!hasDb)('POS store settings', () => {
     const fresh = await getStore(storeId);
     expect(fresh?.gtin_lookup_enabled).toBe(true);
     expect(fresh?.auto_print_receipt).toBe(false);
+    expect(fresh?.refund_act_on_receipt_printer).toBe(false);
     // upc.dev is gone, and its per-store credentials left the wire with it.
     expect('gtin_api_key_set' in (fresh as Record<string, unknown>)).toBe(false);
     expect('gtin_daily_limit' in (fresh as Record<string, unknown>)).toBe(false);
@@ -59,9 +60,11 @@ describe.skipIf(!hasDb)('POS store settings', () => {
     const updated = await updateStore(storeId, {
       gtin_lookup_enabled: false,
       auto_print_receipt: true,
+      refund_act_on_receipt_printer: true,
     });
     expect(updated.gtin_lookup_enabled).toBe(false);
     expect(updated.auto_print_receipt).toBe(true);
+    expect(updated.refund_act_on_receipt_printer).toBe(true);
 
     const readBack = await getStore(storeId);
     expect(readBack?.gtin_lookup_enabled).toBe(false);
@@ -69,9 +72,11 @@ describe.skipIf(!hasDb)('POS store settings', () => {
     const back = await updateStore(storeId, {
       gtin_lookup_enabled: true,
       auto_print_receipt: false,
+      refund_act_on_receipt_printer: false,
     });
     expect(back.gtin_lookup_enabled).toBe(true);
     expect(back.auto_print_receipt).toBe(false);
+    expect(back.refund_act_on_receipt_printer).toBe(false);
   });
 
   it('round-trips the module_remotes jsonb map and leaves it on a partial patch', async () => {

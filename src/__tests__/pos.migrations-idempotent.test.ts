@@ -328,6 +328,32 @@ describe.skipIf(!hasDb || !canCreate)('POS migrations, applied the way the runne
     await expect(applyAll(probe)).resolves.toBeUndefined();
     expect((await read()).find((r) => r.name === 'Бограч')!.labels).toEqual([]);
   });
+
+  it('prints «Evelin»’s refund act on the receipt roll once (114), and an owner’s «off» survives the next boot', async () => {
+    // The boot before 114: no column yet.
+    await probe.query(`ALTER TABLE pos_stores DROP COLUMN refund_act_on_receipt_printer`);
+    await probe.query(
+      `INSERT INTO pos_stores (name, slug, vertical) VALUES ('Evelin', 'evelin', 'clothing'), ('Інша', 'evelin-2', 'clothing')`
+    );
+    const read = async () =>
+      (
+        await probe.query(
+          `SELECT slug, refund_act_on_receipt_printer AS roll FROM pos_stores WHERE slug IN ('evelin', 'evelin-2') ORDER BY slug`
+        )
+      ).rows;
+
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    expect(await read()).toEqual([
+      { slug: 'evelin', roll: true },
+      { slug: 'evelin-2', roll: false },
+    ]);
+    const on = await probe.query(`SELECT count(*)::int AS n FROM pos_stores WHERE refund_act_on_receipt_printer`);
+    expect(on.rows[0].n).toBe(1);
+
+    await probe.query(`UPDATE pos_stores SET refund_act_on_receipt_printer = FALSE WHERE slug = 'evelin'`);
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    expect((await read())[0]).toEqual({ slug: 'evelin', roll: false });
+  });
 });
 
 /**

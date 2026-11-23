@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SaleDetail } from '../../../types';
-import { buildActPayload } from './actPayload';
+import { actSlip, buildActPayload } from './actPayload';
 
 const sale = {
   id: 7,
@@ -127,5 +127,53 @@ describe('buildActPayload — register 2 (track ДК)', () => {
     const act = buildActPayload({ ...sale, fiscal_register: 2 }, refund, store);
     expect(act.org_name).toBeNull();
     expect(act.tax_id_line).toBeNull();
+  });
+});
+
+describe('actSlip', () => {
+  it('carries every fact of the A4 act, top to bottom, in its words', () => {
+    const slip = actSlip(buildActPayload(sale, refund, store));
+    expect(slip.title).toBe('АКТ про видачу коштів');
+    // `slip.rs` refuses a slip that calls itself a receipt.
+    expect(slip.title.toUpperCase()).not.toMatch(/ЧЕК|ФІСКАЛЬН/);
+    expect(slip.store_name).toBe('Demo Kids');
+    expect(slip.lines).toEqual([
+      'ФОП Коваль О. О.',
+      'м. Київ, вул. Хрещатик, 1',
+      'ІД 1234567890',
+      expect.stringMatching(/^№ RF-00007 від \d{2}\.\d{2}\.\d{4}$/),
+      expect.stringMatching(/^Підстава: чек № R-00042 від \d{2}\.\d{2}\.\d{4} о \d{2}:\d{2}$/),
+      'Фіскальний № ФН-111',
+      'Покупець: Коваль Олена',
+      'Документ: паспорт КВ 123456',
+    ]);
+    expect(slip.items).toEqual([{ name: 'Пальто · Синій · M', quantity: '1', line_total_cents: 50000 }]);
+    expect(slip.totals).toEqual([{ label: 'Видано коштів', amount_cents: 50000 }]);
+    expect(slip.footer).toEqual([
+      'Видано на платіжну картку',
+      'Видатковий чек № RF-00007',
+      'Фіскальний № ФН-222',
+      expect.stringMatching(/^Касир: Касирка _+$/),
+      expect.stringMatching(/^Покупець: _+$/),
+    ]);
+  });
+
+  it('leaves blanks for a buyer who declined, and both sums when cash was rounded', () => {
+    const act = buildActPayload(
+      { ...sale, fiscal: null },
+      { ...refund, buyer_name: null, buyer_document: null, method: 'cash', total_cents: 15020, rounding_cents: -20, fiscal: undefined },
+      { name: 'Demo Kids', fiscal: { enabled: false, provider: null } }
+    );
+    const slip = actSlip(act);
+    expect(slip.lines).toContain('Покупець: ____________');
+    expect(slip.lines).toContain('Документ: ____________');
+    expect(slip.lines?.some((l) => l.startsWith('Фіскальний'))).toBe(false);
+    expect(slip.totals).toEqual([
+      { label: 'Сума до заокруглення', amount_cents: 15020 },
+      { label: 'Заокруглення', amount_cents: -20 },
+      { label: 'Видано коштів', amount_cents: 15000 },
+    ]);
+    // None of the labels a receipt owns (`slip.rs` refuses them).
+    for (const t of slip.totals ?? []) expect(t.label.toUpperCase()).not.toMatch(/ДО СПЛАТИ|ПДВ|РЕШТА|ФІСКАЛЬН/);
   });
 });

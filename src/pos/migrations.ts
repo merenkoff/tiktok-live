@@ -231,6 +231,7 @@ export const POS_MIGRATIONS = [
   '112_pos_till_home.sql',
   // A phone's receipt printed on the till's computer: ten minutes to live, and a copy flag.
   '113_pos_print_from_phone.sql',
+  '114_pos_refund_act_on_receipt_printer.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -152,6 +152,8 @@ export interface PosAuthContext {
   /** Whether this store fiscalises, and with whom. Credentials stay server-side. */
   fiscal: FiscalPublicConfig;
   autoPrintReceipt: boolean;
+  /** The refund act prints on the receipt printer as a slip, not on A4 (migration 114). */
+  refundActOnReceiptPrinter: boolean;
   /** Assembly charge on a composite, in basis points. See migration 040. */
   floristLabourBps: number;
   /** Cash totals rounded to 0 (off), 10 or 50 kopecks — НБУ № 25, migration 071. */

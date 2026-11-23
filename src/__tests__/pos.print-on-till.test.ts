@@ -167,6 +167,25 @@ describe.skipIf(!hasDb)('POS print on till', () => {
     await printed(counter);
   });
 
+  it('prints a copy from «Чеки» even when the queue never printed the receipt', async () => {
+    const counter = await sell();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/pos/sales/${counter}/print-request`,
+      headers: auth(store.sellerToken),
+      payload: { copy: true },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const jobs = await app.inject({
+      method: 'GET',
+      url: '/api/pos/sales/print-queue',
+      headers: { ...auth(store.sellerToken), ...DESKTOP },
+    });
+    const job = jobs.json().jobs.find((j: { id: number }) => j.id === counter);
+    expect(job.print_copy).toBe(true);
+    await printed(counter);
+  });
+
   it('refuses a voided receipt, one with a return, and another store', async () => {
     const voided = await sell();
     expect(

@@ -252,6 +252,17 @@ describe.skipIf(!hasDb)('POS auth service', () => {
         static_image_url: null,
       });
       expect(result!.store.auto_print_receipt).toBe(false);
+      expect(result!.store.refund_act_on_receipt_printer).toBe(false);
+    });
+
+    it('carries the refund act on the receipt roll once the owner switches it on (114)', async () => {
+      await pool.query(`UPDATE pos_stores SET refund_act_on_receipt_printer = TRUE WHERE id = $1`, [store.storeId]);
+      try {
+        const result = await authService.loginOwner(store.ownerLogin, store.ownerPassword);
+        expect(result!.store.refund_act_on_receipt_printer).toBe(true);
+      } finally {
+        await pool.query(`UPDATE pos_stores SET refund_act_on_receipt_printer = FALSE WHERE id = $1`, [store.storeId]);
+      }
     });
 
     it('dates the expiry roughly two weeks out', async () => {

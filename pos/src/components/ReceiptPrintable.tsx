@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import type { ReceiptData, ReceiptVatLine } from '../lib/printer';
+import { COPY_MARK, type ReceiptData, type ReceiptVatLine } from '../lib/printer';
 import { paymentWords, withCurrency } from '../lib/paymentWords';
 import { ATTRIBUTION_LINES, storeAttribution } from '../lib/attribution';
 
@@ -46,6 +46,7 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
   if (receipt.provider_text?.trim()) {
     return (
       <div className="receipt-print-area">
+        {receipt.copy && <p className="receipt-print-copy">{COPY_MARK}</p>}
         <pre className="receipt-print-provider">{receipt.provider_text}</pre>
         <Attribution receipt={receipt} />
       </div>
@@ -64,6 +65,7 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
 
   return (
     <div className="receipt-print-area">
+      {receipt.copy && <p className="receipt-print-copy">{COPY_MARK}</p>}
       <p className="receipt-print-store">{receipt.store_name}</p>
       {/* Рядки 1–5, in the regulation's order, from the provider's registration. */}
       {headerLines.map((line, i) => (

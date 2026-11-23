@@ -438,6 +438,8 @@ function mapStore(store: Record<string, unknown>) {
     qr_recipient: (store.qr_recipient as string | null) ?? null,
     gtin_lookup_enabled: Boolean(store.gtin_lookup_enabled),
     auto_print_receipt: Boolean(store.auto_print_receipt),
+    // The refund act on the receipt roll rather than A4 (migration 114).
+    refund_act_on_receipt_printer: store.refund_act_on_receipt_printer === true,
     florist_labour_bps: Number(store.florist_labour_bps ?? 0),
     // НБУ № 25: the step cash totals are rounded to, 0 = not rounded (migration 071).
     cash_rounding: Number(store.cash_rounding ?? 0),
@@ -462,6 +464,8 @@ export type StorePatch = {
   qr_recipient?: string | null;
   gtin_lookup_enabled?: boolean;
   auto_print_receipt?: boolean;
+  /** The refund act prints on the receipt printer as a slip. See migration 114. */
+  refund_act_on_receipt_printer?: boolean;
   /** Assembly charge on a composite, in basis points. See migration 040. */
   florist_labour_bps?: number;
   /** Cash totals rounded to 0 (off), 10 or 50 kopecks. See migration 071. */
@@ -494,6 +498,7 @@ export const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'qr_recipient',
   'gtin_lookup_enabled',
   'auto_print_receipt',
+  'refund_act_on_receipt_printer',
   'florist_labour_bps',
   'cash_rounding',
   'age_check',

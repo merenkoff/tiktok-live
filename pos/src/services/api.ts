@@ -27,6 +27,7 @@ import type {
   SkuSeries,
   SplitQuote,
   SplitSaleResult,
+  ReceiptPrintJob,
   ReceiptPrintStatus,
   SaleItemInput,
   SalePaymentInput,
@@ -592,8 +593,8 @@ class PosApi {
    * Д13) — taken on a two-minute lease. Needs `X-POS-Device-ID`, which only
    * the desktop sends.
    */
-  async receiptPrintQueue(): Promise<{ jobs: SaleDetail[] }> {
-    const { data } = await this.client.get<{ jobs: SaleDetail[] }>('/sales/print-queue');
+  async receiptPrintQueue(): Promise<{ jobs: ReceiptPrintJob[] }> {
+    const { data } = await this.client.get<{ jobs: ReceiptPrintJob[] }>('/sales/print-queue');
     return data;
   }
 

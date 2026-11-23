@@ -38,6 +38,7 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       qr_recipient?: string | null;
       gtin_lookup_enabled?: boolean;
       auto_print_receipt?: boolean;
+      refund_act_on_receipt_printer?: boolean;
       florist_labour_bps?: unknown;
       cash_rounding?: unknown;
       age_check?: unknown;
@@ -134,6 +135,9 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
 
       if (body.gtin_lookup_enabled !== undefined) patch.gtin_lookup_enabled = Boolean(body.gtin_lookup_enabled);
       if (body.auto_print_receipt !== undefined) patch.auto_print_receipt = Boolean(body.auto_print_receipt);
+      if (body.refund_act_on_receipt_printer !== undefined) {
+        patch.refund_act_on_receipt_printer = Boolean(body.refund_act_on_receipt_printer);
+      }
       // Handed over raw: `updateStore` coerces it and refuses anything outside
       // 0–1000% with a message the owner can act on, where the column's CHECK
       // would only manage a 500. Coercing here as well would turn 'багато' into

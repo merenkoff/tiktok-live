@@ -49,7 +49,10 @@ export async function drainReceiptQueue(now: () => number = Date.now): Promise<D
     let printed = 0;
     for (const sale of jobs) {
       try {
-        await printReceipt(printer, buildReceiptPayload(sale, store), paper);
+        // «Друкувати ще раз» on a phone, or «Друкувати чек» in «Чеки», of a
+        // receipt that already came out once: the paper says it is a copy.
+        const payload = buildReceiptPayload(sale, store);
+        await printReceipt(printer, sale.print_copy ? { ...payload, copy: true } : payload, paper);
       } catch (error) {
         restUntil = now() + REST_AFTER_FAILURE_MS;
         return { failed: typeof error === 'string' ? error : String(error) };

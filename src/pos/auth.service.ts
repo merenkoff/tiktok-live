@@ -65,6 +65,8 @@ export interface AuthResponse {
      */
     fiscal: FiscalPublicConfig;
     auto_print_receipt: boolean;
+    /** The refund act on the desktop's receipt printer, not A4 (migration 114). */
+    refund_act_on_receipt_printer: boolean;
     /**
      * Assembly charge on a composite, in basis points. Travels with the login
      * for the same reason as `fiscal`: cold-offline, the cached `pos_auth` is
@@ -194,6 +196,7 @@ function toAuthResponse(
       qr_payment: auth.qrPayment,
       fiscal: auth.fiscal,
       auto_print_receipt: auth.autoPrintReceipt,
+      refund_act_on_receipt_printer: auth.refundActOnReceiptPrinter,
       florist_labour_bps: auth.floristLabourBps,
       cash_rounding: auth.cashRounding,
       age_check: auth.ageCheck,

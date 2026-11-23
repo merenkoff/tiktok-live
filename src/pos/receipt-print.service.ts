@@ -110,7 +110,17 @@ export async function queueReceipt(storeId: number, saleId: number): Promise<voi
  * receipt) or a «внесок» toward a debt (no goods at all). Null when the sale
  * is not this store's.
  */
-export async function requestReprint(storeId: number, saleId: number): Promise<PrintStatus | null> {
+export async function requestReprint(
+  storeId: number,
+  saleId: number,
+  /**
+   * «Друкувати чек» in «Чеки»: a copy whatever the queue knows — the counter
+   * printed that receipt itself and never told the server. Without it (the
+   * phone's «Друкувати ще раз» after a sale) only a receipt the queue already
+   * printed comes out as a copy.
+   */
+  opts: { copy?: boolean } = {}
+): Promise<PrintStatus | null> {
   const found = await pool.query(
     `SELECT s.status, s.debt_prepay_item_id, s.printed_at,
             EXISTS (SELECT 1 FROM pos_refunds r WHERE r.sale_id = s.id) AS refunded
@@ -128,13 +138,13 @@ export async function requestReprint(storeId: number, saleId: number): Promise<P
     `UPDATE pos_sales
         SET print_requested_at = NOW(),
             print_expires_at = NOW() + make_interval(mins => $3),
-            print_copy = (printed_at IS NOT NULL OR print_copy),
+            print_copy = ($4 OR printed_at IS NOT NULL OR print_copy),
             printed_at = NULL,
             print_claimed_by = NULL,
             print_claimed_at = NULL
       WHERE store_id = $1 AND id = $2
       RETURNING print_requested_at, printed_at, print_expires_at`,
-    [storeId, saleId, PHONE_PRINT_MINUTES]
+    [storeId, saleId, PHONE_PRINT_MINUTES, opts.copy === true]
   );
   const updated = result.rows[0];
   return {
