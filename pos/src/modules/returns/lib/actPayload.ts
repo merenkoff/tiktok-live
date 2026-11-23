@@ -8,7 +8,7 @@
 // time of the receipt it was bought on. Pure: the dialog, the receipt card
 // and the tests build the same sheet from the same facts.
 
-import type { FiscalPublicConfig, FiscalRequisites, SaleDetail } from '@pos/platform';
+import type { FiscalPublicConfig, FiscalRequisites, SaleDetail, SlipData } from '@pos/platform';
 import { RETURNED_BY_UK } from './refundReasons';
 
 export interface ActGoodsLine {
@@ -125,5 +125,54 @@ export function buildActPayload(
     },
     refund_fiscal_code: refundFiscalCode ?? refund.fiscal?.fiscal_code ?? null,
     cashier: refund.staff_name,
+  };
+}
+
+/** A blank to sign or fill by hand on a roll — a 58 mm line has room for it. */
+const BLANK = '____________';
+
+/**
+ * The same act as a slip for the receipt printer (the owner's choice,
+ * `store.refund_act_on_receipt_printer`, migration 114): every fact the A4
+ * sheet carries, in the A4 sheet's words, top to bottom. The slip prints «НЕ
+ * Є РОЗРАХУНКОВИМ ДОКУМЕНТОМ» around it, which an act is not — true twice.
+ * Its title may not say «чек» (`slip.rs`), and it does not.
+ */
+export function actSlip(act: ActData): SlipData {
+  const legal = [act.org_name, act.address, act.tax_id_line].filter((l): l is string => Boolean(l && l.trim()));
+  const base = `Підстава: чек № ${act.original.receipt_number} від ${act.original.date} о ${act.original.time}`;
+  const lines = [
+    ...legal,
+    `№ ${act.act_number} від ${act.act_date}`,
+    base,
+    ...(act.original.fiscal_code ? [`Фіскальний № ${act.original.fiscal_code}`] : []),
+    `Покупець: ${act.buyer_name ?? BLANK}`,
+    `Документ: ${act.buyer_document ?? BLANK}`,
+  ];
+  const totals = act.rounding_cents
+    ? [
+        { label: 'Сума до заокруглення', amount_cents: act.total_cents },
+        { label: 'Заокруглення', amount_cents: act.rounding_cents },
+      ]
+    : [];
+  totals.push({ label: 'Видано коштів', amount_cents: act.total_cents + act.rounding_cents });
+  return {
+    title: 'АКТ про видачу коштів',
+    store_name: act.store_name,
+    lines,
+    items: act.goods.map((g) => ({
+      name: g.label ? `${g.name} · ${g.label}` : g.name,
+      quantity: String(g.quantity),
+      line_total_cents: g.amount_cents,
+    })),
+    totals,
+    footer: [
+      ...(act.returned_by ? [`Видано ${act.returned_by}`] : []),
+      `Видатковий чек № ${act.act_number}`,
+      ...(act.refund_fiscal_code ? [`Фіскальний № ${act.refund_fiscal_code}`] : []),
+      `Касир: ${act.cashier} ${BLANK}`,
+      `Покупець: ${BLANK}`,
+    ],
+    printed_at: new Date().toLocaleString('uk-UA'),
   };
 }

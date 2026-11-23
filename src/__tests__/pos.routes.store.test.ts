@@ -573,6 +573,7 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
         qr_recipient: ['ФОП Тестовий', null],
         gtin_lookup_enabled: [false, true],
         auto_print_receipt: [true, false],
+        refund_act_on_receipt_printer: [true, false],
         florist_labour_bps: [2500, 0],
         cash_rounding: [50, 10],
         age_check: [true, false],

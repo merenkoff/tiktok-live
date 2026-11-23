@@ -28,6 +28,19 @@ function receipt(over: Partial<ReceiptData> = {}): ReceiptData {
 }
 
 describe('ReceiptPrintable', () => {
+  it('says «КОПІЯ ЧЕКА» on top of a receipt printed again, and nothing on the original', () => {
+    const { unmount } = render(<ReceiptPrintable receipt={receipt({ copy: true })} />);
+    expect(screen.getByText('КОПІЯ ЧЕКА')).toBeInTheDocument();
+    unmount();
+    render(<ReceiptPrintable receipt={receipt({ copy: true, provider_text: '=== ЧЕК ===' })} />);
+    expect(screen.getByText('КОПІЯ ЧЕКА')).toBeInTheDocument();
+  });
+
+  it('prints no copy mark on the original', () => {
+    render(<ReceiptPrintable receipt={receipt()} />);
+    expect(screen.queryByText('КОПІЯ ЧЕКА')).toBeNull();
+  });
+
   it('renders the provider text verbatim and nothing of the layout', () => {
     render(<ReceiptPrintable receipt={receipt({ provider_text: '=== ЧЕК ===\nСУМА 100.00' })} />);
     const pre = screen.getByText((_, el) => el?.tagName === 'PRE' && el.textContent === '=== ЧЕК ===\nСУМА 100.00');

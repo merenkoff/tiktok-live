@@ -170,7 +170,17 @@ export interface ReceiptData {
    * login when it is absent. A Rust build older than it prints none.
    */
   attribution?: boolean;
+  /**
+   * A receipt printed again — from «Чеки» or a phone's «Друкувати ще раз» —
+   * says «КОПІЯ ЧЕКА» on top (`COPY_MARK`), so a second paper of one sale is
+   * never taken for another sale. Nothing fiscal changes. A Rust build older
+   * than it prints the receipt without the mark.
+   */
+  copy?: boolean;
 }
+
+/** What a copy says on top — the same words as `COPY_MARK` in receipt.rs. */
+export const COPY_MARK = 'КОПІЯ ЧЕКА';
 
 export async function listPrinters(): Promise<PrinterInfo[]> {
   const printers = await invoke<PrinterInfo[]>('list_printers');

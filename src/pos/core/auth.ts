@@ -63,6 +63,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.qr_payment_mode,
        store.qr_static_image_url,
        store.auto_print_receipt,
+       store.refund_act_on_receipt_printer,
        store.florist_labour_bps,
        store.cash_rounding,
        store.age_check,
@@ -133,6 +134,9 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
         : {}),
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
+    // The refund act on the receipt roll (migration 114): the desktop reads it
+    // from the cached login, so it travels with it.
+    refundActOnReceiptPrinter: row.refund_act_on_receipt_printer === true,
     // Rides with the login so the offline till prices a bouquet by the same
     // rule the server would have — cold-offline, the cached `pos_auth` blob
     // is the only place it could read this from.

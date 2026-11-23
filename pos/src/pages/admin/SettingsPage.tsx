@@ -41,6 +41,7 @@ export function SettingsPage() {
   // GTIN column default is TRUE — init checked so it doesn't flash "off" before getStore().
   const [gtinLookupEnabled, setGtinLookupEnabled] = useState(true);
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
+  const [actOnRoll, setActOnRoll] = useState(false);
   // «Покупцю є 18 років?» once per receipt with excise goods (migration 102).
   const [ageCheck, setAgeCheck] = useState(false);
   // НБУ № 25: the step a cash total is rounded to (TechDocs/POS_CASH_ROUNDING.md).
@@ -105,6 +106,7 @@ export function SettingsPage() {
     setQrPurposeTemplate(store.qr_purpose_template ?? '');
     setGtinLookupEnabled(store.gtin_lookup_enabled);
     setAutoPrintReceipt(store.auto_print_receipt);
+    setActOnRoll(store.refund_act_on_receipt_printer === true);
     setAgeCheck(store.age_check === true);
     // A backend older than migration 071 sends nothing: off, as it always was.
     setCashRounding(String(store.cash_rounding ?? 0) as CashRoundingChoice);
@@ -261,6 +263,7 @@ export function SettingsPage() {
         qr_purpose_template: qrPurposeTemplate || null,
         gtin_lookup_enabled: gtinLookupEnabled,
         auto_print_receipt: autoPrintReceipt,
+        refund_act_on_receipt_printer: actOnRoll,
         cash_rounding: Number(cashRounding),
         age_check: ageCheck,
         enabled_modules: [...enabledModules],
@@ -420,6 +423,18 @@ export function SettingsPage() {
             <Toggle checked={autoPrintReceipt} onChange={setAutoPrintReceipt}>
               Автоматично друкувати чек після продажу
             </Toggle>
+
+            {/* Migration 114: the refund act on the roll, for a shop with no
+                office printer. The A4 sheet stays the default. */}
+            <Toggle checked={actOnRoll} onChange={setActOnRoll}>
+              Акт про видачу коштів при поверненні — на принтері чеків, а не на А4
+            </Toggle>
+            <p className="text-[13px] text-sq-muted" data-testid="act-on-roll-hint">
+              Акт потрібен, коли покупцю повертають понад 100 ₴. Якщо увімкнено, каса на комп'ютері друкує
+              його на стрічці принтера чеків. Термопапір з часом вицвітає, а акт зберігають разом із касовими
+              документами — сфотографуйте або зробіть копію. У браузері й на телефоні акт, як і раніше,
+              друкується на А4. На касі зміниться після наступного входу.
+            </p>
           </div>
         </section>
 

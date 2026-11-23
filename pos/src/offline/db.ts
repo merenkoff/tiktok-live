@@ -51,6 +51,8 @@ export interface StaffUnlockRow {
   qrStaticImageUrl?: string | null;
   /** Auto-print receipt flag cached from AuthResponse (optional on old rows). */
   autoPrintReceipt?: boolean;
+  /** The refund act on the receipt printer (migration 114). */
+  refundActOnReceiptPrinter?: boolean;
   /**
    * The store's sales vertical, cached from AuthResponse (optional on old rows).
    *

@@ -97,6 +97,16 @@ describe('drainReceiptQueue', () => {
     expect(api.markReceiptPrinted).toHaveBeenCalledWith(2);
   });
 
+  it('prints a receipt queued again as a copy, and the first print as the original', async () => {
+    meta.set('tableReceiptPrinterName', 'Bar-80');
+    vi.mocked(api.receiptPrintQueue).mockResolvedValue({ jobs: [sale(4, 1), { ...sale(5, 1), print_copy: true }] });
+
+    expect(await drainReceiptQueue()).toEqual({ printed: 2 });
+    const calls = printReceipt.mock.calls as unknown as Array<[string, { copy?: boolean }, number]>;
+    expect(calls[0][1].copy).toBeUndefined();
+    expect(calls[1][1].copy).toBe(true);
+  });
+
   it('leaves a receipt that did not print unconfirmed and rests a minute', async () => {
     meta.set('tableReceiptPrinterName', 'Bar-80');
     vi.mocked(api.receiptPrintQueue).mockResolvedValue({ jobs: [sale(3, 1)] });

@@ -12,6 +12,7 @@ import { PERIOD_OPTIONS, periodFrom, useDebouncedValue, type ReceiptPeriod } fro
 import { PAYMENT_LABEL_UK } from '../lib/refundReasons';
 import { buildActPayload } from '../lib/actPayload';
 import { usePrintableAct } from '../hooks/usePrintableAct';
+import { canReprint, useReprintReceipt } from '../hooks/useReprintReceipt';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
 import { RefundRows } from '../components/RefundRows';
 import { SaleRoundingLine } from '../components/SaleRounding';
@@ -70,6 +71,8 @@ export function TillReceiptsPage() {
     return null;
   }
   const { printAct, actPortal } = usePrintableAct();
+  // «Друкувати чек» for a customer who comes back for the paper — a copy.
+  const reprint = useReprintReceipt();
   // The «Акт про видачу коштів» for a refund made earlier (clothing R1/R2/R4):
   // the receipt card keeps the refund's lines and buyer, so the act prints
   // from here as well as right after the refund.
@@ -110,6 +113,7 @@ export function TillReceiptsPage() {
   }
 
   async function openSale(row: LocalSaleRow) {
+    reprint.clear();
     setSelected(row);
     setDetail(row.detail ?? null);
     setDetailLoading(true);
@@ -252,6 +256,7 @@ export function TillReceiptsPage() {
               onExchange={online ? () => setExchanging(true) : undefined}
               onDiscard={() => void discard(selected)}
               onPrintAct={onPrintAct}
+              reprint={reprint}
             />
           )}
         </section>
@@ -279,6 +284,7 @@ export function TillReceiptsPage() {
             onExchange={online ? () => setExchanging(true) : undefined}
             onDiscard={() => void discard(selected)}
             onPrintAct={onPrintAct}
+            reprint={reprint}
           />
         </div>
       )}
@@ -302,6 +308,7 @@ export function TillReceiptsPage() {
         />
       )}
       {actPortal}
+      {reprint.printablePortal}
     </>
   );
 }
@@ -314,6 +321,7 @@ function SaleDetailPanel({
   onExchange,
   onDiscard,
   onPrintAct,
+  reprint,
 }: {
   row: LocalSaleRow;
   detail: SaleDetail | null;
@@ -323,6 +331,7 @@ function SaleDetailPanel({
   onExchange?: () => void;
   onDiscard?: () => void;
   onPrintAct?: (sale: SaleDetail, refund: SaleDetail['refunds'][number]) => void;
+  reprint?: ReturnType<typeof useReprintReceipt>;
 }) {
   const bodyRef = useDragScroll<HTMLDivElement>();
   // A café's daily number sits on the detail, which is the only request that
@@ -451,6 +460,24 @@ function SaleDetailPanel({
             Обмін
           </button>
         </div>
+        {reprint && detail && canReprint(row, detail) && (
+          <div className="space-y-1.5">
+            <button
+              type="button"
+              className="w-full min-h-[52px] rounded-xl bg-white ring-1 ring-sq-divider text-[17px] font-semibold text-sq-text hover:bg-sq-sidebar disabled:opacity-40"
+              onClick={() => void reprint.reprint(row, detail)}
+              disabled={reprint.busy}
+              data-testid="reprint-receipt"
+            >
+              {reprint.busy ? 'Друкується…' : 'Друкувати чек'}
+            </button>
+            {reprint.message && (
+              <p className="text-sm text-sq-secondary text-center" role="status" data-testid="reprint-status">
+                {reprint.message}
+              </p>
+            )}
+          </div>
+        )}
         {row.sync_state === 'dead' && (
           // A queued sale the server will never accept. Until now the only way
           // to clear one was to take the till offline first.

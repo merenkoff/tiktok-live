@@ -78,6 +78,7 @@ export async function saveStaffUnlock(params: {
     qrPaymentMode: params.auth.store.qr_payment?.mode ?? 'static',
     qrStaticImageUrl: params.auth.store.qr_payment?.static_image_url ?? null,
     autoPrintReceipt: params.auth.store.auto_print_receipt ?? false,
+    refundActOnReceiptPrinter: params.auth.store.refund_act_on_receipt_printer ?? false,
     vertical: params.auth.store.vertical ?? null,
     enabledModules: params.auth.store.enabled_modules ?? DEFAULT_MODULES,
     navOverrides: params.auth.store.nav_overrides ?? {},
@@ -150,6 +151,7 @@ export async function updateStaffUnlockStoreFlags(auth: AuthResponse): Promise<v
     qrPaymentMode: auth.store.qr_payment?.mode ?? row.qrPaymentMode ?? 'static',
     qrStaticImageUrl: auth.store.qr_payment?.static_image_url ?? null,
     autoPrintReceipt: auth.store.auto_print_receipt ?? false,
+    refundActOnReceiptPrinter: auth.store.refund_act_on_receipt_printer ?? false,
     // A store whose vertical changed at noon must not keep selling from the
     // wrong catalog on a till that logged in at nine.
     vertical: auth.store.vertical ?? row.vertical ?? null,
@@ -210,6 +212,7 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
         static_image_url: row.qrStaticImageUrl ?? null,
       },
       auto_print_receipt: row.autoPrintReceipt ?? false,
+      refund_act_on_receipt_printer: row.refundActOnReceiptPrinter ?? false,
       // The settings the payment screen and the receipt read. A row written
       // before they were kept yields what such a session always had: no
       // rounding, no age question, no feedback QR, no assembly charge, no

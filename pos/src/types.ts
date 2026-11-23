@@ -184,6 +184,11 @@ export interface StoreConfig {
   /** Whether a paid-provider API key is stored — the key itself is never returned. */
   auto_print_receipt: boolean;
   /**
+   * The refund act («Акт про видачу коштів») prints on the desktop's receipt
+   * printer as a slip instead of A4 (migration 114). Absent from an older server.
+   */
+  refund_act_on_receipt_printer?: boolean;
+  /**
    * What the shop charges for assembling a composite, in basis points of its
    * components' retail sum (2500 = 25%). 0 = parts only.
    */
@@ -242,6 +247,7 @@ export type StorePatch = Partial<
     | 'qr_recipient'
     | 'gtin_lookup_enabled'
     | 'auto_print_receipt'
+    | 'refund_act_on_receipt_printer'
     | 'florist_labour_bps'
     | 'cash_rounding'
     | 'age_check'
@@ -283,6 +289,8 @@ export interface AuthResponse {
     /** Optional so a cashier build reading an older cached/offline auth still typechecks. */
     qr_payment?: QrPaymentConfig;
     auto_print_receipt?: boolean;
+    /** The refund act on the receipt printer, not A4 (migration 114). Absent from an older server. */
+    refund_act_on_receipt_printer?: boolean;
     /**
      * Assembly charge on a composite, in basis points. Optional for the same
      * reason as the rest: a cached auth from before this existed reads as 0,
@@ -1696,6 +1704,12 @@ export interface SalesSummary {
  * Where a receipt's paper stands in the computer's print queue (Т2): asked for
  * when, printed when, and until when the computer may still print it.
  */
+/** A receipt the server's print queue hands the computer (migrations 090, 113). */
+export interface ReceiptPrintJob extends SaleDetail {
+  /** Queued again after it printed once — the paper says «КОПІЯ ЧЕКА». */
+  print_copy?: boolean;
+}
+
 export interface ReceiptPrintStatus {
   requested_at: string | null;
   printed_at: string | null;

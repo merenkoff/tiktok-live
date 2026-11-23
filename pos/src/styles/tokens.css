@@ -354,6 +354,14 @@ body {
     font-size: 14px;
   }
 
+  /* «КОПІЯ ЧЕКА» over a receipt printed again. */
+  .receipt-print-copy {
+    text-align: center;
+    font-weight: bold;
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+
   /* The café's daily order number — read from the pickup counter, so bigger
      than anything else on the roll. */
   .receipt-print-order {

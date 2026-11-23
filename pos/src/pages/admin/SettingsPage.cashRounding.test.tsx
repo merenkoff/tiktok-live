@@ -89,3 +89,29 @@ describe('Settings — cash rounding', () => {
     expect(updateStore.mock.calls.at(-1)![0].cash_rounding).toBe(0);
   });
 });
+
+// Migration 114: the refund act on the receipt roll — the owner's toggle,
+// off for a store without the field.
+describe('Settings — refund act on the receipt printer', () => {
+  it('shows the stored switch and sends the change', async () => {
+    getStore.mockResolvedValue(storeConfig({ refund_act_on_receipt_printer: true }));
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    const box = await screen.findByRole('checkbox', { name: /Акт про видачу коштів/ });
+    await waitFor(() => expect(box).toBeChecked());
+    expect(screen.getByTestId('act-on-roll-hint')).toHaveTextContent(/вицвітає/);
+
+    await user.click(box);
+    await user.click(screen.getByRole('button', { name: /Зберегти/ }));
+    await waitFor(() => expect(updateStore).toHaveBeenCalled());
+    expect(updateStore.mock.calls.at(-1)![0].refund_act_on_receipt_printer).toBe(false);
+  });
+
+  it('reads a store without the field as off', async () => {
+    getStore.mockResolvedValue(storeConfig());
+    renderWithProviders(<SettingsPage />);
+    const box = await screen.findByRole('checkbox', { name: /Акт про видачу коштів/ });
+    expect(box).not.toBeChecked();
+  });
+});

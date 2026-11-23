@@ -48,7 +48,8 @@ export function registerReceiptPrintRoutes(fastify: FastifyInstance): void {
     const saleId = Number((request.params as { id: string }).id);
     if (!Number.isInteger(saleId) || saleId <= 0) return reply.code(404).send({ error: 'Чек не знайдено' });
     try {
-      const status = await printQueue.requestReprint(auth.storeId, saleId);
+      const copy = (request.body as { copy?: unknown } | undefined)?.copy === true;
+      const status = await printQueue.requestReprint(auth.storeId, saleId, { copy });
       if (!status) return reply.code(404).send({ error: 'Чек не знайдено' });
       return status;
     } catch (error) {
