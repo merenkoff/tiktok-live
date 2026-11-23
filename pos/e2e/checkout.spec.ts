@@ -485,4 +485,12 @@ test('on a phone the receipt is a QR to scan and a share sheet, not paper', asyn
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared))
     .toEqual([{ title: 'Чек R-00007', text: expect.stringContaining(`Перевірити в Податковій: ${taxUrl}`) }]);
+  // «Новий продаж» is on screen without scrolling, on a tall phone and on one
+  // whose Safari bars take the bottom of the screen (iPhone 14 Plus / 15, 2026-11-23).
+  const next = page.getByRole('button', { name: 'Новий продаж' });
+  await expect(next).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 390, height: 664 });
+  await expect(next).toBeInViewport({ ratio: 1 });
+  await next.click();
+  await expect(page.getByTestId('sale-success')).toHaveCount(0);
 });
