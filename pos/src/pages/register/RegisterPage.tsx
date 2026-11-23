@@ -1170,253 +1170,268 @@ export function RegisterPage() {
     const actionClass =
       'min-h-12 px-[18px] rounded-xl bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text inline-flex items-center gap-2 disabled:opacity-50 hover:bg-sq-sidebar';
 
+    // The frame (`CashierLayout`) is the visible height and clips: this column
+    // scrolls inside it, or a phone's QR pushed «Новий продаж» below the edge
+    // with no way down to it (iPhone 14 Plus / 15, 2026-11-23).
     return (
-      <div className="min-h-screen bg-sq-bg grid place-items-center p-4 sm:p-6">
-        <div
-          className="w-full max-w-[520px] bg-white rounded-[22px] shadow-[0_12px_40px_rgba(0,20,60,.12),0_0_2px_rgba(0,0,0,.1)] px-6 pt-9 pb-7 sm:px-10 sm:pb-[30px] flex flex-col items-center text-center animate-fade-up"
-          data-testid="sale-success"
-        >
-          <div className="w-16 h-16 rounded-full bg-sq-success text-white grid place-items-center">
-            <Check size={40} />
-          </div>
-          {showOrderNo ? (
-            <>
-              <p className="mt-[18px] text-sm font-semibold text-sq-secondary">Замовлення</p>
-              <p
-                className="text-[88px] font-bold leading-none text-sq-heading tabular-nums mt-1"
-                data-testid="order-no"
-              >
-                {orderCaption}
-              </p>
-              {localNo != null && (
-                <p className="text-xs text-sq-secondary mt-2" data-testid="order-no-local">
-                  Номер каси — сервер призначить свій після синхронізації
-                </p>
-              )}
-              <p className="text-sm text-sq-muted mt-1.5">
-                {shownParts ? `Чеків: ${shownParts.length}` : `Чек ${success.receipt_number}`}
-                {success.staff_name ? ` · ${success.staff_name}` : ''}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="mt-[18px] text-sm font-semibold text-sq-secondary">
-                {exchangeDone ? 'Обмін оформлено' : 'Оплачено'}
-              </p>
-              <h2 className="text-2xl font-bold mt-1 text-sq-heading tabular-nums">
-                {shownParts ? `Чеків: ${shownParts.length}` : success.receipt_number}
-              </h2>
-              {exchangeDone && (
-                <p className="text-sm text-sq-secondary mt-1 tabular-nums" data-testid="exchange-summary">
-                  Повернення {exchangeRefund?.refund_number ?? '—'} за чеком {exchangeDone.refund.receipt_number}
-                  {' · '}
-                  {exchangeOutcome(exchangeDone.difference_cents)}
-                </p>
-              )}
-              {success.staff_name && <p className="text-sm text-sq-muted mt-1">{success.staff_name}</p>}
-            </>
-          )}
-          <p className="mt-[18px] text-[34px] font-bold text-sq-heading tabular-nums leading-tight">
-            {formatUah(dueCents)}
-          </p>
-          {roundingCents !== 0 && (
-            <p className="text-[13px] text-sq-muted tabular-nums" data-testid="sale-success-rounding">
-              {formatUah(goodsCents)} · заокруглення {formatSignedUah(roundingCents)}
-            </p>
-          )}
-          {payLine && <p className="text-[15px] text-sq-secondary mt-0.5 tabular-nums">{payLine}</p>}
-
-          {shownParts && (
-            <ul className="mt-4 w-full space-y-2 text-left" data-testid="sale-split-receipts">
-              {shownParts.map((sale) => (
-                <SplitReceiptRow
-                  key={sale.id}
-                  sale={sale}
-                  caption={registerCaption(auth?.store.fiscal, sale.fiscal_register ?? 1)}
-                  canPrint={Boolean(receiptPrinterName)}
-                  printing={printing}
-                  onPrint={() => void printSuccessReceipt(sale)}
-                  onPdf={() => printSuccessReceiptAsPdf(sale)}
-                />
-              ))}
-            </ul>
-          )}
-          {splitNotice && (
-            <div
-              role="alert"
-              className="mt-4 w-full rounded-sq bg-red-50 text-red-800 px-3 py-2 text-sm text-left"
-              data-testid="sale-split-notice"
-            >
-              <p className="font-semibold">Не всі чеки пробито</p>
-              <p className="mt-1">{splitNotice.message}</p>
-              <p className="mt-1">Решта товарів лишилась у кошику.</p>
-              {splitNotice.supportCode && <p className="mt-1 text-xs">Код: {splitNotice.supportCode}</p>}
-            </div>
-          )}
-          {!shownParts && fiscalDoc?.fiscal_code && !fiscalNotice && (
-            <div
-              className={`mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-sq text-sm ${
-                fiscalDoc.status === 'done' &&
-                fiscalDoc.mode !== 'offline' &&
-                fiscalDoc.mode !== 'provider_offline'
-                  ? 'bg-sq-success/10 text-sq-success-ink'
-                  : 'bg-amber-50 text-amber-800'
-              }`}
-              data-testid="sale-fiscal"
-            >
-              <ShieldCheck size={24} />
-              {fiscalDoc.mode === 'offline' || fiscalDoc.mode === 'provider_offline'
-                ? `Фіскальний чек № ${fiscalDoc.fiscal_code} · офлайн`
-                : fiscalDoc.status === 'done'
-                  ? `Фіскальний чек № ${fiscalDoc.fiscal_code} зареєстровано`
-                  : `Фіскальний чек № ${fiscalDoc.fiscal_code} · реєструється`}
-            </div>
-          )}
-          {/* The return receipt's own ПРРО fate — a separate document with a
-              separate outcome, so it gets its own line rather than sharing the
-              sale's pill. Only where the store fiscalises. */}
-          {exchangeDone && (auth?.store.fiscal?.enabled ?? false) && (
-            <div
-              className={`mt-2 inline-flex items-center gap-2 px-3 py-2 rounded-sq text-sm ${
-                exchangeDone.refund.refund_fiscal?.status === 'done'
-                  ? 'bg-sq-success/10 text-sq-success-ink'
-                  : 'bg-amber-50 text-amber-800'
-              }`}
-              data-testid="exchange-refund-fiscal"
-            >
-              <ShieldCheck size={24} />
-              {exchangeDone.refund.refund_fiscal?.status === 'done'
-                ? `Видатковий чек № ${exchangeDone.refund.refund_fiscal.fiscal_code ?? ''} зареєстровано`
-                : 'Видатковий чек не зареєстровано в ПРРО — реєстрація повториться автоматично'}
-            </div>
-          )}
-          {fiscalNotice && (
-            <div
-              role="alert"
-              className="mt-5 w-full rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm text-left"
-            >
-              <p className="font-semibold">Чек не зареєстровано в ПРРО</p>
-              <p className="mt-1">{fiscalNotice.message}</p>
-              <p className="mt-1">Реєстрація повториться автоматично.</p>
-              {fiscalNotice.supportCode && (
-                <p className="mt-1 text-xs">Код: {fiscalNotice.supportCode}</p>
-              )}
-            </div>
-          )}
-          {shareableReceipt && !shownParts && !cancelRung.result && (
-            <ReceiptSharePanel
-              receipt={shareableReceipt}
-              taxUrl={fiscalDoc?.tax_url ?? null}
-              registered={!fiscalDoc || (fiscalDoc.status === 'done' && Boolean(fiscalDoc.tax_url))}
-            />
-          )}
-          {cancelRung.result && (
-            <p className="mt-5 w-full rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">
-              {cancelRung.result === 'partially_refunded'
-                ? 'Частину чека повернуто — товар повернувся на склад.'
-                : 'Чек скасовано — кошти й товар повернуто.'}
-            </p>
-          )}
-
-          <div className="mt-[22px] flex flex-wrap justify-center gap-2.5">
-            {/* Two receipts print from their own rows above. */}
-            {receiptPrinterName && !shownParts && (
-              <button
-                type="button"
-                className={actionClass}
-                onClick={() => void printSuccessReceipt()}
-                disabled={printing}
-              >
-                <Printer size={20} />
-                {printing ? 'Друк…' : 'Друкувати'}
-              </button>
-            )}
-            {!shownParts && (
-              <button
-                type="button"
-                className={actionClass}
-                onClick={() => printSuccessReceiptAsPdf()}
-                title={receiptPrinterName ? undefined : 'Принтер не обрано'}
-              >
-                <DownloadLine size={20} />
-                PDF
-              </button>
-            )}
-            {vertical === 'cafe' && kitchenPrinter && (
-              <button
-                type="button"
-                className={actionClass}
-                onClick={() => void printKitchenTicketAgain()}
-                disabled={kitchenPrinting}
-                data-testid="print-kitchen-ticket"
-              >
-                <Printer size={20} />
-                {kitchenPrinting ? 'Друк…' : 'Тікет'}
-              </button>
-            )}
-            {exchangeDone && exchangeRefund && (
-              <button
-                type="button"
-                className={actionClass}
-                onClick={() => void printReturnReceipt()}
-                disabled={printing}
-                data-testid="print-return-receipt"
-              >
-                <Repeat size={20} />
-                Видатковий чек
-              </button>
-            )}
-            {exchangeDone && exchangeRefund && needsAct(exchangeRefund.total_cents) && (
-              <button type="button" className={actionClass} onClick={printExchangeAct} data-testid="print-exchange-act">
-                <Printer size={20} />
-                Акт
-              </button>
-            )}
-          </div>
-          {printStatus && <p className="text-sq-secondary text-sm mt-2">{printStatus}</p>}
-          {kitchenStatus && (
-            <p className="text-sq-secondary text-sm mt-2" data-testid="kitchen-status">
-              {kitchenStatus}
-            </p>
-          )}
-
-          <button
-            type="button"
-            className="pos-btn-primary mt-4 w-full min-h-14 rounded-xl text-[17px]"
-            onClick={() => {
-              setSuccess(null);
-              setSplitParts(null);
-              setSplitNotice(null);
-              setExchangeDone(null);
-              setFiscalNotice(null);
-              setKitchenStatus(null);
-              cancelRung.reset();
-            }}
+      <div className="flex-1 min-h-0 overflow-y-auto bg-sq-bg" data-testid="sale-success-scroll">
+        <div className="min-h-full grid place-items-center p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div
+            className="w-full max-w-[520px] bg-white rounded-[22px] shadow-[0_12px_40px_rgba(0,20,60,.12),0_0_2px_rgba(0,0,0,.1)] px-6 pt-9 pb-7 sm:px-10 sm:pb-[30px] flex flex-col items-center text-center animate-fade-up"
+            data-testid="sale-success"
           >
-            Новий продаж
-          </button>
-          {fiscalNotice && (
-            // Cancelling routes through a refund, and a refund against a sale
-            // with no fiscal document can never itself be fiscalised — it would
-            // leave an orphan no reconciler can see. Wait for the retry instead.
-            <p className="mt-3 text-xs text-sq-secondary">
-              Повернення буде доступне після реєстрації чека в ПРРО.
+            <div className="w-16 h-16 rounded-full bg-sq-success text-white grid place-items-center">
+              <Check size={40} />
+            </div>
+            {showOrderNo ? (
+              <>
+                <p className="mt-[18px] text-sm font-semibold text-sq-secondary">Замовлення</p>
+                <p
+                  className="text-[88px] font-bold leading-none text-sq-heading tabular-nums mt-1"
+                  data-testid="order-no"
+                >
+                  {orderCaption}
+                </p>
+                {localNo != null && (
+                  <p className="text-xs text-sq-secondary mt-2" data-testid="order-no-local">
+                    Номер каси — сервер призначить свій після синхронізації
+                  </p>
+                )}
+                <p className="text-sm text-sq-muted mt-1.5">
+                  {shownParts ? `Чеків: ${shownParts.length}` : `Чек ${success.receipt_number}`}
+                  {success.staff_name ? ` · ${success.staff_name}` : ''}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-[18px] text-sm font-semibold text-sq-secondary">
+                  {exchangeDone ? 'Обмін оформлено' : 'Оплачено'}
+                </p>
+                <h2 className="text-2xl font-bold mt-1 text-sq-heading tabular-nums">
+                  {shownParts ? `Чеків: ${shownParts.length}` : success.receipt_number}
+                </h2>
+                {exchangeDone && (
+                  <p className="text-sm text-sq-secondary mt-1 tabular-nums" data-testid="exchange-summary">
+                    Повернення {exchangeRefund?.refund_number ?? '—'} за чеком {exchangeDone.refund.receipt_number}
+                    {' · '}
+                    {exchangeOutcome(exchangeDone.difference_cents)}
+                  </p>
+                )}
+                {success.staff_name && <p className="text-sm text-sq-muted mt-1">{success.staff_name}</p>}
+              </>
+            )}
+            <p className="mt-[18px] text-[34px] font-bold text-sq-heading tabular-nums leading-tight">
+              {formatUah(dueCents)}
             </p>
-          )}
-          {/* Two receipts are two documents of two ФОП: each goes back on its own from «Чеки». */}
-          {!fiscalNotice && !shownParts && cancelRung.result !== 'refunded' && cancelRung.result !== 'voided' && (
-            <button
-              type="button"
-              className="mt-2 min-h-11 px-4 text-[15px] font-semibold text-red-600 hover:text-red-700"
-              onClick={() => cancelRung.open(success)}
+            {roundingCents !== 0 && (
+              <p className="text-[13px] text-sq-muted tabular-nums" data-testid="sale-success-rounding">
+                {formatUah(goodsCents)} · заокруглення {formatSignedUah(roundingCents)}
+              </p>
+            )}
+            {payLine && <p className="text-[15px] text-sq-secondary mt-0.5 tabular-nums">{payLine}</p>}
+
+            {shownParts && (
+              <ul className="mt-4 w-full space-y-2 text-left" data-testid="sale-split-receipts">
+                {shownParts.map((sale) => (
+                  <SplitReceiptRow
+                    key={sale.id}
+                    sale={sale}
+                    caption={registerCaption(auth?.store.fiscal, sale.fiscal_register ?? 1)}
+                    canPrint={Boolean(receiptPrinterName)}
+                    printing={printing}
+                    onPrint={() => void printSuccessReceipt(sale)}
+                    onPdf={() => printSuccessReceiptAsPdf(sale)}
+                  />
+                ))}
+              </ul>
+            )}
+            {splitNotice && (
+              <div
+                role="alert"
+                className="mt-4 w-full rounded-sq bg-red-50 text-red-800 px-3 py-2 text-sm text-left"
+                data-testid="sale-split-notice"
+              >
+                <p className="font-semibold">Не всі чеки пробито</p>
+                <p className="mt-1">{splitNotice.message}</p>
+                <p className="mt-1">Решта товарів лишилась у кошику.</p>
+                {splitNotice.supportCode && <p className="mt-1 text-xs">Код: {splitNotice.supportCode}</p>}
+              </div>
+            )}
+            {!shownParts && fiscalDoc?.fiscal_code && !fiscalNotice && (
+              <div
+                className={`mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-sq text-sm ${
+                  fiscalDoc.status === 'done' &&
+                  fiscalDoc.mode !== 'offline' &&
+                  fiscalDoc.mode !== 'provider_offline'
+                    ? 'bg-sq-success/10 text-sq-success-ink'
+                    : 'bg-amber-50 text-amber-800'
+                }`}
+                data-testid="sale-fiscal"
+              >
+                <ShieldCheck size={24} />
+                {fiscalDoc.mode === 'offline' || fiscalDoc.mode === 'provider_offline'
+                  ? `Фіскальний чек № ${fiscalDoc.fiscal_code} · офлайн`
+                  : fiscalDoc.status === 'done'
+                    ? `Фіскальний чек № ${fiscalDoc.fiscal_code} зареєстровано`
+                    : `Фіскальний чек № ${fiscalDoc.fiscal_code} · реєструється`}
+              </div>
+            )}
+            {/* The return receipt's own ПРРО fate — a separate document with a
+                separate outcome, so it gets its own line rather than sharing the
+                sale's pill. Only where the store fiscalises. */}
+            {exchangeDone && (auth?.store.fiscal?.enabled ?? false) && (
+              <div
+                className={`mt-2 inline-flex items-center gap-2 px-3 py-2 rounded-sq text-sm ${
+                  exchangeDone.refund.refund_fiscal?.status === 'done'
+                    ? 'bg-sq-success/10 text-sq-success-ink'
+                    : 'bg-amber-50 text-amber-800'
+                }`}
+                data-testid="exchange-refund-fiscal"
+              >
+                <ShieldCheck size={24} />
+                {exchangeDone.refund.refund_fiscal?.status === 'done'
+                  ? `Видатковий чек № ${exchangeDone.refund.refund_fiscal.fiscal_code ?? ''} зареєстровано`
+                  : 'Видатковий чек не зареєстровано в ПРРО — реєстрація повториться автоматично'}
+              </div>
+            )}
+            {fiscalNotice && (
+              <div
+                role="alert"
+                className="mt-5 w-full rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm text-left"
+              >
+                <p className="font-semibold">Чек не зареєстровано в ПРРО</p>
+                <p className="mt-1">{fiscalNotice.message}</p>
+                <p className="mt-1">Реєстрація повториться автоматично.</p>
+                {fiscalNotice.supportCode && (
+                  <p className="mt-1 text-xs">Код: {fiscalNotice.supportCode}</p>
+                )}
+              </div>
+            )}
+            {shareableReceipt && !shownParts && !cancelRung.result && (
+              <ReceiptSharePanel
+                receipt={shareableReceipt}
+                taxUrl={fiscalDoc?.tax_url ?? null}
+                registered={!fiscalDoc || (fiscalDoc.status === 'done' && Boolean(fiscalDoc.tax_url))}
+              />
+            )}
+            {cancelRung.result && (
+              <p className="mt-5 w-full rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">
+                {cancelRung.result === 'partially_refunded'
+                  ? 'Частину чека повернуто — товар повернувся на склад.'
+                  : 'Чек скасовано — кошти й товар повернуто.'}
+              </p>
+            )}
+
+            <div className="mt-[22px] flex flex-wrap justify-center gap-2.5">
+              {/* Two receipts print from their own rows above. */}
+              {receiptPrinterName && !shownParts && (
+                <button
+                  type="button"
+                  className={actionClass}
+                  onClick={() => void printSuccessReceipt()}
+                  disabled={printing}
+                >
+                  <Printer size={20} />
+                  {printing ? 'Друк…' : 'Друкувати'}
+                </button>
+              )}
+              {!shownParts && (
+                <button
+                  type="button"
+                  className={actionClass}
+                  onClick={() => printSuccessReceiptAsPdf()}
+                  title={receiptPrinterName ? undefined : 'Принтер не обрано'}
+                >
+                  <DownloadLine size={20} />
+                  PDF
+                </button>
+              )}
+              {vertical === 'cafe' && kitchenPrinter && (
+                <button
+                  type="button"
+                  className={actionClass}
+                  onClick={() => void printKitchenTicketAgain()}
+                  disabled={kitchenPrinting}
+                  data-testid="print-kitchen-ticket"
+                >
+                  <Printer size={20} />
+                  {kitchenPrinting ? 'Друк…' : 'Тікет'}
+                </button>
+              )}
+              {exchangeDone && exchangeRefund && (
+                <button
+                  type="button"
+                  className={actionClass}
+                  onClick={() => void printReturnReceipt()}
+                  disabled={printing}
+                  data-testid="print-return-receipt"
+                >
+                  <Repeat size={20} />
+                  Видатковий чек
+                </button>
+              )}
+              {exchangeDone && exchangeRefund && needsAct(exchangeRefund.total_cents) && (
+                <button type="button" className={actionClass} onClick={printExchangeAct} data-testid="print-exchange-act">
+                  <Printer size={20} />
+                  Акт
+                </button>
+              )}
+            </div>
+            {printStatus && <p className="text-sq-secondary text-sm mt-2">{printStatus}</p>}
+            {kitchenStatus && (
+              <p className="text-sq-secondary text-sm mt-2" data-testid="kitchen-status">
+                {kitchenStatus}
+              </p>
+            )}
+
+            {/* On a phone the QR makes the card taller than the screen: the button
+                stays at the bottom of the screen until the card's own end. */}
+            <div
+              className={
+                shell === 'cashier'
+                  ? 'w-full'
+                  : 'w-full sticky bottom-0 -mx-6 px-6 sm:-mx-10 sm:px-10 pb-3 bg-white z-10 box-content'
+              }
             >
-              Скасувати чек
-            </button>
-          )}
+              <button
+                type="button"
+                className="pos-btn-primary mt-4 w-full min-h-14 rounded-xl text-[17px]"
+                onClick={() => {
+                  setSuccess(null);
+                  setSplitParts(null);
+                  setSplitNotice(null);
+                  setExchangeDone(null);
+                  setFiscalNotice(null);
+                  setKitchenStatus(null);
+                  cancelRung.reset();
+                }}
+              >
+                Новий продаж
+              </button>
+            </div>
+            {fiscalNotice && (
+              // Cancelling routes through a refund, and a refund against a sale
+              // with no fiscal document can never itself be fiscalised — it would
+              // leave an orphan no reconciler can see. Wait for the retry instead.
+              <p className="mt-3 text-xs text-sq-secondary">
+                Повернення буде доступне після реєстрації чека в ПРРО.
+              </p>
+            )}
+            {/* Two receipts are two documents of two ФОП: each goes back on its own from «Чеки». */}
+            {!fiscalNotice && !shownParts && cancelRung.result !== 'refunded' && cancelRung.result !== 'voided' && (
+              <button
+                type="button"
+                className="mt-2 min-h-11 px-4 text-[15px] font-semibold text-red-600 hover:text-red-700"
+                onClick={() => cancelRung.open(success)}
+              >
+                Скасувати чек
+              </button>
+            )}
+          </div>
+          {printablePortal}
+          {actPortal}
+          {cancelRung.node}
         </div>
-        {printablePortal}
-        {actPortal}
-        {cancelRung.node}
       </div>
     );
   }

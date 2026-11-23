@@ -88,7 +88,7 @@ export function ReceiptSharePanel({
           <QrCode
             value={taxUrl}
             label="QR-код фіскального чека"
-            className="w-full max-w-[300px] aspect-square rounded-xl ring-1 ring-sq-divider"
+            className="w-full max-w-[min(300px,40dvh)] aspect-square rounded-xl ring-1 ring-sq-divider"
           />
           <p className="mt-2 text-sm text-sq-secondary">
             Покажіть покупцю: камера телефона відкриє цей чек у Податковій
