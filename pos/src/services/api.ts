@@ -221,13 +221,19 @@ class PosApi {
     snapshot?: boolean;
     /** Also products that are not on the menu — the stock count counts milk. */
     include_unsellable?: boolean;
+    /** The till's home screen: the ticked cards and the best sellers, whole (migration 112). */
+    home?: boolean;
+    /** A page of CARDS — `limit` products from the `offset`-th, every variant of each. */
+    limit?: number;
+    offset?: number;
   }): Promise<CatalogItem[]> {
-    const { snapshot, include_unsellable, ...rest } = params ?? {};
+    const { snapshot, include_unsellable, home, ...rest } = params ?? {};
     const { data } = await this.client.get<CatalogItem[]>('/catalog', {
       params: {
         ...rest,
         ...(snapshot ? { all: '1' } : {}),
         ...(include_unsellable ? { include_unsellable: '1' } : {}),
+        ...(home ? { home: '1' } : {}),
       },
     });
     return data;

@@ -18,6 +18,8 @@ describe('the list view in the address', () => {
   it('reads and writes the two named views — no photo and the archive — by name', () => {
     expect(readListParams(new URLSearchParams('tag=no-photo'))).toEqual({ q: '', tag: 'no_photo' });
     expect(readListParams(new URLSearchParams('tag=archived&q=зайчик'))).toEqual({ q: 'зайчик', tag: 'archived' });
+    expect(readListParams(new URLSearchParams('tag=home')).tag).toBe('till_home');
+    expect(writeListParams(new URLSearchParams(''), { tag: 'till_home' }).toString()).toBe('tag=home');
     expect(writeListParams(new URLSearchParams(''), { tag: 'no_photo' }).toString()).toBe('tag=no-photo');
     expect(writeListParams(new URLSearchParams('q=x'), { tag: 'archived' }).toString()).toBe('q=x&tag=archived');
     expect(readListParams(writeListParams(new URLSearchParams(''), { tag: 'archived' })).tag).toBe('archived');

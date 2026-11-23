@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { makeCatalogItem, makeTag } from '../test/utils';
-import { filterCatalog, flattenTags, tagFilterIds } from './catalog-filter';
+import { filterCatalog, flattenTags, pageOfCards, tagFilterIds } from './catalog-filter';
 
 /** Одяг(1) → Верх(2) → Футболки(3); Взуття(4) is a separate root. */
 const tags = [
@@ -221,5 +221,30 @@ describe('filterCatalog — the query is read as words', () => {
 
   it.each(MATCH_CASES)('«$query» finds $expected', ({ query, expected }) => {
     expect(find(query)).toBe(expected);
+  });
+});
+
+// The till's home screen offline (migration 112): the snapshot holds the
+// owner's ticks and the sellers' ranks, and «Усі товари» pages by cards as
+// the server does.
+describe('filterCatalog — home, and pageOfCards', () => {
+  const rows = [
+    makeCatalogItem({ variant_id: 1, product_id: 1, till_home: true }),
+    makeCatalogItem({ variant_id: 2, product_id: 2, popular_rank: 3 }),
+    makeCatalogItem({ variant_id: 3, product_id: 3 }),
+    makeCatalogItem({ variant_id: 4, product_id: 3 }),
+    makeCatalogItem({ variant_id: 5, product_id: 4, popular_rank: null }),
+  ];
+
+  it('keeps the ticked cards and the ranked sellers for home', () => {
+    expect(filterCatalog(rows, [], { home: true }).map((r) => r.variant_id)).toEqual([1, 2]);
+    expect(filterCatalog(rows, [])).toHaveLength(5);
+  });
+
+  it('pages cards, never cutting through one card', () => {
+    expect(pageOfCards(rows, 0, 2).map((r) => r.variant_id)).toEqual([1, 2]);
+    expect(pageOfCards(rows, 2, 1).map((r) => r.variant_id)).toEqual([3, 4]);
+    expect(pageOfCards(rows, 3, 5).map((r) => r.variant_id)).toEqual([5]);
+    expect(pageOfCards(rows, 9, 5)).toEqual([]);
   });
 });

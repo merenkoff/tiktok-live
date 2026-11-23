@@ -547,6 +547,14 @@ export interface CatalogItem {
    * true, which is what every product was before the column existed.
    */
   sellable?: boolean;
+  /** Ticked «На головному екрані каси» by the owner (migration 112). Absent on an older payload → false. */
+  till_home?: boolean;
+  /**
+   * 1..24 among the store's best sellers of the last 30 days — the till's home
+   * screen while nothing is ticked. Sent only in the snapshot and for
+   * `home: true`; null or absent elsewhere.
+   */
+  popular_rank?: number | null;
   /**
    * On the day's manual stop-list («сьогодні не робимо», migration 050). The
    * row stays in the answer so the tile greys with a caption instead of
@@ -943,6 +951,8 @@ export interface Product {
   sellable?: boolean;
   /** Sold at the till but never listed in the guest QR menu (migration 083): a cork fee, a bag. Absent on an older payload → false. */
   menu_hidden?: boolean;
+  /** On the till's home screen (migration 112). Absent on an older payload → false. */
+  till_home?: boolean;
   /**
    * The register the owner put this product on (track ДК, migration 089): null
    * or 1 = register 1, 2 = register 2. Stored as set, even while register 2

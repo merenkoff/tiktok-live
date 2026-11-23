@@ -22,6 +22,7 @@ export type TagFilter =
   | 'no_description'
   | 'no_composition'
   | 'archived'
+  | 'till_home'
   | 'label_new'
   | 'label_hit'
   | number;
@@ -39,6 +40,7 @@ const NO_PHOTO = 'no-photo';
 const NO_DESCRIPTION = 'no-description';
 const NO_COMPOSITION = 'no-composition';
 const ARCHIVED = 'archived';
+const TILL_HOME = 'home';
 const LABEL_NEW = 'label:new';
 const LABEL_HIT = 'label:hit';
 
@@ -51,6 +53,7 @@ export function readListParams(sp: URLSearchParams): ListParams {
   else if (raw === NO_DESCRIPTION) tag = 'no_description';
   else if (raw === NO_COMPOSITION) tag = 'no_composition';
   else if (raw === ARCHIVED) tag = 'archived';
+  else if (raw === TILL_HOME) tag = 'till_home';
   else if (raw === LABEL_NEW) tag = 'label_new';
   else if (raw === LABEL_HIT) tag = 'label_hit';
   else if (raw && /^\d+$/.test(raw)) tag = Number(raw);
@@ -77,6 +80,7 @@ function tagParam(tag: Exclude<TagFilter, 'all'>): string {
   if (tag === 'no_description') return NO_DESCRIPTION;
   if (tag === 'no_composition') return NO_COMPOSITION;
   if (tag === 'archived') return ARCHIVED;
+  if (tag === 'till_home') return TILL_HOME;
   if (tag === 'label_new') return LABEL_NEW;
   if (tag === 'label_hit') return LABEL_HIT;
   return String(tag);

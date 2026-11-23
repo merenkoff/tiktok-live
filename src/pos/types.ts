@@ -297,6 +297,14 @@ export interface CatalogItem {
    * `include_unsellable=1` (an ingredient, a semi-finished product).
    */
   sellable: boolean;
+  /** Ticked «На головному екрані каси» by the owner (migration 112). */
+  till_home: boolean;
+  /**
+   * 1..24 among the store's best sellers of the last 30 days, or null — the
+   * till's home screen while nothing is ticked. Read only for the snapshot and
+   * `?home=1`; null in every other answer.
+   */
+  popular_rank: number | null;
   /**
    * The store register this line is fiscalised through (migration 089, ДК2):
    * 1, or 2 for a product the owner marked for the second ФОП's register while

@@ -75,6 +75,8 @@ export interface ProductDraft {
   sellable: boolean;
   /** Sold at the till, never listed to a guest (the cork fee, a bag). */
   menuHidden: boolean;
+  /** On the till's home screen, before any folder (migration 112). */
+  tillHome: boolean;
   /**
    * The register it is sold through (track ДК): 1, or 2 — another ФОП's,
    * where a restaurant's alcohol goes. Kept as stored even while register 2
@@ -142,6 +144,7 @@ export function draftOf(product: Product): ProductDraft {
     imageUrl: product.image_url ?? null,
     sellable: product.sellable !== false,
     menuHidden: product.menu_hidden === true,
+    tillHome: product.till_home === true,
     fiscalRegister: product.fiscal_register ?? 1,
     fiscalExcise: product.fiscal_excise === true,
     excisePerUnit: product.excise_per_unit === true,
@@ -167,6 +170,7 @@ export function emptyDraft(): ProductDraft {
     imageUrl: null,
     sellable: true,
     menuHidden: false,
+    tillHome: false,
     fiscalRegister: 1,
     fiscalExcise: false,
     excisePerUnit: false,
@@ -197,6 +201,7 @@ export function createDirty(draft: ProductDraft, variantsTyped: boolean): boolea
     draft.imageUrl != null ||
     !draft.sellable ||
     draft.menuHidden ||
+    draft.tillHome ||
     draft.fiscalRegister !== 1 ||
     draft.fiscalExcise ||
     draft.uktzed.trim() !== '' ||
@@ -347,6 +352,7 @@ export function detailsOf(d: ProductDraft) {
     image_url: d.imageUrl,
     sellable: d.sellable,
     menu_hidden: d.menuHidden,
+    till_home: d.tillHome,
     fiscal_register: d.fiscalRegister,
     // Excise goods (ДК4): a stamp per unit only on excise goods — the server
     // says so too; sent together so a product un-marked loses both at once.
@@ -393,6 +399,7 @@ export function diffProduct(snapshot: ProductDraft, draft: ProductDraft): Produc
       (snapshot.imageUrl ?? null) !== (draft.imageUrl ?? null) ||
       snapshot.sellable !== draft.sellable ||
       snapshot.menuHidden !== draft.menuHidden ||
+      snapshot.tillHome !== draft.tillHome ||
       snapshot.fiscalRegister !== draft.fiscalRegister ||
       snapshot.fiscalExcise !== draft.fiscalExcise ||
       snapshot.excisePerUnit !== draft.excisePerUnit ||

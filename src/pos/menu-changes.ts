@@ -59,6 +59,7 @@ export const PRODUCT_FIELDS = [
   'prep_minutes',
   'image_url',
   'menu_hidden',
+  'till_home',
   'sellable',
   'kind',
   'stock_mode',

@@ -10,6 +10,9 @@ import { ChevronLeft } from '../../platform/glyphs';
  * The horizontal strip of catalog tags above the product grid: «Усі товари»,
  * the tags an owner pinned to it, and a back step when the cashier has walked
  * into a folder. Drag-scrollable, because on a till it is a finger.
+ *
+ * With `onAll` the root is two chips (migration 112): «Головна» — the folders
+ * and the cards the owner put there — and «Усі товари», the whole range.
  */
 export function CatalogTagBar({
   tags,
@@ -18,13 +21,16 @@ export function CatalogTagBar({
   backLabel,
   onSelect,
   onBack,
+  onAll,
 }: {
   tags: PosTag[];
-  activeId: number | 'all' | null;
+  activeId: number | 'all' | 'home' | null;
   showBack: boolean;
   backLabel: string;
   onSelect: (tag: PosTag | null) => void;
   onBack: () => void;
+  /** «Усі товари» beside «Головна»; absent — one root chip, «Усі товари». */
+  onAll?: (() => void) | null;
 }) {
   const ref = useDragScroll<HTMLDivElement>();
   // Things' filter chips: plain text, the chosen one on a grey plate.
@@ -45,9 +51,24 @@ export function CatalogTagBar({
           {backLabel}
         </button>
       )}
-      <button type="button" onClick={() => onSelect(null)} className={chip(activeId === 'all')}>
-        Усі товари
-      </button>
+      {onAll ? (
+        <>
+          <button type="button" onClick={() => onSelect(null)} className={chip(activeId === 'home')}>
+            Головна
+          </button>
+          <button type="button" onClick={onAll} className={chip(activeId === 'all')}>
+            Усі товари
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className={chip(activeId === 'all' || activeId === 'home')}
+        >
+          Усі товари
+        </button>
+      )}
       {tags.map((tag) => (
         <button
           key={tag.id}
