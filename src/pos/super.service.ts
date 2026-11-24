@@ -14,6 +14,7 @@ import { logger } from '../logger.js';
 import { updateStore, type StorePatch } from './analytics.service.js';
 import {
   assertSingleFiscalRemote,
+  assertRequiredRemotes,
   assertSingleVerticalRemote,
   effectiveEnabledModules,
   isAllowedRemoteUrl,
@@ -131,6 +132,7 @@ async function validatedRemotes(
   try {
     assertSingleFiscalRemote(sanitized, fiscal?.provider ?? null);
     assertSingleVerticalRemote(sanitized, vertical);
+    assertRequiredRemotes(sanitized);
   } catch (error) {
     if (error instanceof ModuleRemoteConflictError) throw new SuperValidationError(error.message);
     throw error;

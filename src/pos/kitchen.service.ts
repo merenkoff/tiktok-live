@@ -23,6 +23,7 @@ import type { PrepStatus } from './types.js';
 import { parseLineModifierSnapshot } from './modifiers.service.js';
 import { authorName } from './guest-author.js';
 import { invalidatePublicMenu } from './public-menu/menu.service.js';
+import { servedQuantitySql } from './served.js';
 
 export class KitchenError extends Error {
   constructor(message: string) {
@@ -55,6 +56,12 @@ export interface KitchenOrderItem {
    * printer sends a line with none to the kitchen.
    */
   stations: TagStation[];
+  /**
+   * A round's line only: how many of `quantity` the waiters have already
+   * carried to the table («Роздача», migration 115). Absent on a counter
+   * sale's line, which leaves the counter whole.
+   */
+  served_quantity?: number;
 }
 
 export interface KitchenOrder {
@@ -261,8 +268,10 @@ async function openRounds(storeId: number): Promise<KitchenOrder[]> {
   const roundIds = heads.rows.map((row) => Number(row.id));
   const itemRows = await pool.query(
     `SELECT i.id, i.round_id, i.product_name, i.variant_label, i.quantity, i.note,
-            i.modifiers, ${STATIONS_SQL} AS stations
+            i.modifiers, ${STATIONS_SQL} AS stations,
+            ${servedQuantitySql('i', 'r')} AS served_quantity
      FROM pos_bill_items i
+     JOIN pos_bill_rounds r ON r.id = i.round_id
      WHERE i.round_id = ANY($1::bigint[])
      ORDER BY i.round_id, i.sort_order, i.id`,
     [roundIds]
@@ -284,6 +293,7 @@ async function openRounds(storeId: number): Promise<KitchenOrder[]> {
       })),
       note: typeof row.note === 'string' ? row.note : '',
       stations: stationsOf(row.stations),
+      served_quantity: Number(row.served_quantity ?? 0),
     });
     itemsByRound.set(roundId, list);
   }

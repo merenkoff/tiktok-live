@@ -89,6 +89,7 @@ export function registerKitchenRoutes(fastify: FastifyInstance): void {
         storeId: auth.storeId,
         roundId,
         status: body.prep_status,
+        staffId: auth.staffId,
       });
     } catch (error) {
       if (error instanceof kitchen.KitchenNotFound) {

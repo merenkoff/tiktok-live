@@ -54,6 +54,7 @@ import * as modifiers from './modifiers.service.js';
 import { customBouquetLabel } from './sales.service.js';
 import { newPourContext, undoRoundPours } from './bottles.service.js';
 import { ROUND_PRINT_LEASE } from './round-print.service.js';
+import * as serving from './serving.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -361,6 +362,16 @@ export async function cancelRound(params: {
     if (paid.rows.length > 0) {
       throw new bills.BillConflict('Частину раунду вже оплачено — це повернення, а не скасування');
     }
+    // «Роздача» (115): a plate a waiter already carried was cooked and eaten —
+    // cancelling would credit its stock back. Until the tap is taken back
+    // («Повернути»), the round stays.
+    const carried = await client.query(
+      `SELECT 1 FROM pos_bill_item_serves WHERE round_id = $1 AND undone_at IS NULL LIMIT 1`,
+      [params.roundId]
+    );
+    if (carried.rows.length > 0) {
+      throw new bills.BillConflict('З раунду вже винесли страви — скасувати його не можна');
+    }
 
     const lines = await client.query(
       `SELECT id, variant_id, quantity FROM pos_bill_items WHERE round_id = $1`,
@@ -417,7 +428,18 @@ export async function setRoundPrep(params: {
   storeId: number;
   roundId: number;
   status: 'ready' | 'served';
+  /** Who tapped — the author of the rows «Видано» writes for what the waiters have not carried. */
+  staffId?: number | null;
 }): Promise<PrepStatusRow> {
+  // «Видано» carries the rest of the round as the kitchen's rows (TechDocs/POS_PASS.md,
+  // rule 2), so «Винесено» lists every plate and a partly carried round closes whole.
+  if (params.status === 'served') {
+    return serving.serveRoundByKitchen({
+      storeId: params.storeId,
+      staffId: params.staffId ?? null,
+      roundId: params.roundId,
+    });
+  }
   const updated = await pool.query(
     `UPDATE pos_bill_rounds
      SET prep_status = $3::text,

@@ -44,6 +44,7 @@ import { feedbackMenuKey, feedbackUrl } from './public-menu/urls.js';
 import { getTableKeys } from './public-menu/table-keys.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 import { movePoursToSale } from './bottles.service.js';
+import { servedQuantitySql } from './served.js';
 
 export class BillError extends Error {
   constructor(message: string) {
@@ -119,6 +120,11 @@ export interface BillLine {
   added_by: number | null;
   added_by_name: string;
   sort_order: number;
+  /**
+   * A fired line only: how many of `quantity` the waiters have carried to
+   * the table («Роздача», migration 115). Absent on a draft line.
+   */
+  served_quantity?: number;
 }
 
 export interface BillRound {
@@ -297,6 +303,7 @@ function mapLine(row: Record<string, unknown>, preview: number | null): BillLine
       : {}),
     ...(row.excise_per_unit ? { excise_per_unit: true } : {}),
     ...(row.bottle_pending ? { bottle_pending: true } : {}),
+    ...(row.round_id != null ? { served_quantity: Number(row.served_quantity ?? 0) } : {}),
   };
 }
 
@@ -446,8 +453,10 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
             (SELECT array_agg(l.label ORDER BY l.id) FROM pos_excise_labels l
               WHERE l.bill_item_id = i.id AND l.released_at IS NULL) AS excise_labels,
             EXISTS (SELECT 1 FROM pos_bottle_pours bp
-                     WHERE bp.bill_item_id = i.id AND bp.bottle_id IS NULL AND bp.undone_at IS NULL) AS bottle_pending
+                     WHERE bp.bill_item_id = i.id AND bp.bottle_id IS NULL AND bp.undone_at IS NULL) AS bottle_pending,
+            ${servedQuantitySql('i', 'fr')} AS served_quantity
        FROM pos_bill_items i
+       LEFT JOIN pos_bill_rounds fr ON fr.id = i.round_id
        LEFT JOIN pos_staff s ON s.id = i.added_by
        JOIN pos_variants v ON v.id = i.variant_id
        JOIN pos_products p ON p.id = v.product_id
