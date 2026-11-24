@@ -14,7 +14,7 @@ It is an **automatic export**. Development happens in a private monorepo (`meren
 
 ### What is not here
 
-The **online-only modules** — `pos/private-modules.json` is the list: the flowers, café and grocery verticals, `tables`, `debts`, `tiktok-live`, the two ПРРО cabinets (`fiscal-checkbox`, `fiscal-cashalot`) and their shared `fiscal-core` library. They reach a store as signed bundles named in `pos_stores.module_remotes`; the server routes, services and migrations they call are part of this backend.
+The **online-only modules** — `pos/private-modules.json` is the list: the flowers, café and grocery verticals, `tables`, `pass` («Роздача», what of a round the waiters carried), `debts`, `tiktok-live`, the two ПРРО cabinets (`fiscal-checkbox`, `fiscal-cashalot`) and their shared `fiscal-core` library. They reach a store as signed bundles named in `pos_stores.module_remotes`; the server routes, services and migrations they call are part of this backend.
 
 - A store runs without them. The clothing vertical ships in the host, and a store whose own vertical module is missing falls back to its catalog (`resolveSalesCatalog`, `pos/src/modules/verticals.ts`).
 - `npm run check:private-imports` (in `pos/`) keeps open code from importing a private module; go through `@pos/platform` instead.

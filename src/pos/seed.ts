@@ -190,6 +190,44 @@ async function registerTablesModule(): Promise<void> {
 }
 
 /**
+ * Point the demo café at a locally served «Роздача» bundle (`pass`,
+ * TechDocs/POS_PASS.md): the waiter's screen of what the kitchen's rounds
+ * still have to carry. It works on top of `tables` — the server refuses `pass`
+ * in `module_remotes` without it — so it goes to the same store
+ * `POS_SEED_TABLES=1` points (`POS_SEED_PASS_STORE` for another one).
+ *
+ *   POS_SEED_TABLES=1 POS_SEED_PASS=1 npm run pos:seed
+ */
+async function registerPassModule(): Promise<void> {
+  const slug = process.env.POS_SEED_PASS_STORE || 'demo-cafe';
+  const store = await pool.query(`SELECT id, module_remotes FROM pos_stores WHERE slug = $1`, [slug]);
+  if (store.rows.length === 0) {
+    console.log(`   ${slug} store not found — run the migrations first`);
+    return;
+  }
+  const remotes = (store.rows[0].module_remotes ?? {}) as Record<string, unknown>;
+  if (!('tables' in remotes)) {
+    console.log(`   ${slug} has no «Столи» — run with POS_SEED_TABLES=1 too; «Роздача» needs it`);
+    return;
+  }
+  const entry = {
+    url: process.env.POS_SEED_PASS_URL || 'http://localhost:5013/remote-entry.js',
+    title: 'Роздача',
+    routePath: '/pass',
+    icon: 'UtensilsCrossed',
+    nav: [{ label: 'Роздача', location: 'cashier-primary', order: 61, icon: 'UtensilsCrossed', match: '/pass' }],
+  };
+  await pool.query(
+    `UPDATE pos_stores
+     SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                          || jsonb_build_object('pass', $2::jsonb)
+     WHERE id = $1`,
+    [Number(store.rows[0].id), JSON.stringify(entry)]
+  );
+  console.log(`   pass module registered on ${slug} → ${entry.url}`);
+}
+
+/**
  * Point a demo store at a locally served `debts` bundle (grocery phase Г3,
  * «під запис» — TechDocs/grocery/G3_DEBTS.md).
  *
@@ -481,6 +519,7 @@ async function seed(): Promise<void> {
   if (process.env.POS_SEED_VERTICAL_CAFE === '1') await registerCafeModule();
   if (process.env.POS_SEED_TABLES === '1') await registerTablesModule();
   if (process.env.POS_SEED_DEBTS === '1') await registerDebtsModule();
+  if (process.env.POS_SEED_PASS === '1') await registerPassModule();
   if (process.env.POS_SEED_VERTICAL_GROCERY === '1') await registerGroceryModule();
   if (process.env.POS_SEED_FISCAL_CASHALOT === '1') await registerFiscalCashalotModule();
   console.log('\n✅ Demo store ready (tags ensured)');

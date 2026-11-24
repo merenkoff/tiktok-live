@@ -8,7 +8,8 @@
     "vertical-cafe",
     "vertical-grocery",
     "tables",
-    "debts"
+    "debts",
+    "pass"
   ],
   "libraries": ["fiscal-core"]
 }
