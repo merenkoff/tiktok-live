@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useMemo, useState, type KeyboardEvent, type Ref } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { Plus, Search, X } from '@pos/platform/ui';
 import type { ComponentOption } from './componentOptions';
 import { panelFieldClass } from './formStyles';
@@ -51,6 +51,15 @@ export function IngredientPicker({
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
+  // The blur's «close a beat later» timer, cleared if the picker goes first —
+  // a dialog saved and gone within those 150 ms must not set state after it.
+  const blurTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (blurTimer.current != null) window.clearTimeout(blurTimer.current);
+    },
+    []
+  );
 
   const chosen = useMemo(
     () => (value == null ? null : (options.find((o) => o.variant_id === value) ?? null)),
@@ -132,7 +141,9 @@ export function IngredientPicker({
           aria-label={ariaLabel}
           onFocus={() => setOpen(true)}
           // Closes a beat later, so a tap on a line of the list still lands.
-          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          onBlur={() => {
+            blurTimer.current = window.setTimeout(() => setOpen(false), 150);
+          }}
           onChange={(e) => {
             setQuery(e.target.value);
             setCursor(0);
