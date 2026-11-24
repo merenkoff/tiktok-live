@@ -117,6 +117,8 @@ test('the owner finds a dish, fixes its recipe in place and prices an ingredient
       { component_variant_id: 20, quantity: 250, loss_bps: 0 },
     ],
     price_cents: 7500,
+    // A kitchen's recipe carries its «вихід» (migration 116): null = for one unit.
+    recipe_yield: null,
   });
   await expect(dialog).toBeHidden();
 
