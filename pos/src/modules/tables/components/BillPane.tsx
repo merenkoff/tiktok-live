@@ -9,7 +9,7 @@
 // wide screen, and the sheet that slides up over it on a narrow one.
 
 import { formatUah } from '@pos/platform';
-import { canCancelRound, firedLineCents, ROUND_STATUS } from '../lib/bill';
+import { canCancelRound, carriedOfLine, firedLineCents, ROUND_STATUS, roundCarried } from '../lib/bill';
 import type { DraftLineView, DraftSummary } from '../lib/draft';
 import type { BillLine, BillRound } from '../lib/types';
 import { ChefHat, Minus, Pencil, Plus, Printer } from '@pos/platform/ui';
@@ -71,19 +71,25 @@ export function BillPane({
   canClose = false,
   onCloseTable,
 }: BillPaneProps): JSX.Element {
-  const firedLine = (l: BillLine): JSX.Element => (
-    <LineRow
-      key={l.id}
-      testId={`bill-line-${l.id}`}
-      quantity={l.quantity}
-      title={l.product_name}
-      sub={[l.variant_label, l.note].filter(Boolean).join(' · ')}
-      price={formatUah(firedLineCents(l))}
-      // Went to the kitchen, but the bar has not opened the bottle it pours
-      // from (ДК5, Д18): its part cannot be paid until then.
-      waiting={l.sale_id == null && l.bottle_pending === true ? 'Чекає марку з бару' : null}
-    />
-  );
+  const firedLine = (l: BillLine, round: BillRound): JSX.Element => {
+    // «Роздача»: what of a round still being served is already on the table.
+    // A handed-over round says «видано» once, in its header, not per line.
+    const out = round.prep_status === 'served' || round.cancelled_at != null ? 0 : carriedOfLine(l);
+    return (
+      <LineRow
+        key={l.id}
+        testId={`bill-line-${l.id}`}
+        quantity={l.quantity}
+        title={l.product_name}
+        sub={[l.variant_label, l.note].filter(Boolean).join(' · ')}
+        price={formatUah(firedLineCents(l))}
+        // Went to the kitchen, but the bar has not opened the bottle it pours
+        // from (ДК5, Д18): its part cannot be paid until then.
+        waiting={l.sale_id == null && l.bottle_pending === true ? 'Чекає марку з бару' : null}
+        carried={out === 0 ? null : out >= l.quantity ? 'винесено' : `винесено ${out} з ${l.quantity}`}
+      />
+    );
+  };
 
   const draftLine = (row: DraftLineView): JSX.Element => {
     const sub = [row.variant_label, ...row.modifierNames, row.note].filter(Boolean).join(' · ');
@@ -163,6 +169,7 @@ export function BillPane({
       <div className="flex-1 overflow-auto px-3.5 pt-3.5 pb-2 space-y-2.5">
         {rounds.map((round) => {
           const cancelled = round.cancelled_at != null;
+          const carried = roundCarried(round);
           return (
             <section
               key={round.id}
@@ -196,9 +203,14 @@ export function BillPane({
                     : round.prep_status === 'new'
                       ? `${ROUND_STATUS.new} · ${minutesSince(round.fired_at)} хв`
                       : ROUND_STATUS[round.prep_status]}
+                  {carried && (
+                    <span className="block text-right text-sq-success" data-testid={`bill-round-carried-${round.id}`}>
+                      винесено {carried.carried} з {carried.total}
+                    </span>
+                  )}
                 </span>
               </div>
-              <div className="pt-1">{round.items.map(firedLine)}</div>
+              <div className="pt-1">{round.items.map((line) => firedLine(line, round))}</div>
               {canCancelRound(round) && (
                 <button
                   type="button"
@@ -324,6 +336,7 @@ function LineRow({
   sub,
   price,
   waiting = null,
+  carried = null,
 }: {
   testId: string;
   quantity: number;
@@ -332,6 +345,8 @@ function LineRow({
   price: string;
   /** A mark under the line — «Чекає марку з бару». */
   waiting?: string | null;
+  /** What of the line the waiters carried — «винесено 1 з 3» («Роздача»). */
+  carried?: string | null;
 }): JSX.Element {
   return (
     <div className="flex items-start gap-2.5 py-1.5" data-testid={testId}>
@@ -339,6 +354,11 @@ function LineRow({
       <div className="min-w-0 flex-1">
         <p className="text-[15px] text-sq-text truncate">{title}</p>
         {sub && <p className="text-[13px] text-sq-muted truncate">{sub}</p>}
+        {carried && (
+          <p className="text-[13px] font-semibold text-sq-success" data-testid={`${testId}-carried`}>
+            {carried}
+          </p>
+        )}
         {waiting && (
           <span
             className="mt-1 inline-block rounded-lg bg-amber-50 ring-1 ring-amber-300 px-2 py-0.5 text-[13px] font-semibold text-amber-800"

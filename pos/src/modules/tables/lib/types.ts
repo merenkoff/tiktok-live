@@ -110,6 +110,12 @@ export interface BillLine {
    * from a backend older than ДК5-Б.
    */
   bottle_pending?: boolean;
+  /**
+   * A fired line: how many of `quantity` the waiters have carried to the
+   * table («Роздача», TechDocs/POS_PASS.md). Absent on a draft line and from
+   * a server older than migration 115.
+   */
+  served_quantity?: number;
 }
 
 export interface BillRound {

@@ -30,6 +30,23 @@ export function isEmptyBill(bill: Bill): boolean {
   return bill.rounds.every((r) => r.cancelled_at != null && r.items.every((l) => l.sale_id == null));
 }
 
+/** How many of a fired line's plates the waiters have carried («Роздача»); 0 when nobody says. */
+export function carriedOfLine(line: Pick<BillLine, 'quantity' | 'served_quantity'>): number {
+  return Math.min(line.quantity, Math.max(0, line.served_quantity ?? 0));
+}
+
+/**
+ * What of a round still being served has gone to the table — «винесено 2 з 5»
+ * beside its state — or null while nothing has, and for a round already
+ * handed over or cancelled, whose own word («видано», «скасовано») says it.
+ */
+export function roundCarried(round: BillRound): { carried: number; total: number } | null {
+  if (round.cancelled_at != null || round.prep_status === 'served') return null;
+  const total = round.items.reduce((sum, line) => sum + line.quantity, 0);
+  const carried = round.items.reduce((sum, line) => sum + carriedOfLine(line), 0);
+  return carried > 0 ? { carried, total } : null;
+}
+
 /**
  * A round can be taken back until it is handed over.
  *

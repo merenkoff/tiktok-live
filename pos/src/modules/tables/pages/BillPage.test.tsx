@@ -1188,6 +1188,25 @@ describe('BillPage — guest requests (Q7)', () => {
     expect(screen.queryByTestId('bill-banner')).toBeNull();
   });
 
+  it('marks what of a round the waiters already carried («Роздача»)', async () => {
+    bill = {
+      ...bill,
+      rounds: [
+        round({
+          prep_status: 'ready',
+          items: [
+            line({ id: 2, quantity: 2, unit_price_cents: 8000, served_quantity: 1 }),
+            line({ id: 5, product_name: 'Круасан', variant_label: '', quantity: 1, unit_price_cents: 5500, served_quantity: 1 }),
+          ],
+        }),
+      ],
+    };
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    expect(await screen.findByTestId('bill-round-carried-7')).toHaveTextContent('винесено 2 з 3');
+    expect(screen.getByTestId('bill-line-2-carried')).toHaveTextContent('винесено 1 з 2');
+    expect(screen.getByTestId('bill-line-5-carried')).toHaveTextContent('винесено');
+  });
+
   describe('a free table and an empty bill (§4.1)', () => {
     const empty = (over: Partial<Bill> = {}): Bill => ({
       ...bill,
