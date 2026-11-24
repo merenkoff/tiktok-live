@@ -80,6 +80,7 @@ export const VARIANT_FIELDS = [
   'pack_qty',
   'pack_label',
   'bottle_ml',
+  'recipe_yield',
   'is_active',
 ] as const;
 

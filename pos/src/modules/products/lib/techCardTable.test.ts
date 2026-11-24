@@ -13,9 +13,12 @@ describe('techCardTable', () => {
   it('reads the downloadable sample back into the rows it shows', () => {
     const { rows, headerFound } = tableToRows(parseDelimited(bytes(toCsv(TECH_CARD_SAMPLE))));
     expect(headerFound).toBe(true);
-    expect(rows).toHaveLength(7);
-    expect(rows[0]).toEqual({ line: 2, dish: 'Борщ', variant: '', ingredient: 'Буряк', quantity: '80', unit: 'г', price: '20' });
+    expect(rows).toHaveLength(11);
+    expect(rows[0]).toEqual({ line: 2, dish: 'Борщ', variant: '', ingredient: 'Буряк', quantity: '80', unit: 'г', price: '20', yield: '' });
     expect(rows[5]).toMatchObject({ line: 7, dish: 'Взвар', variant: '300 мл', price: '' });
+    // The semi-finished written for a batch carries its «Вихід» on one row.
+    expect(rows[7]).toMatchObject({ dish: 'Шашлик ПФ', ingredient: 'Шия свинна', quantity: '2', unit: 'кг', yield: '1,9 кг' });
+    expect(rows[9]).toMatchObject({ dish: 'Шашлик', ingredient: 'Шашлик ПФ', quantity: '125', yield: '' });
   });
 
   it('finds the columns by their headings in any order, the optional ones may be missing', () => {
@@ -26,15 +29,17 @@ describe('techCardTable', () => {
       quantity: 4,
       unit: 3,
       price: 0,
+      yield: null,
     });
+    expect(mapColumns(['Страва', 'Складник', 'Кількість', 'Од.', 'Вихід, г'])).toMatchObject({ yield: 4, quantity: 2 });
   });
 
   it('reads a file with no headings in the sample’s order, its first row being data', () => {
-    const { rows, headerFound } = tableToRows(parseDelimited(bytes('Борщ;;Буряк;80;г;20\nБорщ;;Сіль;2;г;\n')));
+    const { rows, headerFound } = tableToRows(parseDelimited(bytes('Борщ;;Буряк;80;г;20;5000\nБорщ;;Сіль;2;г;\n')));
     expect(headerFound).toBe(false);
-    expect(rows.map((r) => [r.line, r.ingredient, r.price])).toEqual([
-      [1, 'Буряк', '20'],
-      [2, 'Сіль', ''],
+    expect(rows.map((r) => [r.line, r.ingredient, r.price, r.yield])).toEqual([
+      [1, 'Буряк', '20', '5000'],
+      [2, 'Сіль', '', ''],
     ]);
   });
 

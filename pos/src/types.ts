@@ -890,6 +890,12 @@ export interface ProductVariant {
    * added to a recipe. No sum reads it. Null or absent = not said.
    */
   prep_loss_bps?: number | null;
+  /**
+   * The composition is written for this many base units of the variant — a
+   * kitchen tech card's «вихід» (migration 116): «шия 2000 г … вихід 1900 г».
+   * Null or absent = for one unit.
+   */
+  recipe_yield?: number | null;
   compare_at_cents?: number | null;
   is_active: boolean;
   /**

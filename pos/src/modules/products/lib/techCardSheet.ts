@@ -12,6 +12,7 @@
 import type { ProductComponentInput } from '@pos/platform';
 import type { CostIndex } from './recipeCost';
 import { lossPercentText, netOf, recipeYield, yieldText } from './recipeLoss';
+import { batchText } from './recipeBatch';
 
 export interface TechCardSheetLine {
   caption: string;
@@ -46,6 +47,8 @@ export function buildTechCardSheet(input: {
   components: readonly ProductComponentInput[];
   index: CostIndex;
   now?: Date;
+  /** The recipe is written for a batch (migration 116): its stated «вихід» is printed, not the estimate. */
+  batch?: { amount: number; unit: string } | null;
 }): TechCardSheet {
   const lines: TechCardSheetLine[] = input.components
     .filter((line) => line.quantity > 0)
@@ -69,7 +72,10 @@ export function buildTechCardSheet(input: {
     size: input.size,
     date: `${two(now.getDate())}.${two(now.getMonth() + 1)}.${now.getFullYear()}`,
     lines,
-    yield: yieldText(recipeYield(input.index, input.components)),
+    yield:
+      input.batch && input.batch.amount > 1
+        ? `${batchText(input.batch.amount, input.batch.unit)} (склад — на всю варку)`
+        : yieldText(recipeYield(input.index, input.components)),
     lossy: lines.some((line) => line.loss !== ''),
   };
 }

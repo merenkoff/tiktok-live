@@ -13,7 +13,13 @@ import {
   seedProduct,
 } from './helpers/pos-fixtures.js';
 import { completeSale, refundSale, voidSale } from '../pos/sales.service.js';
-import { createProduct, getCatalog, updateProduct, updateVariant } from '../pos/products.service.js';
+import {
+  createProduct,
+  getCatalog,
+  listProducts,
+  updateProduct,
+  updateVariant,
+} from '../pos/products.service.js';
 import { adjustStock, listLowStock } from '../pos/stock.service.js';
 import {
   addLine,
@@ -22,7 +28,12 @@ import {
   reverseDocument,
 } from '../pos/stock-documents.service.js';
 import { listOnHand } from '../pos/stock-reports.service.js';
-import { derivedAvailability } from '../pos/composites.service.js';
+import {
+  derivedAvailability,
+  flattenComponents,
+  listTechCards,
+  wholeShare,
+} from '../pos/composites.service.js';
 import { parkCart, reservedFor } from '../pos/parked-carts.service.js';
 import { readMigration } from '../pos/migrations.js';
 import { randomUUID } from 'node:crypto';
@@ -34,6 +45,19 @@ import { randomUUID } from 'node:crypto';
  * back exactly what the sale took (not what the recipe says today), and a
  * composite assembled in advance must not be written off twice.
  */
+/**
+ * The boot-time rebuild of migration 116 without its DDL: the `ALTER TABLE
+ * pos_variants` at its top takes an exclusive lock that, inside a test's
+ * transaction, deadlocks with the other files writing variants right now. On
+ * a real boot the migrations run before the API, alone.
+ */
+function flatRebuild116(): string {
+  const sql = readMigration('116_pos_recipe_yield.sql');
+  const at = sql.indexOf('DELETE FROM pos_product_components_flat;');
+  if (at < 0) throw new Error('116 lost its flat rebuild');
+  return sql.slice(at);
+}
+
 describe.skipIf(!hasDb)('POS composite products', () => {
   let storeId = 0;
   let staffId = 0;
@@ -1197,7 +1221,7 @@ describe.skipIf(!hasDb)('POS composite products', () => {
       expect(await reservedFor(pool, cafeId, syrup)).toBe(0);
     });
 
-    it('matches the boot-time rebuild in migration 045, row for row', async () => {
+    it('matches the boot-time rebuild in migration 116, row for row', async () => {
       // The migration is what runs on every container start; the service's
       // per-store rebuild must leave exactly what it would. Run inside a
       // transaction that is rolled back: the migration rebuilds EVERY store's
@@ -1207,7 +1231,7 @@ describe.skipIf(!hasDb)('POS composite products', () => {
         const read = async () =>
           (
             await client.query(
-              `SELECT variant_id, leaf_variant_id, quantity_per_unit
+              `SELECT variant_id, leaf_variant_id, quantity_per_unit, quantity_exact
                FROM pos_product_components_flat WHERE store_id = $1
                ORDER BY variant_id, leaf_variant_id`,
               [cafeId]
@@ -1216,11 +1240,340 @@ describe.skipIf(!hasDb)('POS composite products', () => {
             Number(r.variant_id),
             Number(r.leaf_variant_id),
             Number(r.quantity_per_unit),
+            Number(r.quantity_exact),
           ]);
         await client.query('BEGIN');
         const incremental = await read();
         expect(incremental.length).toBeGreaterThan(10);
+        // Without a «вихід» the exact share is the same whole number.
+        for (const [, , perUnit, exact] of incremental) expect(exact).toBe(perUnit);
+        // 045 no longer rebuilds once 116's column exists; 116 is the last word.
         await client.query(readMigration('045_pos_product_components_flat.sql'));
+        expect(await read()).toEqual(incremental);
+        await client.query(flatRebuild116());
+        expect(await read()).toEqual(incremental);
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
+    });
+  });
+
+  describe('a recipe written for a batch («вихід», migration 116)', () => {
+    // A kitchen's tech card for a semi-finished is a batch: «шия 2000 г,
+    // приправа 50 г, сіль 10 г, перець 5 г, цибуля 500 г — вихід 1900 г», and
+    // the dish takes 125 г of it. The authored quantities stay whole; the
+    // flat table carries the exact share and its whole write-off per unit.
+    let yStore = 0;
+    let yStaff = 0;
+    const leaf: Record<string, number> = {};
+    let shashlikPf = 0;
+    let shashlik = 0;
+    let dough = 0;
+    let varenykyPf = 0;
+    let varenyky = 0;
+
+    async function ingredient(name: string, unit: string, quantity: number, cost: number) {
+      const product = await createProduct(yStore, {
+        name,
+        sellable: false,
+        variants: [{ attributes: {}, unit, price_cents: 0, cost_cents: cost, quantity }],
+      });
+      return (product!.variants[0] as { id: number }).id;
+    }
+
+    async function semiFinished(
+      name: string,
+      recipeYield: number | null,
+      components: Array<{ component_variant_id: number; quantity: number }>,
+      stockMode: 'own' | 'derived' = 'derived'
+    ) {
+      const product = await createProduct(yStore, {
+        name,
+        kind: 'composite',
+        stock_mode: stockMode,
+        sellable: false,
+        variants: [
+          { attributes: {}, unit: 'г', price_cents: 0, quantity: 0, recipe_yield: recipeYield, components },
+        ],
+      });
+      return { productId: product!.id, variantId: (product!.variants[0] as { id: number }).id };
+    }
+
+    async function dish(name: string, components: Array<{ component_variant_id: number; quantity: number }>) {
+      const product = await createProduct(yStore, {
+        name,
+        kind: 'composite',
+        stock_mode: 'derived',
+        variants: [{ attributes: {}, price_cents: 25000, quantity: 0, components }],
+      });
+      return (product!.variants[0] as { id: number }).id;
+    }
+
+    async function flat(variantId: number): Promise<Record<number, { perUnit: number; exact: number }>> {
+      const rows = await pool.query(
+        `SELECT leaf_variant_id, quantity_per_unit, quantity_exact
+         FROM pos_product_components_flat WHERE store_id = $1 AND variant_id = $2`,
+        [yStore, variantId]
+      );
+      return Object.fromEntries(
+        rows.rows.map((r) => [
+          Number(r.leaf_variant_id),
+          { perUnit: Number(r.quantity_per_unit), exact: Number(r.quantity_exact) },
+        ])
+      );
+    }
+
+    async function stock(variantId: number): Promise<number> {
+      const r = await pool.query(`SELECT quantity FROM pos_stock WHERE variant_id = $1 AND store_id = $2`, [
+        variantId,
+        yStore,
+      ]);
+      return Number(r.rows[0].quantity);
+    }
+
+    beforeAll(async () => {
+      const store = await createTestStore('yield');
+      yStore = store.storeId;
+      yStaff = store.ownerId;
+      await pool.query(`UPDATE pos_stores SET vertical = 'cafe' WHERE id = $1`, [yStore]);
+      leaf.neck = await ingredient('Шия свинна', 'г', 100000, 30);
+      leaf.seasoning = await ingredient('Приправа для м’яса', 'г', 10000, 20);
+      leaf.salt = await ingredient('Сіль', 'г', 10000, 1);
+      leaf.pepper = await ingredient('Перець чорний', 'г', 10000, 60);
+      leaf.onion = await ingredient('Цибуля', 'г', 10000, 2);
+      leaf.lavash = await ingredient('Лаваш', 'г', 10000, 8);
+      leaf.flour = await ingredient('Борошно', 'г', 100000, 2);
+      leaf.egg = await ingredient('Яйця', 'г', 10000, 12);
+      leaf.oil = await ingredient('Олія', 'мл', 10000, 8);
+      leaf.potato = await ingredient('Картопля', 'г', 100000, 2);
+      leaf.sourCream = await ingredient('Сметана', 'г', 10000, 11);
+      leaf.mayo = await ingredient('Майонез', 'г', 10000, 12);
+      leaf.garlic = await ingredient('Часник', 'г', 10000, 16);
+
+      shashlikPf = (
+        await semiFinished('Шашлик свинний ПФ', 1900, [
+          { component_variant_id: leaf.neck, quantity: 2000 },
+          { component_variant_id: leaf.seasoning, quantity: 50 },
+          { component_variant_id: leaf.salt, quantity: 10 },
+          { component_variant_id: leaf.pepper, quantity: 5 },
+          { component_variant_id: leaf.onion, quantity: 500 },
+        ])
+      ).variantId;
+      shashlik = await dish('Шашлик свинний', [
+        { component_variant_id: shashlikPf, quantity: 125 },
+        { component_variant_id: leaf.lavash, quantity: 50 },
+      ]);
+
+      // Three levels: dough → dumplings → the plate.
+      dough = (
+        await semiFinished('Тісто ПФ', 1675, [
+          { component_variant_id: leaf.flour, quantity: 1000 },
+          { component_variant_id: leaf.egg, quantity: 50 },
+          { component_variant_id: leaf.oil, quantity: 45 },
+          { component_variant_id: leaf.salt, quantity: 30 },
+        ])
+      ).variantId;
+      varenykyPf = (
+        await semiFinished('Вареники з картоплею ПФ', 1630, [
+          { component_variant_id: dough, quantity: 1000 },
+          { component_variant_id: leaf.potato, quantity: 700 },
+          { component_variant_id: leaf.onion, quantity: 150 },
+          { component_variant_id: leaf.flour, quantity: 100 },
+        ])
+      ).variantId;
+      varenyky = await dish('Вареники з картоплею', [
+        { component_variant_id: varenykyPf, quantity: 200 },
+        { component_variant_id: leaf.sourCream, quantity: 52 },
+      ]);
+    });
+
+    afterAll(async () => {
+      if (yStore) await dropTestStore(yStore);
+    });
+
+    it('divides a batch into the portion and rounds once, never a leaf away', async () => {
+      const rows = await flat(shashlik);
+      const share = (batch: number) => (125 * batch) / 1900;
+      expect(rows[leaf.neck].exact).toBeCloseTo(share(2000), 5); // 131.578947
+      expect(rows[leaf.neck].perUnit).toBe(132);
+      expect(rows[leaf.seasoning].perUnit).toBe(3); // 3.29
+      expect(rows[leaf.salt].perUnit).toBe(1); // 0.66
+      expect(rows[leaf.pepper].exact).toBeCloseTo(share(5), 5); // 0.33 …
+      expect(rows[leaf.pepper].perUnit).toBe(1); // … still written off
+      expect(rows[leaf.onion].perUnit).toBe(33); // 32.89
+      expect(rows[leaf.lavash]).toEqual({ perUnit: 50, exact: 50 });
+      // The semi-finished itself, per gram: exact shares, and whole write-offs
+      // nobody sells by (it is not on the menu).
+      const pf = await flat(shashlikPf);
+      expect(pf[leaf.neck].exact).toBeCloseTo(2000 / 1900, 9);
+      expect(pf[leaf.salt].perUnit).toBe(1);
+    });
+
+    it('carries the shares through three levels', async () => {
+      const rows = await flat(varenyky);
+      const flour = (200 * 100) / 1630 + ((200 * 1000) / 1630) * (1000 / 1675);
+      const egg = ((200 * 1000) / 1630) * (50 / 1675);
+      const salt = ((200 * 1000) / 1630) * (30 / 1675);
+      expect(rows[leaf.flour].exact).toBeCloseTo(flour, 5);
+      expect(rows[leaf.flour].perUnit).toBe(Math.round(flour)); // 86
+      expect(rows[leaf.egg].exact).toBeCloseTo(egg, 5);
+      expect(rows[leaf.egg].perUnit).toBe(Math.round(egg)); // 4
+      expect(rows[leaf.salt].perUnit).toBe(Math.max(1, Math.round(salt))); // 2
+      expect(rows[leaf.potato].perUnit).toBe(Math.round((200 * 700) / 1630)); // 86
+      expect(rows[leaf.sourCream]).toEqual({ perUnit: 52, exact: 52 });
+    });
+
+    it('sells and refunds the whole per-portion write-off', async () => {
+      const before = { neck: await stock(leaf.neck), pepper: await stock(leaf.pepper), lavash: await stock(leaf.lavash) };
+      const sale = await completeSale({
+        storeId: yStore,
+        staffId: yStaff,
+        items: [{ variant_id: shashlik, quantity: 2 }],
+        payments: [{ method: 'cash', amount_cents: 50000 }],
+      });
+      expect(await stock(leaf.neck)).toBe(before.neck - 264);
+      expect(await stock(leaf.pepper)).toBe(before.pepper - 2);
+      expect(await stock(leaf.lavash)).toBe(before.lavash - 100);
+      await voidSale({ storeId: yStore, staffId: yStaff, saleId: sale!.id });
+      expect(await stock(leaf.neck)).toBe(before.neck);
+      expect(await stock(leaf.pepper)).toBe(before.pepper);
+    });
+
+    it('expands a portion of a batch that a modifier or a counter-made recipe names', async () => {
+      // «Соус: 50 г ПФ» — 50 × the exact share, rounded once per leaf; never
+      // 50 × the per-gram write-off (that would be 50 г of salt).
+      const parts = Object.fromEntries(
+        (await flattenComponents(pool, yStore, [{ component_variant_id: shashlikPf, quantity: 50 }])).map((c) => [
+          c.component_variant_id,
+          c.quantity,
+        ])
+      );
+      expect(parts[leaf.neck]).toBe(Math.round((50 * 2000) / 1900)); // 53
+      expect(parts[leaf.salt]).toBe(1); // 0.26
+      expect(parts[leaf.onion]).toBe(Math.round((50 * 500) / 1900)); // 13
+      expect(wholeShare(0.4)).toBe(1);
+      expect(wholeShare(2.5)).toBe(3);
+    });
+
+    it('produces a made-in-advance batch from exactly the batch', async () => {
+      const sauce = (
+        await semiFinished(
+          'Часниковий соус ПФ',
+          905,
+          [
+            { component_variant_id: leaf.mayo, quantity: 700 },
+            { component_variant_id: leaf.sourCream, quantity: 200 },
+            { component_variant_id: leaf.garlic, quantity: 80 },
+          ],
+          'own'
+        )
+      ).variantId;
+      const before = { mayo: await stock(leaf.mayo), garlic: await stock(leaf.garlic) };
+      const doc = await createDocument({ storeId: yStore, staffId: yStaff, type: 'production' });
+      await addLine({ storeId: yStore, documentId: doc.id, variantId: sauce, quantity: 905 });
+      await postDocument({ storeId: yStore, documentId: doc.id, staffId: yStaff });
+      expect(await stock(leaf.mayo)).toBe(before.mayo - 700);
+      expect(await stock(leaf.garlic)).toBe(before.garlic - 80);
+      expect(await stock(sauce)).toBe(905);
+      // A gram of it costs (700×12 + 200×11 + 80×16) / 905 ≈ 13.127 коп — kept
+      // in thousandths of a kopeck (migration 103), not rounded to 13.
+      const cost = await pool.query(`SELECT cost_milli, cost_cents FROM pos_variants WHERE id = $1`, [sauce]);
+      expect(Number(cost.rows[0].cost_milli)).toBe(Math.round(((700 * 12 + 200 * 11 + 80 * 16) * 1000) / 905));
+      expect(Number(cost.rows[0].cost_cents)).toBe(13);
+    });
+
+    it('costs the tech card by the exact share and shows the batch', async () => {
+      const rows = await listTechCards(pool, yStore);
+      const pf = rows.find((r) => r.variant_id === shashlikPf)!;
+      const batch = 2000 * 30 + 50 * 20 + 10 * 1 + 5 * 60 + 500 * 2;
+      expect(pf.recipe_yield).toBe(1900);
+      expect(pf.batch_cost_cents).toBe(batch);
+      const plate = rows.find((r) => r.variant_id === shashlik)!;
+      expect(plate.recipe_yield).toBeNull();
+      expect(plate.batch_cost_cents).toBeNull();
+      expect(plate.cost_cents).toBe(Math.round((125 * batch) / 1900 + 50 * 8));
+    });
+
+    it('counts how much of a semi-finished the shelves allow in its own grams', async () => {
+      const products = await listProducts(yStore);
+      const pf = products.find((p) => p.variants.some((v) => (v as { id: number }).id === shashlikPf))!;
+      const variant = pf.variants[0] as { quantity: number; recipe_yield: number | null };
+      expect(variant.recipe_yield).toBe(1900);
+      // The tightest shelf, divided by its EXACT share per gram (onion here:
+      // 500 г in 1900) — not by the per-gram write-off rounded to 1 г.
+      const shares = await flat(shashlikPf);
+      let expected = Number.POSITIVE_INFINITY;
+      for (const [leafId, row] of Object.entries(shares)) {
+        expected = Math.min(expected, Math.floor((await stock(Number(leafId))) / row.exact));
+      }
+      expect(expected).toBe(38000);
+      expect(variant.quantity).toBe(expected);
+    });
+
+    it('rebuilds every dish above when the «вихід» changes, and refuses it where it means nothing', async () => {
+      await updateVariant(yStore, shashlikPf, { recipe_yield: 1000 });
+      expect((await flat(shashlik))[leaf.neck].perUnit).toBe(250);
+      await updateVariant(yStore, shashlikPf, { recipe_yield: 1900 });
+      expect((await flat(shashlik))[leaf.neck].perUnit).toBe(132);
+      // 1 is «for one unit»: stored as null.
+      await updateVariant(yStore, dough, { recipe_yield: 1 });
+      expect((await pool.query(`SELECT recipe_yield FROM pos_variants WHERE id = $1`, [dough])).rows[0].recipe_yield).toBeNull();
+      await updateVariant(yStore, dough, { recipe_yield: 1675 });
+
+      await expect(updateVariant(yStore, leaf.salt, { recipe_yield: 100 })).rejects.toThrow(/лише в техкарти/);
+      await expect(updateVariant(yStore, shashlikPf, { recipe_yield: 12.5 })).rejects.toThrow(/ціле число/);
+      await expect(updateVariant(yStore, shashlikPf, { recipe_yield: -3 })).rejects.toThrow(/ціле число/);
+    });
+
+    it('refuses a «вихід» outside the café', async () => {
+      await expect(
+        createProduct(storeId, {
+          name: 'Букет на вихід',
+          kind: 'composite',
+          stock_mode: 'derived',
+          variants: [
+            {
+              attributes: {},
+              price_cents: 100,
+              quantity: 0,
+              recipe_yield: 10,
+              components: [{ component_variant_id: stemId, quantity: 5 }],
+            },
+          ],
+        })
+      ).rejects.toThrow(/лише для кафе/);
+    });
+
+    it('clears the «вихід» when a recipe stops being one', async () => {
+      const own = await semiFinished(
+        'Заготовка, що стане простою',
+        500,
+        [{ component_variant_id: leaf.onion, quantity: 400 }],
+        'own'
+      );
+      await updateVariant(yStore, own.variantId, { components: [] });
+      await updateProduct(yStore, own.productId, { kind: 'simple' });
+      const row = await pool.query(`SELECT recipe_yield FROM pos_variants WHERE id = $1`, [own.variantId]);
+      expect(row.rows[0].recipe_yield).toBeNull();
+    });
+
+    it('matches the boot-time rebuild in migration 116 with yields, row for row', async () => {
+      const client = await pool.connect();
+      try {
+        const read = async () =>
+          (
+            await client.query(
+              `SELECT variant_id, leaf_variant_id, quantity_per_unit, quantity_exact
+               FROM pos_product_components_flat WHERE store_id = $1
+               ORDER BY variant_id, leaf_variant_id`,
+              [yStore]
+            )
+          ).rows.map((r) => [Number(r.variant_id), Number(r.leaf_variant_id), Number(r.quantity_per_unit), String(r.quantity_exact)]);
+        await client.query('BEGIN');
+        const incremental = await read();
+        expect(incremental.length).toBeGreaterThan(15);
+        await client.query(flatRebuild116());
         expect(await read()).toEqual(incremental);
       } finally {
         await client.query('ROLLBACK');

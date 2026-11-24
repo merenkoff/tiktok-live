@@ -56,6 +56,7 @@ function Harness({
   sources,
   onPrint,
   losses = true,
+  batchUnit,
 }: {
   initial?: ProductComponentInput[];
   price?: number;
@@ -64,12 +65,16 @@ function Harness({
   sources?: Parameters<typeof RecipeEditor>[0]['sources'];
   onPrint?: () => void;
   losses?: boolean;
+  /** Ask for a «вихід» (migration 116) in this unit. */
+  batchUnit?: string;
 }) {
   const [products, setProducts] = useState<Product[]>([BEANS, MILK, BACON, POTATO, EGG]);
   const [value, setValue] = useState<ProductComponentInput[]>(initial);
+  const [batch, setBatch] = useState('');
   return (
     <>
       <output data-testid="value">{JSON.stringify(value)}</output>
+      <output data-testid="batch">{batch}</output>
       <RecipeEditor
         value={value}
         options={ingredientOptions(products)}
@@ -93,6 +98,7 @@ function Harness({
         sources={sources}
         onPrint={onPrint}
         losses={losses}
+        batch={batchUnit ? { value: batch, unit: batchUnit, onChange: setBatch } : undefined}
       />
     </>
   );
@@ -407,5 +413,34 @@ describe('RecipeEditor: gross, loss and net', () => {
     render(<Harness initial={[{ component_variant_id: 40, quantity: 125, loss_bps: 2000 }]} onPrint={onPrint} />);
     await user.click(screen.getByTestId('recipe-print'));
     expect(onPrint).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for the «вихід» only when told to, offers the net as one, and costs the whole batch', async () => {
+    const user = userEvent.setup();
+    const lines = [
+      // 2 кг of potato at 20 % loss nets 1600 г; 40 г of beans.
+      { component_variant_id: 40, quantity: 2000, loss_bps: 2000 },
+      { component_variant_id: 10, quantity: 40, loss_bps: 0 },
+    ];
+    const { unmount } = render(<Harness initial={lines} />);
+    expect(screen.queryByTestId('recipe-batch')).not.toBeInTheDocument();
+    unmount();
+
+    render(<Harness initial={lines} batchUnit="г" price={0} />);
+    expect(screen.getByTestId('recipe-batch')).toHaveTextContent('Склад записано на');
+    // The net of the lines (1600 + 40) is what the batch comes to: one tap writes it.
+    await user.click(screen.getByTestId('recipe-batch-take-net'));
+    expect(screen.getByTestId('batch')).toHaveTextContent('1640');
+    const box = screen.getByLabelText('Вихід');
+    expect(box).toHaveValue('1640');
+    // Only whole units are typed: «1,9» loses its comma.
+    await user.clear(box);
+    await user.type(box, '1,900');
+    expect(screen.getByTestId('batch')).toHaveTextContent('1900');
+    // The batch: 2000 × 2 коп + 40 × 60 коп = 64 ₴ for the whole of it; 100 г is 3,37 ₴.
+    expect(screen.getByTestId('recipe-batch-cost')).toHaveTextContent('Собівартість варки 64 ₴');
+    expect(screen.getByTestId('recipe-batch-cost')).toHaveTextContent('100 г — 3,37 ₴');
+    // The net offer is gone once a «вихід» is written.
+    expect(screen.queryByTestId('recipe-batch-take-net')).not.toBeInTheDocument();
   });
 });

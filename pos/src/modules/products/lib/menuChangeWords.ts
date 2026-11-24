@@ -50,6 +50,7 @@ const FIELDS: Record<string, { label: string; kind: Kind }> = {
   'variant.pack_qty': { label: 'Фасування, кількість', kind: 'number' },
   'variant.pack_label': { label: 'Фасування', kind: 'text' },
   'variant.bottle_ml': { label: 'Пляшка за маркою, мл', kind: 'number' },
+  'variant.recipe_yield': { label: 'Вихід техкарти', kind: 'number' },
   'variant.is_active': { label: 'Варіант у продажу', kind: 'bool' },
   'variant.recipe': { label: 'Техкарта', kind: 'list' },
   'group.name': { label: 'Назва групи', kind: 'text' },

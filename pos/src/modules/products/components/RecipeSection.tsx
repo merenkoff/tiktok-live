@@ -14,6 +14,7 @@ import { rowName, type ProductDraft, type VariantDraft } from '../lib/productDra
 import { compositionHint, type ProductShape } from '../lib/productShape';
 import { foodCostBps, recipeCost, type CostIndex } from '../lib/recipeCost';
 import { recipeLineOf } from '../lib/recipeLoss';
+import { recipeYieldOf } from '../lib/productDraft';
 import { buildTechCardSheet } from '../lib/techCardSheet';
 import { useTechCardPrint } from '../lib/useTechCardPrint';
 
@@ -119,7 +120,10 @@ export function RecipeSection({
 
   const figure = (v: VariantDraft): string => {
     if (v.components.length === 0) return 'немає рецепта';
-    const bps = foodCostBps(recipeCost(costs, v.components, v.id), uahInputToCents(v.price));
+    const bps = foodCostBps(
+      recipeCost(costs, v.components, v.id, recipeYieldOf(v.recipeYield) ?? 1),
+      uahInputToCents(v.price)
+    );
     return bps == null ? 'собівартість невідома' : foodCostPercent(bps);
   };
 
@@ -183,6 +187,16 @@ export function RecipeSection({
         create={{ units, onCreated: onProductCreated }}
         sources={[...siblings, ...others]}
         losses={dish}
+        // A kitchen writes a semi-finished for a batch (migration 116).
+        batch={
+          dish
+            ? {
+                value: active.recipeYield ?? '',
+                unit: active.unit,
+                onChange: (recipeYield) => onPatchVariant(active.id, { recipeYield }),
+              }
+            : undefined
+        }
         // What is on screen is what is printed — saved or not.
         onPrint={() =>
           print(
@@ -192,6 +206,7 @@ export function RecipeSection({
               size: active.label,
               components: active.components,
               index: costs,
+              batch: { amount: recipeYieldOf(active.recipeYield) ?? 1, unit: active.unit },
             })
           )
         }

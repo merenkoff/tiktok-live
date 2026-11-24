@@ -45,6 +45,27 @@ const PARITY = {
   costWithoutB: 205,
 };
 
+/**
+ * A semi-finished written for a batch (migration 116) — the same case as
+ * `YIELD` in `pos/src/modules/products/lib/recipeCost.test.ts`: shashlik
+ * semi-finished, 2000 г of neck at 30 коп/г and 10 г of salt at 1 коп/г for a
+ * 1900 г batch; the dish takes 125 г of it and 50 г of lavash at 8 коп/г.
+ *   125 × 60 010 000 / 1900 + 50 × 8000 = 4 348 026.3 thousandths → 43,48 ₴,
+ *   16,72 % of 260 ₴.
+ */
+const YIELD = {
+  neck: 30_000,
+  salt: 1_000,
+  lavash: 8_000,
+  batch: 1900,
+  portion: 125,
+  price: 26_000,
+  costMilli: 4_348_026,
+  cost: 4348,
+  bps: 1672,
+  batchCost: 60_010,
+};
+
 describe.skipIf(!hasDb)('POS recipes: the live cost on the client is this server’s sum', () => {
   let app: FastifyInstance;
   let store: TestStore;
@@ -123,5 +144,57 @@ describe.skipIf(!hasDb)('POS recipes: the live cost on the client is this server
     await pool.query(`UPDATE pos_variants SET cost_milli = 0 WHERE id = $1`, [b]);
     const row = (await listTechCards(pool, store.storeId)).find((r) => r.variant_id === dish);
     expect(row).toMatchObject({ cost_cents: PARITY.costWithoutB, food_cost_bps: null, has_unpriced_leaf: true });
+  });
+
+  it('divides a semi-finished written for a batch the way the client does («вихід»)', async () => {
+    const leaf = async (name: string, cost: number) => {
+      const id = (await seedProduct(store.storeId, { name, priceCents: 0, quantity: 100000 })).variantId;
+      await pool.query(`UPDATE pos_variants SET cost_milli = $2, unit = 'г' WHERE id = $1`, [id, cost]);
+      return id;
+    };
+    const neck = await leaf('Шия', YIELD.neck);
+    const salt = await leaf('Сіль', YIELD.salt);
+    const lavash = await leaf('Лаваш', YIELD.lavash);
+    const prep = await app.inject({
+      method: 'POST',
+      url: '/api/pos/products',
+      headers: auth(store.ownerToken),
+      payload: {
+        name: 'Шашлик ПФ',
+        kind: 'composite',
+        stock_mode: 'derived',
+        sellable: false,
+        variants: [
+          {
+            unit: 'г',
+            price_cents: 0,
+            recipe_yield: YIELD.batch,
+            components: [
+              { component_variant_id: neck, quantity: 2000 },
+              { component_variant_id: salt, quantity: 10 },
+            ],
+          },
+        ],
+      },
+    });
+    expect(prep.statusCode).toBe(201);
+    const prepId = Number(prep.json().variants[0].id);
+    expect(prep.json().variants[0].recipe_yield).toBe(YIELD.batch);
+    const plate = await composite('Шашлик', 'derived', true, YIELD.price, [
+      [prepId, YIELD.portion],
+      [lavash, 50],
+    ]);
+    const rows = await listTechCards(pool, store.storeId);
+    expect(rows.find((r) => r.variant_id === plate)).toMatchObject({
+      cost_milli: YIELD.costMilli,
+      cost_cents: YIELD.cost,
+      food_cost_bps: YIELD.bps,
+      recipe_yield: null,
+      batch_cost_cents: null,
+    });
+    expect(rows.find((r) => r.variant_id === prepId)).toMatchObject({
+      recipe_yield: YIELD.batch,
+      batch_cost_cents: YIELD.batchCost,
+    });
   });
 });

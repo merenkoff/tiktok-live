@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, formatUah } from '@pos/platform';
 import type { Product, ProductVariant } from '@pos/platform';
 import { PageHeader, Puzzle, SectionHead } from '@pos/platform/ui';
+import { productionNeed, productionRuns } from '../lib/productionNeed';
 
 /**
  * Assembling composites: the florist makes ten bouquets, each taking its stems
@@ -64,6 +65,12 @@ export function StockProductionPage() {
   const selected = producible.find((row) => row.variant.id === variantId) ?? null;
   const quantity = Number(qty) || 0;
 
+  /**
+   * The composition is for `recipe_yield` units of the semi-finished (a tech
+   * card's «вихід», migration 116) — 1 when it says nothing.
+   */
+  const perBatch = Math.max(1, selected?.variant.recipe_yield ?? 1);
+
   /** What this run will consume, and whether the shelf can pay for it. */
   const bom = useMemo(() => {
     const components = selected?.variant.components ?? [];
@@ -72,7 +79,7 @@ export function StockProductionPage() {
       for (const variant of product.variants) stockOf.set(variant.id, variant.quantity);
     }
     return components.map((component) => {
-      const need = component.quantity * quantity;
+      const need = productionNeed(component.quantity, quantity, perBatch);
       const have = stockOf.get(component.component_variant_id) ?? 0;
       return {
         ...component,
@@ -81,7 +88,7 @@ export function StockProductionPage() {
         short: need > have,
       };
     });
-  }, [selected, products, quantity]);
+  }, [selected, products, quantity, perBatch]);
 
   const maxRuns = useMemo(() => {
     const components = selected?.variant.components ?? [];
@@ -92,9 +99,9 @@ export function StockProductionPage() {
     }
     return components.reduce((min, component) => {
       const have = stockOf.get(component.component_variant_id) ?? 0;
-      return Math.min(min, Math.floor(have / component.quantity));
+      return Math.min(min, productionRuns(have, component.quantity, perBatch));
     }, Number.POSITIVE_INFINITY);
-  }, [selected, products]);
+  }, [selected, products, perBatch]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();

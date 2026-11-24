@@ -21,6 +21,10 @@ export interface SizeRow {
   /** «M», or «» for a dish with one size. */
   label: string;
   priceCents: number;
+  /** The variant's base unit — what a «вихід» is counted in. */
+  unit: string;
+  /** The recipe is written for this many units (a tech card's «вихід», migration 116); null = for one. */
+  recipeYield: number | null;
   cost: RecipeCost;
   /** Null when it cannot be told honestly — the screen says «—» and why, never 0 %. */
   bps: number | null;
@@ -41,11 +45,21 @@ export interface DishRow {
 
 function sizeRow(index: CostIndex, variant: Product['variants'][number]): SizeRow {
   const components = (variant.components ?? []).map(recipeLineOf);
-  const cost = recipeCost(index, components, variant.id);
+  // A recipe written for a batch (migration 116): one unit is its share.
+  const cost = recipeCost(index, components, variant.id, Math.max(1, variant.recipe_yield ?? 1));
   const bps = foodCostBps(cost, variant.price_cents);
   const problem: DishProblem | null =
     components.length === 0 ? 'empty' : cost.unpriced ? 'unpriced' : bps != null && bps >= 10000 ? 'loss' : null;
-  return { variantId: variant.id, label: variant.label, priceCents: variant.price_cents, cost, bps, problem };
+  return {
+    variantId: variant.id,
+    label: variant.label,
+    priceCents: variant.price_cents,
+    unit: variant.unit,
+    recipeYield: (variant.recipe_yield ?? 1) > 1 ? variant.recipe_yield! : null,
+    cost,
+    bps,
+    problem,
+  };
 }
 
 function recipeRows(products: readonly Product[], index: CostIndex, sold: boolean): DishRow[] {

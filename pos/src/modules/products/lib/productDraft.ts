@@ -53,6 +53,11 @@ export interface VariantDraft {
    * its excise stamp (track ДК, ДК5) — raw text, '' = not one.
    */
   bottleMl: string;
+  /**
+   * A tech card's «вихід» as typed (migration 116): the composition is for this
+   * many base units — '' = for one.
+   */
+  recipeYield: string;
   components: ProductComponentInput[];
 }
 
@@ -121,6 +126,7 @@ export function variantDraftOf(v: ProductVariant): VariantDraft {
     barcode: v.barcode ?? '',
     pack: { qty: v.pack_qty == null ? '' : String(v.pack_qty), label: v.pack_label ?? '' },
     bottleMl: v.bottle_ml == null ? '' : String(v.bottle_ml),
+    recipeYield: v.recipe_yield == null ? '' : String(v.recipe_yield),
     components: (v.components ?? []).map(recipeLineOf),
   };
 }
@@ -253,6 +259,12 @@ function bottleMlOf(text: string | undefined): number | null {
  * Whether the owner changed anything the server would store. Text is compared
  * by what it MEANS — «400» and «400,00» are one price, « KZ-86 » is «KZ-86».
  */
+/** The «вихід» as the server takes it: '', 0 and 1 all mean «for one unit». */
+export function recipeYieldOf(text: string | undefined): number | null {
+  const value = text == null || text.trim() === '' ? null : Number(text);
+  return value == null || !Number.isFinite(value) || value === 0 || value === 1 ? null : value;
+}
+
 export function variantChanged(a: VariantDraft, b: VariantDraft): boolean {
   if (uahInputToCents(a.price) !== uahInputToCents(b.price)) return true;
   if (costMilliOfDraft(a) !== costMilliOfDraft(b)) return true;
@@ -263,6 +275,7 @@ export function variantChanged(a: VariantDraft, b: VariantDraft): boolean {
   if (packQty(a.pack.qty) !== packQty(b.pack.qty)) return true;
   if (a.pack.label.trim() !== b.pack.label.trim()) return true;
   if (bottleMlOf(a.bottleMl) !== bottleMlOf(b.bottleMl)) return true;
+  if (recipeYieldOf(a.recipeYield) !== recipeYieldOf(b.recipeYield)) return true;
   if (!sameAttributes(a.attributes, b.attributes)) return true;
   if (!sameComponents(a.components, b.components)) return true;
   return false;
@@ -300,6 +313,8 @@ export interface VariantPayload {
   pack_qty: number | null;
   pack_label: string;
   bottle_ml: number | null;
+  /** Sent with the composition and cleared with it; absent = the server keeps it. */
+  recipe_yield?: number | null;
   components?: ProductComponentInput[];
 }
 
@@ -330,9 +345,11 @@ export function variantPayload(
     ...(menuOnly
       ? {}
       : components === 'keep'
-        ? { components: v.components }
+        ? // The «вихід» is part of the recipe: it rides with the composition
+          // and is cleared with it.
+          { components: v.components, recipe_yield: recipeYieldOf(v.recipeYield) }
         : components === 'clear'
-          ? { components: [] }
+          ? { components: [], recipe_yield: null }
           : {}),
   };
 }

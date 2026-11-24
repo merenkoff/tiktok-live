@@ -190,6 +190,17 @@ describe('what a save writes', () => {
     expect((await screen.findAllByText('Вкажіть ціну')).length).toBeGreaterThanOrEqual(2);
     expect(updateVariant).not.toHaveBeenCalled();
   });
+
+  it('asks no selling price of what is not sold — an ingredient or a prep keeps 0', async () => {
+    catalog = [card({ sellable: false, variants: [variant(70, 7, 'блакитний / 86', { price_cents: 0 })] } as Partial<Product>)];
+    const user = userEvent.setup();
+    const save = await openCard();
+    await user.type(sku('блакитний / 86'), 'KZ');
+    await user.click(save);
+    await waitFor(() => expect(updateVariant).toHaveBeenCalledTimes(1));
+    expect(updateVariant).toHaveBeenCalledWith(70, expect.objectContaining({ price_cents: 0, sku: 'KZ' }));
+    expect(screen.queryByText('Вкажіть ціну')).not.toBeInTheDocument();
+  });
 });
 
 describe('when a row is refused', () => {

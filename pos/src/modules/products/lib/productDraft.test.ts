@@ -15,6 +15,7 @@ import {
   draftOf,
   emptyDraft,
   isDirty,
+  recipeYieldOf,
   rowName,
   variantChanged,
   costMilliOfDraft,
@@ -199,6 +200,31 @@ describe('variantPayload — the whole row, as the server replaces it', () => {
     expect(variantDraftOf(variant()).bottleMl).toBe('');
     expect(variantPayload({ ...v, bottleMl: '700' }, 'omit').bottle_ml).toBe(700);
     expect(variantPayload({ ...v, bottleMl: '' }, 'omit')).toHaveProperty('bottle_ml', null);
+  });
+});
+
+describe('the «вихід» of a recipe written for a batch (migration 116)', () => {
+  const v = variantDraftOf(variant({ unit: 'г', components: [{ component_variant_id: 1, quantity: 2000 } as never], recipe_yield: 1900 }));
+
+  it('reads it as text and sends it with the composition, cleared with it, never alone', () => {
+    expect(v.recipeYield).toBe('1900');
+    expect(variantDraftOf(variant()).recipeYield).toBe('');
+    expect(variantPayload(v, 'keep')).toMatchObject({ recipe_yield: 1900 });
+    expect(variantPayload({ ...v, recipeYield: '' }, 'keep')).toHaveProperty('recipe_yield', null);
+    expect(variantPayload(v, 'clear')).toMatchObject({ components: [], recipe_yield: null });
+    expect(variantPayload(v, 'omit')).not.toHaveProperty('recipe_yield');
+    // The marketer sends no recipe, so no «вихід» either.
+    expect(variantPayload(v, 'keep', true)).not.toHaveProperty('recipe_yield');
+  });
+
+  it('treats empty, 0 and 1 as «for one unit», and sees a change', () => {
+    expect(recipeYieldOf('')).toBeNull();
+    expect(recipeYieldOf('0')).toBeNull();
+    expect(recipeYieldOf('1')).toBeNull();
+    expect(recipeYieldOf(undefined)).toBeNull();
+    expect(recipeYieldOf('1675')).toBe(1675);
+    expect(variantChanged(v, { ...v, recipeYield: '1000' })).toBe(true);
+    expect(variantChanged({ ...v, recipeYield: '' }, { ...v, recipeYield: '1' })).toBe(false);
   });
 });
 

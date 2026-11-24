@@ -389,7 +389,10 @@ function ProductCard({ id }: { id: string | undefined }) {
       setError('Вкажіть назву');
       return;
     }
-    const unpriced = diff.variants.filter((v) => uahInputToCents(v.price) <= 0);
+    // Only what is sold needs a selling price: an ingredient or a prep (a
+    // semi-finished written for a batch, §7u) keeps 0 — «Техкарти» already
+    // asks the same way (`RecipeDialog`), and the server takes 0.
+    const unpriced = draft.sellable ? diff.variants.filter((v) => uahInputToCents(v.price) <= 0) : [];
     if (unpriced.length > 0) {
       setRowErrors(Object.fromEntries(unpriced.map((v) => [v.id, 'Вкажіть ціну'])));
       setError('Вкажіть ціну');

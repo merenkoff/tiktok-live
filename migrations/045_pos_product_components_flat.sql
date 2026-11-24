@@ -61,6 +61,21 @@ COMMENT ON TABLE pos_product_components_flat IS
 
 -- Full rebuild, every boot. The depth guard only bounds a walk that the
 -- service never lets become cyclic; a vertical allows at most 3 levels.
+--
+-- Only until 116 has added `pos_variants.recipe_yield`: from then on 116 is
+-- the one that rebuilds (it runs later on every boot and knows a recipe
+-- written for a batch). This integer walk would multiply a batch by a batch
+-- (200 g × 1000 g × 1000 g …) and could overflow `::int`, failing the boot,
+-- before 116 got to correct it.
+DO $flat$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = current_schema() AND table_name = 'pos_variants' AND column_name = 'recipe_yield'
+  ) THEN
+    RETURN;
+  END IF;
+
 DELETE FROM pos_product_components_flat;
 
 INSERT INTO pos_product_components_flat (store_id, variant_id, leaf_variant_id, quantity_per_unit)
@@ -89,3 +104,4 @@ JOIN pos_variants lv ON lv.id = w.node_id
 JOIN pos_products lp ON lp.id = lv.product_id
 WHERE NOT (lp.kind = 'composite' AND lp.stock_mode = 'derived')
 GROUP BY w.store_id, w.root_id, w.node_id;
+END $flat$;

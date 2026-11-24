@@ -95,6 +95,11 @@ export function NewVariantFields({
             value={value.components}
             options={partOptions}
             onChange={(components) => set({ components })}
+            batch={
+              (vertical.maxCompositionDepth ?? 1) > 1
+                ? { value: value.recipeYield ?? '', unit: value.unit, onChange: (recipeYield) => set({ recipeYield }) }
+                : undefined
+            }
           />
           <p className="text-[13px] text-sq-muted mt-1.5">{compositionHint(shape)}</p>
         </div>

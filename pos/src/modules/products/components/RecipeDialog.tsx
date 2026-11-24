@@ -17,11 +17,16 @@ import { foodCostBps, recipeCost, type CostIndex } from '../lib/recipeCost';
 import { recipeLineOf } from '../lib/recipeLoss';
 import { buildTechCardSheet } from '../lib/techCardSheet';
 import { useTechCardPrint } from '../lib/useTechCardPrint';
+import { recipeYieldOf } from '../lib/productDraft';
 
 interface SizeDraft {
   id: number;
   label: string;
   price: string;
+  /** The variant's base unit — what its «вихід» is counted in. */
+  unit: string;
+  /** A tech card's «вихід» as typed (migration 116); '' = for one unit. */
+  recipeYield: string;
   components: ProductComponentInput[];
 }
 
@@ -32,6 +37,8 @@ function draftOf(product: Product): SizeDraft[] {
       id: v.id,
       label: v.label,
       price: centsToInput(v.price_cents),
+      unit: v.unit,
+      recipeYield: v.recipe_yield == null ? '' : String(v.recipe_yield),
       components: (v.components ?? []).map(recipeLineOf),
     }));
 }
@@ -138,6 +145,8 @@ export function RecipeDialog({
           await api.updateVariant(size.id, {
             components: size.components,
             price_cents: uahInputToCents(size.price),
+            // The «вихід» is part of the recipe (migration 116); null = for one unit.
+            ...(kitchen ? { recipe_yield: recipeYieldOf(size.recipeYield) } : {}),
           });
         } catch (err) {
           setTab(size.id);
@@ -158,7 +167,10 @@ export function RecipeDialog({
 
   const figure = (size: SizeDraft): string => {
     if (size.components.length === 0) return 'немає рецепта';
-    const bps = foodCostBps(recipeCost(costs, size.components, size.id), uahInputToCents(size.price));
+    const bps = foodCostBps(
+      recipeCost(costs, size.components, size.id, recipeYieldOf(size.recipeYield) ?? 1),
+      uahInputToCents(size.price)
+    );
     return bps == null ? 'собівартість невідома' : foodCostPercent(bps);
   };
 
@@ -283,6 +295,12 @@ export function RecipeDialog({
           create={{ units, onCreated: onProductChanged }}
           sources={sources}
           losses={kitchen}
+          // A kitchen writes a semi-finished for a batch (migration 116).
+          batch={
+            kitchen
+              ? { value: active.recipeYield, unit: active.unit, onChange: (recipeYield) => patch(active.id, { recipeYield }) }
+              : undefined
+          }
           // What is on screen is what is printed — saved or not.
           onPrint={() =>
             print(
@@ -292,6 +310,7 @@ export function RecipeDialog({
                 size: active.label,
                 components: active.components,
                 index: costs,
+                batch: { amount: recipeYieldOf(active.recipeYield) ?? 1, unit: active.unit },
               })
             )
           }

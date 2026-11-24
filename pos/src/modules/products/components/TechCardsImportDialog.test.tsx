@@ -65,7 +65,7 @@ describe('TechCardsImportDialog', () => {
     const [, path, body] = posRequest.mock.calls[0];
     expect(path).toBe('/products/tech-cards/import');
     expect(body).toEqual({
-      rows: [{ line: 2, dish: 'Борщ', variant: '', ingredient: 'Буряк', quantity: '80', unit: 'г', price: '20' }],
+      rows: [{ line: 2, dish: 'Борщ', variant: '', ingredient: 'Буряк', quantity: '80', unit: 'г', price: '20', yield: '' }],
       apply: false,
     });
 

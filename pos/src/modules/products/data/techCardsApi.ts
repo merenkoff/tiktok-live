@@ -20,8 +20,12 @@ export interface TechCardRow {
   stock_mode: 'own' | 'derived';
   /** What it sells for. */
   price_cents: number;
-  /** What it costs to assemble, at the LAST purchase prices of its leaves. */
+  /** What ONE unit costs to assemble, at the LAST purchase prices of its leaves. */
   cost_cents: number;
+  /** The recipe is written for this many units (a tech card's «вихід», migration 116); null = for one. */
+  recipe_yield?: number | null;
+  /** What the whole batch costs, for a recipe with a «вихід»; null otherwise. */
+  batch_cost_cents?: number | null;
   /** Shelves it takes from, expanded. Zero = a recipe that is empty. */
   leaf_count: number;
   /** At least one leaf has never been received with a price. */
@@ -53,6 +57,8 @@ export interface TechCardImportDish {
   cost_cents: number | null;
   price_cents: number | null;
   food_cost_bps: number | null;
+  /** The «вихід» the table gave the dish; null = for one unit (absent on an older server). */
+  recipe_yield?: number | null;
   becomes: 'derived' | 'replaced' | null;
   error: string | null;
 }
@@ -72,7 +78,7 @@ export interface TechCardImportResult {
  * true`, all or nothing — a plan with errors comes back `applied: false`).
  */
 export function importTechCards(
-  rows: Array<{ line: number; dish: string; variant: string; ingredient: string; quantity: string; unit: string; price: string }>,
+  rows: Array<{ line: number; dish: string; variant: string; ingredient: string; quantity: string; unit: string; price: string; yield?: string }>,
   apply: boolean
 ): Promise<TechCardImportResult> {
   return api.posRequest<TechCardImportResult>('post', '/products/tech-cards/import', { rows, apply }, { timeout: 120_000 });

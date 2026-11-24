@@ -43,6 +43,11 @@ export interface CostNode {
   derived: boolean;
   /** Any recipe at all (`derived` or made in advance). */
   recipe: boolean;
+  /**
+   * Its composition is written for this many base units — a tech card's
+   * «вихід» (migration 116); 1 when it says nothing.
+   */
+  recipeYield: number;
   /** Not on the sell screen: an ingredient or a prep. */
   ingredient: boolean;
   components: ProductComponentInput[];
@@ -64,6 +69,7 @@ export function buildCostIndex(products: readonly Product[]): CostIndex {
         prepLossBps: variant.prep_loss_bps ?? null,
         derived: composite && product.stock_mode === 'derived',
         recipe: composite,
+        recipeYield: Math.max(1, variant.recipe_yield ?? 1),
         ingredient: product.sellable === false,
         components: (variant.components ?? []).map((c) => ({
           component_variant_id: c.component_variant_id,
@@ -101,7 +107,10 @@ export function unitCostOf(index: CostIndex, variantId: number, seen: ReadonlySe
     milli += one.milli * part.quantity;
     if (one.unpriced) unpriced = true;
   }
-  return { milli, unpriced };
+  // A recipe written for a batch: one unit of it is its share of the batch —
+  // the server's exact share (`quantity_exact`), so a gram of a sauce written
+  // for 905 г costs 1/905 of the sauce, not a gram of every ingredient.
+  return { milli: milli / node.recipeYield, unpriced };
 }
 
 export interface RecipeLine {
@@ -117,17 +126,32 @@ export interface RecipeLine {
 
 export interface RecipeCost {
   lines: RecipeLine[];
-  /** Σ of the lines in thousandths of a kopeck — a floor when `unpriced`. */
+  /**
+   * What ONE unit costs, in thousandths of a kopeck — Σ of the lines, or its
+   * share of the batch when the recipe is written for one («вихід»). A floor
+   * when `unpriced`.
+   */
   milli: number;
-  /** The same sum as money: rounded once, at the end, as the server rounds it. */
+  /** The same as money: rounded once, at the end, as the server rounds it. */
   cents: number;
+  /** Σ of the lines — the whole batch for a recipe with a «вихід», else the same as `cents`. */
+  batchCents: number;
   unpriced: boolean;
   /** The captions of the lines that have no price, for «не вистачає ціни: …». */
   missing: string[];
 }
 
-/** What one unit of a dish costs to assemble from `components`, line by line. */
-export function recipeCost(index: CostIndex, components: readonly ProductComponentInput[], selfId?: number): RecipeCost {
+/**
+ * What one unit of a dish costs to assemble from `components`, line by line.
+ * `perUnits`: the composition is written for this many units (a tech card's
+ * «вихід»), so one unit is the sum divided by it.
+ */
+export function recipeCost(
+  index: CostIndex,
+  components: readonly ProductComponentInput[],
+  selfId?: number,
+  perUnits = 1
+): RecipeCost {
   const seen = selfId == null ? new Set<number>() : new Set([selfId]);
   const lines: RecipeLine[] = [];
   const missing: string[] = [];
@@ -146,7 +170,15 @@ export function recipeCost(index: CostIndex, components: readonly ProductCompone
       unpriced: one.unpriced,
     });
   }
-  return { lines, milli, cents: milliToCents(milli), unpriced: missing.length > 0, missing };
+  const unit = milli / Math.max(1, perUnits);
+  return {
+    lines,
+    milli: unit,
+    cents: milliToCents(unit),
+    batchCents: milliToCents(milli),
+    unpriced: missing.length > 0,
+    missing,
+  };
 }
 
 /**

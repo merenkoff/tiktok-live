@@ -16,6 +16,7 @@ function node(variantId: number, caption: string, unit: string, recipe = false):
     prepLossBps: null,
     derived: recipe,
     recipe,
+    recipeYield: 1,
     ingredient: true,
     components: [],
   };
@@ -72,5 +73,21 @@ describe('the tech card as a sheet for the kitchen', () => {
     });
     expect(sheet.lossy).toBe(false);
     expect(sheet.lines.map((l) => l.caption)).toEqual(['Масло', 'Варіант 99']);
+  });
+
+  it('prints the stated «вихід» of a recipe written for a batch, not the estimate', () => {
+    const sheet = buildTechCardSheet({
+      store: 'Шабля',
+      title: 'Шашлик свинний ПФ',
+      size: '',
+      components: [{ component_variant_id: 1, quantity: 2000, loss_bps: 0 }],
+      index,
+      batch: { amount: 1900, unit: 'г' },
+    });
+    expect(sheet.yield).toBe('1,9 кг (склад — на всю варку)');
+    // «For one unit» keeps the estimate from the lines.
+    expect(
+      buildTechCardSheet({ store: '', title: '', size: '', components: [{ component_variant_id: 1, quantity: 350 }], index, batch: { amount: 1, unit: 'г' } }).yield
+    ).toBe('≈ 350 г');
   });
 });
