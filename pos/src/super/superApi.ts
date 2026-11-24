@@ -359,6 +359,16 @@ export class SuperApi {
     return data;
   }
 
+  /**
+   * The address a till of this copy gets for a module URL: a private module on
+   * the licence server comes back with this copy's delivery token in its path,
+   * anything else unchanged. For «Перевірити джерело» only — never stored.
+   */
+  async moduleProbeUrl(url: string): Promise<string> {
+    const { data } = await this.client.post<{ url?: unknown }>('/module-remotes/probe-url', { url });
+    return typeof data?.url === 'string' && data.url ? data.url : url;
+  }
+
   /** The marketing site's leads, newest activity first (TechDocs/CRM_LEADS.md). */
   async listLeads(filter: SuperLeadFilter = {}): Promise<SuperLeadList> {
     const params = Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== undefined && v !== ''));

@@ -32,6 +32,7 @@ import { MenuImportError } from '../import/choiceqr.js';
 import * as leads from '../../crm/leads.service.js';
 import * as licenses from '../license/activations.service.js';
 import * as licenseNotice from '../license/notice.js';
+import { moduleUrlForTill } from '../license/moduleToken.js';
 import { errorMessage } from './_shared.js';
 
 export function registerSuperRoutes(fastify: FastifyInstance): void {
@@ -160,6 +161,21 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
       }
       throw error;
     }
+  });
+
+  // «Перевірити джерело» reads a module's signed manifest in the browser. A
+  // private module on this copy's licence server answers a bare URL with 403
+  // while LICENSE_MODULE_GATE is on, so the page asks here for the address a
+  // till of this copy is given at login — the same rewrite, with this copy's
+  // delivery token. Nothing is stored: the stores keep the bare URL, and the
+  // page uses this one for the check alone (TechDocs/POS_SUPER_ADMIN.md).
+  fastify.post('/super/module-remotes/probe-url', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const body = (request.body ?? {}) as { url?: unknown };
+    const url = typeof body.url === 'string' ? body.url.trim() : '';
+    if (!url || url.length > 2048) return reply.code(400).send({ error: 'url required' });
+    reply.header('Cache-Control', 'no-store');
+    return { url: await moduleUrlForTill(url) };
   });
 
   // The QR menu's opens (track W, TechDocs/POS_MENU_WALL.md): the tab's
