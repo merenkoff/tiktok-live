@@ -6,11 +6,13 @@ import { describe, expect, it } from 'vitest';
 import {
   billTotals,
   canCancelRound,
+  carriedOfLine,
   firedLineCents,
   isEmptyBill,
   lineTitle,
   liveRounds,
   previewLineCents,
+  roundCarried,
 } from './bill';
 import type { Bill, BillLine, BillRound } from './types';
 
@@ -155,5 +157,22 @@ describe('billTotals', () => {
       draft: [line({ id: 2 }), line({ id: 3, preview_unit_price_cents: null })],
     });
     expect(billTotals(b).draftExact).toBe(false);
+  });
+});
+
+describe('what the waiters carried («Роздача»)', () => {
+  it('counts a line’s carried plates, never more than were fired', () => {
+    expect(carriedOfLine(line({ quantity: 3, served_quantity: 1 }))).toBe(1);
+    expect(carriedOfLine(line({ quantity: 3, served_quantity: 7 }))).toBe(3);
+    expect(carriedOfLine(line({ quantity: 3 }))).toBe(0);
+  });
+
+  it('says «винесено k з n» only for a round still being served', () => {
+    const items = [line({ id: 1, quantity: 2, served_quantity: 2 }), line({ id: 2, quantity: 3, served_quantity: 1 })];
+    expect(roundCarried(round({ items }))).toEqual({ carried: 3, total: 5 });
+    expect(roundCarried(round({ items: [line({ quantity: 2 })] }))).toBeNull();
+    // A handed-over or cancelled round says so in its own word.
+    expect(roundCarried(round({ items, prep_status: 'served' }))).toBeNull();
+    expect(roundCarried(round({ items, cancelled_at: 'x' }))).toBeNull();
   });
 });
