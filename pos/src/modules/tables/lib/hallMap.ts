@@ -113,8 +113,10 @@ export function tileSum(cents: number): string {
  * How long the guests have been sitting, as `1:05` or `48`.
  *
  * Minutes up to an hour, then hours and minutes — the two forms a waiter
- * actually uses. A clock skew that would read negative is clamped to zero
- * rather than shown: «−2 хв» is a bug report, not a number.
+ * actually uses. From a day up it is days («3 дн»): «180:05» reads as a time
+ * of day, and a bill that old is a forgotten table, not a dinner. A clock
+ * skew that would read negative is clamped to zero rather than shown: «−2 хв»
+ * is a bug report, not a number.
  */
 export function seatedFor(openedAt: string, now: string): string {
   const minutes = Math.max(
@@ -123,7 +125,18 @@ export function seatedFor(openedAt: string, now: string): string {
   );
   if (!Number.isFinite(minutes)) return '';
   if (minutes < 60) return `${minutes} хв`;
+  if (minutes >= 24 * 60) return `${Math.floor(minutes / (24 * 60))} дн`;
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/**
+ * A bill with nothing on it: no round alive, nothing in the draft. The tile
+ * says «Без замовлення» instead of «0 ₴ · 2:40». Unknown (an older backend
+ * sends no `live_rounds`) is never empty — better a zero sum than a table
+ * that looks free of an order it has.
+ */
+export function isEmptySummary(bill: OpenBillSummary): boolean {
+  return bill.live_rounds === 0 && bill.draft_count === 0;
 }
 
 /** Halls with at least one table to show, in the owner's order. */

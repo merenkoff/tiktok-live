@@ -335,12 +335,14 @@ export async function cancelRound(params: {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // The bill first (the order every bill writer takes), and only an open
+    // one: a paid bill's round is a refund, never a cancel.
+    await bills.loadOpenBill(client, params.storeId, params.billId);
     const round = await client.query(
       `SELECT r.id, r.prep_status, r.cancelled_at
          FROM pos_bill_rounds r
-         JOIN pos_bills b ON b.id = r.bill_id
         WHERE r.store_id = $1 AND r.bill_id = $2 AND r.id = $3
-        FOR UPDATE OF r`,
+        FOR UPDATE`,
       [params.storeId, params.billId, params.roundId]
     );
     if (round.rows.length === 0) throw new bills.BillNotFound('Раунд не знайдено');
@@ -348,6 +350,16 @@ export async function cancelRound(params: {
     if (row.cancelled_at != null) throw new bills.BillConflict('Раунд уже скасовано');
     if (row.prep_status === 'served') {
       throw new bills.BillConflict('Раунд уже видано — це повернення, а не скасування');
+    }
+    // A plate of this round may already be on a receipt (a split pays fired
+    // lines whatever the kitchen's state). Cancelling would credit its stock
+    // back while the fiscal receipt says it was sold.
+    const paid = await client.query(
+      `SELECT 1 FROM pos_bill_items WHERE round_id = $1 AND sale_id IS NOT NULL LIMIT 1`,
+      [params.roundId]
+    );
+    if (paid.rows.length > 0) {
+      throw new bills.BillConflict('Частину раунду вже оплачено — це повернення, а не скасування');
     }
 
     const lines = await client.query(
@@ -372,6 +384,7 @@ export async function cancelRound(params: {
       `UPDATE pos_bill_rounds SET cancelled_at = NOW(), cancelled_by = $2 WHERE id = $1`,
       [params.roundId, params.staffId]
     );
+    await client.query(`UPDATE pos_bills SET updated_at = NOW() WHERE id = $1`, [params.billId]);
     await queueRoundCancelPrints(client, params.storeId, params.roundId);
     // Nor was it poured (ДК5-Б): the millilitres go back into their bottles,
     // and its pours stop waiting for the bar.

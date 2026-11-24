@@ -24,6 +24,7 @@ import { refillAllStores } from './pos/fiscal/offline/pool.js';
 import { runBootHeartbeat, runLicenseHeartbeat } from './pos/license/service.js';
 import { refreshModuleToken, refreshModuleTokenOnBoot } from './pos/license/moduleToken.js';
 import { expireParkedCarts } from './pos/parked-carts.service.js';
+import { autoCancelEmptyBills } from './pos/bills.service.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
 
@@ -127,6 +128,18 @@ async function main(): Promise<void> {
         if (expired > 0) logger.info(`🧹 Expired ${expired} parked carts`);
       } catch (error) {
         logger.error('Parked cart expiry cron error', { error });
+      }
+    });
+
+    // Free tables whose bill holds nothing and has sat untouched for hours —
+    // opened by mistake, or every round taken back (TechDocs/POS_TABLES.md
+    // §4.1). Without it such a bill keeps the table «occupied» for days.
+    cron.schedule('*/10 * * * *', async () => {
+      try {
+        const closed = await autoCancelEmptyBills();
+        if (closed > 0) logger.info(`🧹 Closed ${closed} empty table bill(s)`);
+      } catch (error) {
+        logger.error('Empty bill cleanup cron error', { error });
       }
     });
 

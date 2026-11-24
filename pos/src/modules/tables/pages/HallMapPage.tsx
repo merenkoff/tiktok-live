@@ -5,10 +5,11 @@
 // The hall map — the waiter's home screen (phase К4e, TechDocs/POS_TABLES.md
 // §3.1).
 //
-// One tap does both things: an empty table is seated, an occupied one is
-// opened. That is not a shortcut, it is what the server does — `POST /bills`
-// answers with the bill already on the table rather than refusing (К4b) — so
-// the screen has no reason to ask which the waiter meant.
+// A tap on an occupied table opens its bill. A tap on a free one only ASKS
+// (§4.1): «Скільки гостей?» — a number seats the table, «Пізніше» opens the
+// bill screen on the table alone and the first dish seats it. A table somebody
+// merely looked at stays free on everyone's map, instead of reading «0 ₴ ·
+// 2:40» until somebody remembers to close it.
 //
 // The layout is the owner's, in grid CELLS: a table's `pos_x`/`pos_y` and its
 // width and height are cell coordinates (§4.8), so the same room reads the
@@ -38,6 +39,7 @@ import { Bell } from '@pos/platform/ui';
 import { GuestAlertsPanel } from '../components/GuestAlertsPanel';
 import { GuestOrdersPanel } from '../components/GuestOrdersPanel';
 import type { AcceptOutcome } from '../components/GuestOrdersPanel';
+import { GuestsSheet } from '../components/GuestsSheet';
 import { TableTile, ToneLegend } from '../components/TableTile';
 import { hallExtent, seatsOfHall, visibleHalls } from '../lib/hallMap';
 import type { TableSeat } from '../lib/hallMap';
@@ -47,6 +49,7 @@ import { useGuestOrders } from '../lib/useGuestOrders';
 import { useChimeSetting, useNotifyChime } from '../lib/useNotifyChime';
 import { serverMessage, useHallMap } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
+import { newUuid } from '../lib/uuid';
 
 /** `20:41` on the device clock — what «станом на» reads. */
 function savedAtLabel(at: number): string {
@@ -72,6 +75,9 @@ export function HallMapPage(): JSX.Element {
   const [hallId, setHallId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+  // The free table whose «Скільки гостей?» is open, with the key that makes a
+  // repeated seat (a timeout, a double tap) the same bill.
+  const [seating, setSeating] = useState<{ seat: TableSeat; uuid: string } | null>(null);
   // A success worth a line («прийнято»), which is not an error and must not
   // wear the red of one. `warn` is the amber variant: a success that leaves
   // something to know («оплату прийнято, а чек ще не зареєстровано»).
@@ -112,8 +118,14 @@ export function HallMapPage(): JSX.Element {
   );
   const extent = useMemo(() => hallExtent(seats), [seats]);
 
-  async function open(seat: TableSeat): Promise<void> {
+  function open(seat: TableSeat): void {
     if (busy) return;
+    // An occupied table is only read — which works from the mirror too, so a
+    // blink of the Wi-Fi still shows the waiter what table 5 ordered.
+    if (seat.bill) {
+      navigate(`/tables/${seat.bill.id}`);
+      return;
+    }
     // Seating a table is a write, and a write needs the server — the mirror
     // is a cache, not a queue (§4.10). Said here, before the request times
     // out somewhere the waiter cannot see.
@@ -121,12 +133,38 @@ export function HallMapPage(): JSX.Element {
       setBanner('Потрібна мережа, щоб відкрити стіл');
       return;
     }
+    setBanner(null);
+    setSeating({ seat, uuid: newUuid() });
+  }
+
+  /** The table, with no bill yet: the screen opens on it and the first dish seats it. */
+  function later(seat: TableSeat): void {
+    setSeating(null);
+    navigate(`/tables/table/${seat.table.id}`, {
+      state: { table: { id: seat.table.id, name: seat.table.name, hall_name: current?.name ?? '' } },
+    });
+  }
+
+  /** «4» on «Скільки гостей?»: that is what seats the table. */
+  async function seatWith(guests: number): Promise<void> {
+    if (!seating || busy) return;
+    if (!online) {
+      setSeating(null);
+      setBanner('Потрібна мережа, щоб відкрити стіл');
+      return;
+    }
     setBusy(true);
     setBanner(null);
     try {
-      const opened = await tablesApi.seatTable(seat.table.id);
+      const opened = await tablesApi.seatTable(seating.seat.table.id, { guests, clientUuid: seating.uuid });
+      // Somebody seated it a moment ago with another count: ours is the newer word.
+      if (!opened.created && opened.bill.guests !== guests) {
+        await tablesApi.updateBill(opened.bill.id, { guests });
+      }
+      setSeating(null);
       navigate(`/tables/${opened.bill.id}`);
     } catch (err) {
+      setSeating(null);
       setBanner(serverMessage(err, 'Не вдалося відкрити стіл'));
       void refresh();
     } finally {
@@ -444,10 +482,20 @@ export function HallMapPage(): JSX.Element {
               calling={alerts.get(seat.table.id)}
               sentUnseen={alerts.get(seat.table.id)?.sent ?? 0}
               lowScore={alerts.get(seat.table.id)?.low ?? null}
-              onOpen={(s) => void open(s)}
+              onOpen={open}
             />
           ))}
         </div>
+      )}
+
+      {seating && (
+        <GuestsSheet
+          title={`Стіл ${seating.seat.table.name}`}
+          busy={busy}
+          onPick={(n) => void seatWith(n)}
+          onLater={() => later(seating.seat)}
+          onClose={() => setSeating(null)}
+        />
       )}
     </div>
   );

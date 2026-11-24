@@ -11,7 +11,7 @@
 
 import { Bell, ChefHat, Pencil, Receipt, Star, User } from '@pos/platform/ui';
 import type { TableSeat, TableTone } from '../lib/hallMap';
-import { guestsLabel, kitchenState, seatedFor, seatsLabel, tableTone, tileSum } from '../lib/hallMap';
+import { guestsLabel, isEmptySummary, kitchenState, seatedFor, seatsLabel, tableTone, tileSum } from '../lib/hallMap';
 
 /** Ring, fill and dot per state — the board's legend: вільний / мій / зайнятий / просять рахунок. */
 const TONE: Record<TableTone, { tile: string; dot: string | null }> = {
@@ -182,6 +182,12 @@ export function TableTile({
           {tone === 'bill' ? (
             <span className="text-[13px] font-semibold text-sq-danger" data-testid={`table-precheck-${table.id}`}>
               Просять рахунок
+            </span>
+          ) : isEmptySummary(bill) ? (
+            // Seated, nothing ordered (or every round taken back): a zero sum
+            // and a clock would read as dinner. The bill screen offers «Закрити стіл».
+            <span className="text-[13px] font-semibold text-sq-muted" data-testid={`table-empty-${table.id}`}>
+              Без замовлення
             </span>
           ) : (
             <span className="text-[13px] font-semibold text-sq-text tabular-nums">

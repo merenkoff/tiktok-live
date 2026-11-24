@@ -96,7 +96,7 @@ async function tick(ms: number): Promise<void> {
 describe('useBill polling', () => {
   it('shows what another waiter (or an accepted request) changed, without a tap', async () => {
     getBill.mockResolvedValueOnce(bill()).mockResolvedValue(bill([line(3)]));
-    const { result } = renderHook(() => useBill(90, { online: true }));
+    const { result } = renderHook(() => useBill({ billId: 90 }, { online: true }));
     await tick(0);
     expect(result.current.bill?.draft).toHaveLength(0);
     await tick(POLL_MS);
@@ -105,7 +105,7 @@ describe('useBill polling', () => {
 
   it('keeps the very same bill when nothing changed, so an open sheet does not re-render', async () => {
     getBill.mockImplementation(async () => bill([line(3)]));
-    const { result } = renderHook(() => useBill(90, { online: true }));
+    const { result } = renderHook(() => useBill({ billId: 90 }, { online: true }));
     await tick(0);
     const first = result.current.bill;
     await tick(POLL_MS);
@@ -115,7 +115,7 @@ describe('useBill polling', () => {
 
   it('shows no error when a poll fails — a blink of the Wi-Fi is not a broken bill', async () => {
     getBill.mockResolvedValueOnce(bill([line(3)])).mockRejectedValue(new Error('Network Error'));
-    const { result } = renderHook(() => useBill(90, { online: true }));
+    const { result } = renderHook(() => useBill({ billId: 90 }, { online: true }));
     await tick(0);
     await tick(POLL_MS);
     expect(result.current.error).toBeNull();
@@ -125,7 +125,7 @@ describe('useBill polling', () => {
 
   it('recovers a bill that could not be read the first time', async () => {
     getBill.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValue(bill([line(3)]));
-    const { result } = renderHook(() => useBill(90, { online: true }));
+    const { result } = renderHook(() => useBill({ billId: 90 }, { online: true }));
     await tick(0);
     expect(result.current.error).not.toBeNull();
     await tick(POLL_MS);
@@ -135,7 +135,7 @@ describe('useBill polling', () => {
 
   it('reads nothing while the till is out of range', async () => {
     getBill.mockResolvedValue(bill());
-    renderHook(() => useBill(90, { online: false }));
+    renderHook(() => useBill({ billId: 90 }, { online: false }));
     await tick(POLL_MS * 3);
     expect(getBill).not.toHaveBeenCalled();
   });
@@ -150,7 +150,7 @@ describe('useBill polling', () => {
       .mockImplementationOnce(() => new Promise<Bill>((resolve) => (releasePoll = resolve)));
     addLine.mockResolvedValue(bill([line(3, 'Борщ')]));
 
-    const { result } = renderHook(() => useBill(90, { online: true }));
+    const { result } = renderHook(() => useBill({ billId: 90 }, { online: true }));
     await tick(0);
     await tick(POLL_MS); // the poll is now in flight
     expect(getBill).toHaveBeenCalledTimes(2);
@@ -174,7 +174,7 @@ describe('useBill polling', () => {
     getBill.mockResolvedValue(bill());
     addLine.mockImplementation(() => new Promise<Bill>((resolve) => (releaseWrite = resolve)));
 
-    const { result } = renderHook(() => useBill(90, { online: true }));
+    const { result } = renderHook(() => useBill({ billId: 90 }, { online: true }));
     await tick(0);
     getBill.mockClear();
 

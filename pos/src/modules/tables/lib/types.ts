@@ -49,6 +49,12 @@ export interface OpenBillSummary {
   fired_total_cents: number;
   /** Lines typed but not sent: the dot that says «не відправлено». */
   draft_count: number;
+  /**
+   * Rounds not cancelled. With `draft_count` it says the bill holds nothing —
+   * the tile reads «Без замовлення». Absent from an older backend (and from a
+   * mirror one wrote), which then never reads as empty.
+   */
+  live_rounds?: number;
   /** What the table is waiting for, or null when nothing is. */
   prep_status: 'new' | 'ready' | null;
 }

@@ -23,14 +23,21 @@ export function listOpenBills(): Promise<{ bills: OpenBillSummary[] }> {
 /**
  * Seat a table — or open the bill already on it.
  *
- * Tapping an occupied table means «show me it», never «start a second one»,
- * and the server answers with the bill that is already there (К4b). So the
- * map needs no separate «open» and «view»: one tap, one endpoint.
+ * Called only when there is something to put on the bill: the guests' count,
+ * or the first dish (§4.1). Tapping a free table no longer seats it, so a
+ * table someone only looked at stays free. Two waiters seating the same
+ * table land on ONE bill — the server answers with the one already there —
+ * and `client_uuid` makes a repeated request on a bad connection the same
+ * bill rather than an error.
  */
-export function seatTable(tableId: number, guests?: number): Promise<{ bill: { id: number } }> {
-  return posRequest<{ bill: { id: number } }>('post', '/bills', {
+export function seatTable(
+  tableId: number,
+  opts: { guests?: number; clientUuid?: string } = {}
+): Promise<{ bill: Bill; created: boolean }> {
+  return posRequest<{ bill: Bill; created: boolean }>('post', '/bills', {
     table_id: tableId,
-    ...(guests ? { guests } : {}),
+    ...(opts.guests ? { guests: opts.guests } : {}),
+    ...(opts.clientUuid ? { client_uuid: opts.clientUuid } : {}),
   });
 }
 
@@ -38,6 +45,11 @@ export function seatTable(tableId: number, guests?: number): Promise<{ bill: { i
 
 export function getBill(billId: number): Promise<Bill> {
   return posRequest<Bill>('get', `/bills/${billId}`);
+}
+
+/** The guests' count (and the note) of an open bill. */
+export function updateBill(billId: number, patch: { guests?: number; note?: string | null }): Promise<Bill> {
+  return posRequest<Bill>('patch', `/bills/${billId}`, patch);
 }
 
 /**
