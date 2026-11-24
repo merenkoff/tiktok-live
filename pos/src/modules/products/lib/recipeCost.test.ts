@@ -106,6 +106,52 @@ function parityCatalogue(bCost = PARITY.b): Product[] {
   ];
 }
 
+/**
+ * A semi-finished written for a batch (migration 116) — the same case as
+ * `YIELD` in `src/__tests__/pos.recipe-cost-parity.test.ts`, read back from
+ * the server's `listTechCards`.
+ */
+const YIELD = { neck: 30_000, salt: 1_000, lavash: 8_000, batch: 1900, portion: 125, price: 26_000, cost: 4348, bps: 1672, batchCost: 60_010 };
+
+function yieldCatalogue(): Product[] {
+  const prep = product(13, 'Шашлик ПФ', { kind: 'composite', mode: 'derived', parts: [[110, 2000], [120, 10]] });
+  prep.variants[0] = { ...prep.variants[0]!, recipe_yield: YIELD.batch };
+  return [
+    product(11, 'Шия', { cost: YIELD.neck }),
+    product(12, 'Сіль', { cost: YIELD.salt }),
+    prep,
+    product(14, 'Лаваш', { cost: YIELD.lavash }),
+    product(15, 'Шашлик', {
+      kind: 'composite',
+      mode: 'derived',
+      sellable: true,
+      price: YIELD.price,
+      unit: 'шт',
+      parts: [[130, YIELD.portion], [140, 50]],
+    }),
+  ];
+}
+
+describe('recipeCost: a semi-finished written for a batch («вихід»)', () => {
+  it('takes the share of the batch a dish holds — the server’s sum to the kopeck', () => {
+    const index = buildCostIndex(yieldCatalogue());
+    expect(unitCostOf(index, 130).milli).toBeCloseTo((2000 * YIELD.neck + 10 * YIELD.salt) / YIELD.batch, 6);
+    const dish = recipeCost(index, index.get(150)!.components, 150);
+    expect(dish.cents).toBe(YIELD.cost);
+    expect(foodCostBps(dish, YIELD.price)).toBe(YIELD.bps);
+  });
+
+  it('costs the batch itself as the batch, and one unit as its share', () => {
+    const index = buildCostIndex(yieldCatalogue());
+    const prep = recipeCost(index, index.get(130)!.components, 130, YIELD.batch);
+    expect(prep.batchCents).toBe(YIELD.batchCost);
+    expect(prep.milli).toBeCloseTo((YIELD.batchCost * 1000) / YIELD.batch, 6);
+    // Without a «вихід» the batch IS the unit.
+    const plain = recipeCost(index, index.get(130)!.components, 130);
+    expect(plain.batchCents).toBe(plain.cents);
+  });
+});
+
 describe('recipeCost: the server’s sum, live', () => {
   it('folds a recipe assembled on sale, and reads one made ahead as its own shelf', () => {
     const index = buildCostIndex(parityCatalogue());

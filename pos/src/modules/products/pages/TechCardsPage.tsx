@@ -39,6 +39,7 @@ import {
   type IngredientRow,
   type SizeRow,
 } from '../lib/techCardLists';
+import { batchText } from '../lib/recipeBatch';
 
 type Tab = 'dishes' | 'preps' | 'ingredients';
 type Show = 'all' | 'attention' | 'over' | 'none';
@@ -74,7 +75,15 @@ function SizeLine({ size, single, targetBps }: { size: SizeRow; single: boolean;
         {size.priceCents > 0 ? moneyText(size.priceCents) : '—'}
       </span>
       <span className="w-24 shrink-0 text-right text-sq-text">
-        {size.cost.lines.length === 0 ? '—' : size.cost.unpriced ? `від ${moneyText(size.cost.cents)}` : moneyText(size.cost.cents)}
+        {size.cost.lines.length === 0
+          ? '—'
+          : // A batch: what the whole of it costs — a gram of it is a kopeck (migration 116).
+            `${size.cost.unpriced ? 'від ' : ''}${moneyText(size.recipeYield != null ? size.cost.batchCents : size.cost.cents)}`}
+        {size.recipeYield != null && (
+          <span className="block text-[12px] text-sq-muted" data-testid="tech-batch">
+            варка {batchText(size.recipeYield, size.unit)}
+          </span>
+        )}
       </span>
       <span className="flex-1 min-w-[7rem] flex items-center gap-2">
         {size.bps != null ? (

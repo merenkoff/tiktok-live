@@ -45,6 +45,7 @@ const VARIANT_FIELDS: Record<string, string> = {
   pack_label: 'фасування',
   bottle_ml: 'пляшка за маркою',
   prep_loss_bps: 'відходи при обробці',
+  recipe_yield: 'техкарта',
 };
 
 /** What a field holds when nobody set it — a new card's value. */
@@ -65,6 +66,7 @@ const DEFAULTS: Record<string, unknown> = {
   pack_label: null,
   prep_loss_bps: null,
   bottle_ml: null,
+  recipe_yield: null,
 };
 
 /** null, undefined, '' and false-for-flags read alike; numbers by value; recipes by content. */
@@ -83,6 +85,8 @@ function normalize(field: string, value: unknown): unknown {
   }
   if (typeof value === 'boolean') return value ? true : null;
   if (field === 'fiscal_register' && Number(value) === 1) return null;
+  // A recipe «for 1 unit» is the same fact as no «вихід» (stored as null).
+  if (field === 'recipe_yield' && Number(value) === 1) return null;
   if (typeof value === 'number' || (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value))) {
     const n = Number(value);
     return n === 0 && field !== 'fiscal_register' ? null : n;

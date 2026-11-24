@@ -88,6 +88,12 @@ export interface VariantInput {
    * ingredient is added to a recipe; no sum reads it. Null = not said.
    */
   prep_loss_bps?: number | null;
+  /**
+   * The composition is written for this many base units of the variant — a
+   * kitchen tech card's «вихід» (migration 116, POS_VERTICALS.md §7u): «шия
+   * 2000 г … вихід 1900 г». Null = for one unit. Absent on an update = keep.
+   */
+  recipe_yield?: number | null;
 }
 
 /** `undefined` leaves it, `null` or '' clears it, anything else must be 0…99 %. */
@@ -220,6 +226,31 @@ async function assertExciseShape(client: Pick<typeof pool, 'query'>, storeId: nu
  * A bottle's size in ml (ДК5, migration 093), or null: only for a variant
  * counted in millilitres, whole, and within a sane size.
  */
+/**
+ * A tech card's «вихід»: whole base units, only on a composite, only where a
+ * recipe may hold a recipe (the café) — a florist's bouquet is priced as the
+ * sum of its stems (`priceOfComposition`), and a bouquet «per 1900 bouquets»
+ * would break that sum. 1 is the same as «for one unit», so it is stored as
+ * null and a row never carries two spellings of one fact.
+ */
+function normalizeRecipeYield(
+  raw: unknown,
+  current: number | null,
+  kind: ProductKind,
+  vertical: VerticalDefinition
+): number | null {
+  const value = raw === undefined ? current : raw === null || raw === '' || raw === 0 ? null : Number(raw);
+  if (value == null || value === 1) return null;
+  if (!Number.isInteger(value) || value <= 0 || value > 1_000_000) {
+    throw new Error('Вихід техкарти — ціле число від 1 до 1000000 в одиниці товару');
+  }
+  if (kind !== 'composite') throw new Error('Вихід буває лише в техкарти — у складеного товару');
+  if (vertical.maxCompositionDepth <= 1) {
+    throw new Error('Техкарта на вихід (напівфабрикат на варку) — лише для кафе');
+  }
+  return value;
+}
+
 function normalizeBottleMl(raw: unknown, current: number | null, unit: string): number | null {
   const value = raw === undefined ? current : raw === null || raw === '' || raw === 0 ? null : Number(raw);
   if (value == null) return null;
@@ -362,8 +393,14 @@ export async function listProducts(storeId: number, onlyIds?: readonly number[])
             -- its leaves allow (the recipe expanded, migration 045), not the 0
             -- sitting on its own stock row.
             CASE
+              -- A semi-finished written for a batch (116) is counted in its
+              -- grams: how many of THOSE the shelves allow is the exact share,
+              -- not the per-unit write-off rounded up to a whole gram of salt.
               WHEN p.kind = 'composite' AND p.stock_mode = 'derived' THEN COALESCE((
-                SELECT MIN(FLOOR(COALESCE(cs.quantity, 0)::numeric / f.quantity_per_unit))
+                SELECT MIN(FLOOR(COALESCE(cs.quantity, 0)::numeric / CASE
+                         WHEN v.recipe_yield IS NULL THEN f.quantity_per_unit
+                         ELSE COALESCE(f.quantity_exact, f.quantity_per_unit)
+                       END))
                 FROM pos_product_components_flat f
                 LEFT JOIN pos_stock cs
                   ON cs.variant_id = f.leaf_variant_id AND cs.store_id = f.store_id
@@ -413,6 +450,8 @@ export async function listProducts(storeId: number, onlyIds?: readonly number[])
       bottle_ml: row.bottle_ml == null ? null : Number(row.bottle_ml),
       // The ingredient's usual preparation loss, offered by the recipe editor (migration 104).
       prep_loss_bps: row.prep_loss_bps == null ? null : Number(row.prep_loss_bps),
+      // The recipe is written for this many units — a tech card's «вихід» (116).
+      recipe_yield: row.recipe_yield == null ? null : Number(row.recipe_yield),
       // What the price is for: 1000 = per kg/l, a weighed variant (migration 075).
       price_per: Number(row.price_per ?? 1),
     });
@@ -493,14 +532,17 @@ async function insertVariantTx(
   const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
   const pack = normalizePack(variant);
   const bottleMl = normalizeBottleMl(variant.bottle_ml, null, derived.unit);
+  // Before the recipe is set below: `setComponents` rebuilds the expanded
+  // recipes, and they must already divide by this.
+  const recipeYield = normalizeRecipeYield(variant.recipe_yield, null, shape.kind, vertical);
   const barcode =
     emptyToNull(variant.barcode) ??
     (vertical.autoBarcode ? await generateInternalBarcode(storeId, client) : null);
   const variantResult = await client.query(
     `INSERT INTO pos_variants
        (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_milli, compare_at_cents,
-        pack_qty, pack_label, price_per, bottle_ml, prep_loss_bps)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        pack_qty, pack_label, price_per, bottle_ml, prep_loss_bps, recipe_yield)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING id`,
     [
       storeId,
@@ -520,6 +562,7 @@ async function insertVariantTx(
       derived.price_per,
       bottleMl,
       normalizePrepLoss(variant.prep_loss_bps, null),
+      recipeYield,
     ]
   );
   const variantId = Number(variantResult.rows[0].id);
@@ -874,7 +917,17 @@ export async function updateProduct(
     );
     if (result.rows.length === 0) throw new Error('Product not found');
     await assertExciseShape(client, storeId, productId);
-    if (reshaping) await recomputeFlat(client, storeId);
+    if (reshaping) {
+      // A simple product has no recipe, so no «вихід» either (the composition
+      // itself had to be cleared before this shape change was allowed).
+      await client.query(
+        `UPDATE pos_variants SET recipe_yield = NULL, updated_at = NOW()
+         WHERE product_id = $1 AND store_id = $2 AND recipe_yield IS NOT NULL
+           AND (SELECT kind FROM pos_products WHERE id = $1) = 'simple'`,
+        [productId, storeId]
+      );
+      await recomputeFlat(client, storeId);
+    }
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1023,6 +1076,8 @@ export async function updateVariant(
     row.bottle_ml == null ? null : Number(row.bottle_ml),
     derived.unit
   );
+  const currentYield = row.recipe_yield == null ? null : Number(row.recipe_yield);
+  const recipeYield = normalizeRecipeYield(input.recipe_yield, currentYield, shape.kind, vertical);
 
   // Resolve every column against the row we already read, then write them all.
   // The previous COALESCE form could not express "clear this field": an empty
@@ -1049,6 +1104,7 @@ export async function updateVariant(
          price_per = $14,
          bottle_ml = $15,
          prep_loss_bps = $16,
+         recipe_yield = $17,
          updated_at = NOW()
        WHERE id = $12 AND store_id = $13
        RETURNING product_id`,
@@ -1073,11 +1129,17 @@ export async function updateVariant(
         derived.price_per,
         bottleMl,
         normalizePrepLoss(input.prep_loss_bps, row.prep_loss_bps == null ? null : Number(row.prep_loss_bps)),
+        recipeYield,
       ]
     );
     productId = Number(result.rows[0].product_id);
     if (input.components !== undefined) {
       await setComponents(client, storeId, variantId, input.components);
+    } else if (recipeYield !== currentYield) {
+      // A new «вихід» changes every share below it, in this recipe and in
+      // every dish that holds it — a recipe write with no composition in it.
+      await lockRecipes(client, storeId);
+      await recomputeFlat(client, storeId);
     }
     await assertExciseShape(client, storeId, productId);
     await client.query('COMMIT');

@@ -47,6 +47,13 @@ export interface TechCardRowInput {
   quantity?: unknown;
   unit?: unknown;
   price?: unknown;
+  /**
+   * The tech card's «вихід» (§7u): the recipe of this dish/variant is written
+   * for this much of it — «1,9 кг», «1900 г», «40 шт», or a bare number in the
+   * dish's own unit. One value per dish; it may sit on any of its rows.
+   * Empty on every row = the recipe is for ONE unit, as before.
+   */
+  yield?: unknown;
 }
 
 type BaseUnit = 'г' | 'мл' | 'шт';
@@ -82,6 +89,8 @@ export interface PlannedDish {
   cost_cents: number | null;
   price_cents: number | null;
   food_cost_bps: number | null;
+  /** The recipe is written for this many units of the dish (its «вихід»); null = for one. */
+  recipe_yield: number | null;
   /** `derived` — a simple dish that becomes a recipe; `replaced` — a composite whose recipe is rewritten. */
   becomes: 'derived' | 'replaced' | null;
   error: string | null;
@@ -138,6 +147,27 @@ interface ParsedRow {
   unit: BaseUnit;
   /** Kopecks per base unit, or undefined when the row carries no price. */
   cost?: number;
+  /** The «Вихід» cell as read: an amount in a base unit, or in the dish's own unit when bare. */
+  yield?: { amount: number; base: BaseUnit | null; text: string };
+}
+
+/** «1,9 кг» → 1900 г, «1900» → 1900 (the dish's unit), «40 шт» → 40 шт. */
+function parseYield(raw: unknown): { amount: number; base: BaseUnit | null; text: string } | null | 'bad' {
+  const cell = text(raw, 30);
+  if (!cell) return null;
+  const match = /^(\d+(?:[.,]\d+)?)\s*([^\d\s.,]*)\.?$/u.exec(cell.replace(/\s+/g, ' ').trim());
+  if (!match) return 'bad';
+  const amount = Number(match[1].replace(',', '.'));
+  const word = lower(match[2] ?? '');
+  if (!word) {
+    if (!Number.isInteger(amount) || amount <= 0) return 'bad';
+    return { amount, base: null, text: cell };
+  }
+  const unit = UNITS[word];
+  if (!unit) return 'bad';
+  const value = amount * unit.factor;
+  if (value <= 0 || Math.abs(value - Math.round(value)) > 1e-6) return 'bad';
+  return { amount: Math.round(value), base: unit.base, text: cell };
 }
 
 const lower = (s: string) => s.toLocaleLowerCase('uk-UA').replace(/\s+/g, ' ').trim();
@@ -182,6 +212,11 @@ function parseRows(input: TechCardRowInput[], warnings: string[]): { rows: Parse
       quantity: Math.round(quantity),
       unit: unit.base,
     };
+    const yieldCell = parseYield(raw.yield);
+    if (yieldCell === 'bad') {
+      return void errors.push(`${at}: вихід «${text(raw.yield, 30)}» — потрібне ціле число в г, мл або шт (наприклад «1,9 кг» чи «1900»)`);
+    }
+    if (yieldCell) row.yield = yieldCell;
     const priceText = text(raw.price, 20);
     if (priceText) {
       const price = number(priceText);
@@ -320,6 +355,7 @@ async function buildPlan(storeId: number, input: TechCardRowInput[]): Promise<{ 
       cost_cents: null,
       price_cents: null,
       food_cost_bps: null,
+      recipe_yield: null,
       becomes: null,
       error: null,
     };
@@ -353,6 +389,31 @@ async function buildPlan(storeId: number, input: TechCardRowInput[]): Promise<{ 
     if (variant.weighed) {
       dish.error = `«${product.name}» продається на вагу — складена страва на вагу не продається`;
       continue;
+    }
+    // The «Вихід»: one value per dish, in the dish's own unit (a semi-finished
+    // counted in grams is written for 1900 of them).
+    const yieldRows = group.filter((r) => r.yield);
+    if (yieldRows.length) {
+      const unit = variant.unit as BaseUnit;
+      const wrong = yieldRows.find((r) => r.yield!.base != null && r.yield!.base !== unit);
+      if (wrong) {
+        dish.error = `«${product.name}» ведеться в ${unit}, а вихід «${wrong.yield!.text}» — ні (рядок ${wrong.line})`;
+        continue;
+      }
+      const values = [...new Set(yieldRows.map((r) => r.yield!.amount))];
+      if (values.length > 1) {
+        dish.error = `«${product.name}»: різний вихід у рядках ${yieldRows.map((r) => r.line).join(', ')} — має бути один`;
+        continue;
+      }
+      if (vertical.maxCompositionDepth <= 1) {
+        dish.error = `«${product.name}»: техкарта на вихід (напівфабрикат на варку) — лише для кафе`;
+        continue;
+      }
+      if (values[0] > 1_000_000) {
+        dish.error = `«${product.name}»: вихід ${values[0]} ${unit} — забагато`;
+        continue;
+      }
+      dish.recipe_yield = values[0] === 1 ? null : values[0];
     }
     if (product.kind === 'simple') {
       const onHand = product.variants.reduce((n, v) => n + v.on_hand, 0);
@@ -396,8 +457,10 @@ async function buildPlan(storeId: number, input: TechCardRowInput[]): Promise<{ 
       cost += part.quantity * ing.cost_milli;
     }
     // Summed in thousandths, rounded once — the sum «Техкарти» will show.
-    dish.cost_cents = Number.isNaN(cost) ? null : milliToCents(cost);
-    dish.food_cost_bps = !Number.isNaN(cost) && dish.price_cents ? foodCostBps(cost, dish.price_cents) : null;
+    // A recipe written for a batch costs the batch; one unit is its share.
+    const perUnit = cost / (dish.recipe_yield ?? 1);
+    dish.cost_cents = Number.isNaN(cost) ? null : milliToCents(perUnit);
+    dish.food_cost_bps = !Number.isNaN(cost) && dish.price_cents ? foodCostBps(perUnit, dish.price_cents) : null;
   }
 
   // A derived dish needs a recipe on EVERY variant — say which ones are missing.
@@ -518,6 +581,12 @@ export async function applyTechCardImport(storeId: number, input: TechCardRowInp
         );
         reshaped.add(dish.product_id!);
       }
+      // The table is the recipe, «вихід» included: a dish imported without
+      // one is written for one unit, whatever it was before.
+      await client.query(
+        `UPDATE pos_variants SET recipe_yield = $1, updated_at = NOW() WHERE id = $2 AND store_id = $3`,
+        [dish.recipe_yield, dish.variant_id, storeId]
+      );
       await setComponents(
         client,
         storeId,

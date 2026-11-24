@@ -61,3 +61,6 @@ data/gtin-dumps/*
 *.db
 *.sqlite
 *.sqlite3
+
+# Client materials (real stores' private files: tech cards, contracts) — never committed
+clients/

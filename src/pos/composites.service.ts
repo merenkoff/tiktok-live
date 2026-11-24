@@ -382,30 +382,43 @@ async function assertRecipeGraph(
 /**
  * Rewrite the store's expanded recipes from its authored ones.
  *
- * The same walk as the boot-time rebuild in migration 045, scoped to one
- * store — the two are pinned against each other by `pos.composites.test.ts`.
- * Whole-store on purpose: an inner recipe's edit changes every recipe above
- * it, a store's recipes are small, and "which ancestors" is exactly the kind
- * of bookkeeping that drifts. Callers hold the store's recipe lock.
+ * The same walk as the boot-time rebuild in migration 116 (045's until then),
+ * scoped to one store — the two are pinned against each other by
+ * `pos.composites.test.ts`. Whole-store on purpose: an inner recipe's edit
+ * changes every recipe above it, a store's recipes are small, and "which
+ * ancestors" is exactly the kind of bookkeeping that drifts. Callers hold the
+ * store's recipe lock.
+ *
+ * A recipe written for a batch (`pos_variants.recipe_yield`, §7u) divides on
+ * the way down, so the walk carries an exact share: 2000 g of neck in a
+ * 1900 g batch is 131.578947 g in a 125 g portion. `quantity_exact` keeps it;
+ * `quantity_per_unit` — what selling ONE unit writes off — is it rounded,
+ * never below 1, so no leaf is rounded out of the write-off. Without a yield
+ * both are the same whole number they always were.
  */
 export async function recomputeFlat(client: DbClient, storeId: number): Promise<void> {
   await client.query(`DELETE FROM pos_product_components_flat WHERE store_id = $1`, [storeId]);
   await client.query(
-    `INSERT INTO pos_product_components_flat (store_id, variant_id, leaf_variant_id, quantity_per_unit)
+    `INSERT INTO pos_product_components_flat
+       (store_id, variant_id, leaf_variant_id, quantity_per_unit, quantity_exact)
      WITH RECURSIVE walk AS (
        SELECT c.store_id, c.variant_id AS root_id, c.component_variant_id AS node_id,
-              c.quantity::bigint AS qty, 1 AS depth
+              ROUND(c.quantity::numeric / COALESCE(rv.recipe_yield, 1), 12) AS qty, 1 AS depth
        FROM pos_product_components c
+       JOIN pos_variants rv ON rv.id = c.variant_id
        WHERE c.store_id = $1
        UNION ALL
-       SELECT w.store_id, w.root_id, c.component_variant_id, w.qty * c.quantity, w.depth + 1
+       SELECT w.store_id, w.root_id, c.component_variant_id,
+              ROUND(w.qty * c.quantity / COALESCE(nv.recipe_yield, 1), 12), w.depth + 1
        FROM walk w
        JOIN pos_variants nv ON nv.id = w.node_id
        JOIN pos_products np ON np.id = nv.product_id
        JOIN pos_product_components c ON c.variant_id = w.node_id AND c.store_id = w.store_id
        WHERE np.kind = 'composite' AND np.stock_mode = 'derived' AND w.depth < 8
      )
-     SELECT w.store_id, w.root_id, w.node_id, SUM(w.qty)::int
+     SELECT w.store_id, w.root_id, w.node_id,
+            GREATEST(1, ROUND(SUM(w.qty)))::int,
+            ROUND(SUM(w.qty), 10)
      FROM walk w
      JOIN pos_variants lv ON lv.id = w.node_id
      JOIN pos_products lp ON lp.id = lv.product_id
@@ -690,6 +703,41 @@ async function flatOf(
 }
 
 /**
+ * The exact share of each leaf in ONE unit of a stored recipe (migration 116):
+ * a recipe written for a batch makes these fractions, and a caller that
+ * multiplies by a quantity must multiply the fraction and round once, not
+ * multiply the already-rounded per-unit write-off. Without a yield the share
+ * is the same whole number as `quantity_per_unit`.
+ */
+async function flatSharesOf(
+  client: DbClient,
+  storeId: number,
+  variantId: number
+): Promise<Array<{ component_variant_id: number; exact: number }>> {
+  const result = await client.query(
+    `SELECT leaf_variant_id, COALESCE(quantity_exact, quantity_per_unit) AS exact
+     FROM pos_product_components_flat
+     WHERE store_id = $1 AND variant_id = $2
+     ORDER BY leaf_variant_id ASC`,
+    [storeId, variantId]
+  );
+  return result.rows.map((row) => ({
+    component_variant_id: Number(row.leaf_variant_id),
+    exact: Number(row.exact),
+  }));
+}
+
+/**
+ * A whole amount from an exact share × a quantity: rounded half up, never
+ * below 1 — the same rule the flat table's `quantity_per_unit` follows, so a
+ * leaf is never rounded out of a write-off. The share carries ten decimals;
+ * snapping the float back to nine first keeps 0.5 from becoming 0.4999999.
+ */
+export function wholeShare(exact: number): number {
+  return Math.max(1, Math.round(Math.round(exact * 1e9) / 1e9));
+}
+
+/**
  * Expand a composition that is not stored anywhere — a bouquet assembled at
  * the counter, a modifier's write-off — to stock leaves, the way the flat
  * table does for a stored recipe. One lookup, no recursion: a derived
@@ -715,6 +763,9 @@ export async function flattenComponents(
       .map((row) => Number(row.id))
   );
 
+  // Exact shares, summed, then made whole once per leaf: 50 g of a garlic
+  // sauce written for a 905 g batch takes 50 × 700 / 905 g of mayonnaise, not
+  // 50 × (its per-gram write-off rounded up to 1 g).
   const totals = new Map<number, number>();
   const add = (variantId: number, quantity: number): void => {
     totals.set(variantId, (totals.get(variantId) ?? 0) + quantity);
@@ -724,13 +775,13 @@ export async function flattenComponents(
       add(row.component_variant_id, row.quantity);
       continue;
     }
-    const inner = await flatOf(client, storeId, row.component_variant_id);
+    const inner = await flatSharesOf(client, storeId, row.component_variant_id);
     if (inner.length === 0) throw new EmptyCompositionError(row.component_variant_id);
-    for (const leaf of inner) add(leaf.component_variant_id, leaf.quantity * row.quantity);
+    for (const leaf of inner) add(leaf.component_variant_id, leaf.exact * row.quantity);
   }
   return [...totals.entries()].map(([component_variant_id, quantity]) => ({
     component_variant_id,
-    quantity,
+    quantity: wholeShare(quantity),
   }));
 }
 
@@ -1036,8 +1087,15 @@ export function returnStockForSaleItem(
 /** One shelf a composite takes from, with what that shelf last cost. */
 export interface FlatLeaf {
   leafVariantId: number;
-  /** Per ONE unit of the composite, in the leaf's own unit. */
+  /** Per ONE unit of the composite, in the leaf's own unit — what selling one writes off. */
   quantityPerUnit: number;
+  /**
+   * The exact share behind it (migration 116): equal to `quantityPerUnit`
+   * unless a recipe on the way is written for a batch. Cost and production
+   * read this one — a semi-finished counted per gram would otherwise cost
+   * (and take) a whole gram of salt per gram.
+   */
+  quantityExact: number;
   /** Last purchase price of the leaf per its own unit, in thousandths of a kopeck. */
   costMilli: number;
 }
@@ -1053,7 +1111,8 @@ async function loadFlatComposition(
   variantId: number
 ): Promise<FlatLeaf[]> {
   const result = await client.query(
-    `SELECT f.leaf_variant_id, f.quantity_per_unit, v.cost_milli
+    `SELECT f.leaf_variant_id, f.quantity_per_unit,
+            COALESCE(f.quantity_exact, f.quantity_per_unit) AS quantity_exact, v.cost_milli
      FROM pos_product_components_flat f
      JOIN pos_variants v ON v.id = f.leaf_variant_id
      WHERE f.store_id = $1 AND f.variant_id = $2
@@ -1063,6 +1122,7 @@ async function loadFlatComposition(
   return result.rows.map((row: Record<string, unknown>) => ({
     leafVariantId: Number(row.leaf_variant_id),
     quantityPerUnit: Number(row.quantity_per_unit),
+    quantityExact: Number(row.quantity_exact),
     costMilli: Number(row.cost_milli),
   }));
 }
@@ -1090,12 +1150,18 @@ export function sumUnitCost(leaves: FlatLeaf[]): {
   unitCostCents: number;
   hasUnpricedLeaf: boolean;
 } {
-  let unitCostMilli = 0;
+  let exactMilli = 0;
   let hasUnpricedLeaf = false;
   for (const leaf of leaves) {
-    unitCostMilli += leaf.quantityPerUnit * leaf.costMilli;
+    // The exact share (§7u): a gram of a semi-finished written for a batch
+    // costs its fraction of the batch, not a whole gram of every leaf.
+    exactMilli += leaf.quantityExact * leaf.costMilli;
     if (leaf.costMilli <= 0) hasUnpricedLeaf = true;
   }
+  // Whole thousandths of a kopeck, as `cost_milli` is stored; a positive cost
+  // never rounds to 0, which would read as «not known».
+  const rounded = Math.round(Math.round(exactMilli * 1e3) / 1e3);
+  const unitCostMilli = exactMilli > 0 && rounded === 0 ? 1 : rounded;
   return { unitCostMilli, unitCostCents: milliToCents(unitCostMilli), hasUnpricedLeaf };
 }
 
@@ -1154,10 +1220,13 @@ export async function produceComposite(
   // rounded on the way from the ingredients to the thing made of them.
   const { unitCostMilli } = sumUnitCost(leaves);
   for (const leaf of leaves) {
+    // The exact share × the batch, made whole once: 1900 g of a shashlik
+    // semi-finished written for 1900 g takes exactly its 2000 g of neck, not
+    // 1900 × a per-gram write-off rounded to 1 g.
     await applyStockDelta(client, {
       storeId: params.storeId,
       variantId: leaf.leafVariantId,
-      delta: -leaf.quantityPerUnit * params.quantity,
+      delta: -wholeShare(leaf.quantityExact * params.quantity),
       reason: 'writeoff',
       staffId: params.staffId,
       referenceType: params.referenceType,
@@ -1198,6 +1267,14 @@ export interface TechCardRow {
   cost_cents: number;
   /** The same sum before rounding, in thousandths of a kopeck. */
   cost_milli: number;
+  /** The recipe is written for this many units (a tech card's «вихід», §7u); null = for one. */
+  recipe_yield: number | null;
+  /**
+   * What the whole batch costs, for a recipe written for one — the figure a
+   * kitchen thinks in («варка 610 ₴»), where one gram of it costs a kopeck.
+   * Null when the recipe is for one unit.
+   */
+  batch_cost_cents: number | null;
   /** How many shelves it takes from, expanded. Zero = a recipe that is empty. */
   leaf_count: number;
   /** At least one leaf has never been received with a price — see below. */
@@ -1234,7 +1311,8 @@ export async function listTechCards(
             v.unit,
             p.stock_mode,
             v.price_cents,
-            COALESCE(SUM(f.quantity_per_unit * lv.cost_milli), 0)::bigint AS cost_milli,
+            v.recipe_yield,
+            COALESCE(SUM(COALESCE(f.quantity_exact, f.quantity_per_unit) * lv.cost_milli), 0) AS cost_exact,
             COUNT(f.leaf_variant_id)::int                                 AS leaf_count,
             COALESCE(BOOL_OR(lv.cost_milli <= 0), FALSE)                  AS has_unpriced_leaf
      FROM pos_variants v
@@ -1246,14 +1324,19 @@ export async function listTechCards(
        AND v.is_active = TRUE
        AND p.is_active = TRUE
        AND p.kind = 'composite'
-     GROUP BY v.id, p.id, p.name, v.label, v.unit, p.stock_mode, v.price_cents
+     GROUP BY v.id, p.id, p.name, v.label, v.unit, p.stock_mode, v.price_cents, v.recipe_yield
      ORDER BY p.name ASC, v.label ASC, v.id ASC`,
     [storeId]
   );
 
   return result.rows.map((row: Record<string, unknown>) => {
     const price = Number(row.price_cents);
-    const costMilli = Number(row.cost_milli);
+    const costExact = Number(row.cost_exact);
+    // The very rounding `sumUnitCost` makes, so this screen and the
+    // production document that assembles the same recipe agree exactly.
+    const rounded = Math.round(Math.round(costExact * 1e3) / 1e3);
+    const costMilli = costExact > 0 && rounded === 0 ? 1 : rounded;
+    const recipeYield = row.recipe_yield == null ? null : Number(row.recipe_yield);
     const leafCount = Number(row.leaf_count);
     const hasUnpricedLeaf = Boolean(row.has_unpriced_leaf);
     return {
@@ -1267,6 +1350,8 @@ export async function listTechCards(
       price_cents: price,
       cost_cents: milliToCents(costMilli),
       cost_milli: costMilli,
+      recipe_yield: recipeYield,
+      batch_cost_cents: recipeYield == null ? null : milliToCents(costExact * recipeYield),
       leaf_count: leafCount,
       has_unpriced_leaf: hasUnpricedLeaf,
       // Null, never 0: «we cannot tell» and «this dish costs nothing» are

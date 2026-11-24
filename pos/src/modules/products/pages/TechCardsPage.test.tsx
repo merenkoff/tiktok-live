@@ -193,6 +193,8 @@ describe('TechCardsPage', () => {
         { component_variant_id: 30, quantity: 20, loss_bps: 0 },
       ],
       price_cents: 25000,
+      // A café's recipe carries its «вихід» (migration 116): null = for one unit.
+      recipe_yield: null,
     });
     await waitFor(() => expect(screen.queryByTestId('recipe-dialog')).not.toBeInTheDocument());
     expect(screen.getByTestId('tech-cards-flash')).toHaveTextContent('«Борщ»: рецепт збережено.');
@@ -324,6 +326,24 @@ describe('TechCardsPage', () => {
       })
     );
     expect(await screen.findByTestId('tech-cards-flash')).toHaveTextContent('«Яловичина» замінено на «Бекон»: 2 рецепти.');
+  });
+
+  it('shows a prep written for a batch by its «вихід» and what the batch costs, and a dish holding a portion by its share', async () => {
+    // Shashlik prep: 2000 г of beef at 50 коп/г for a 1900 г batch — 1000 ₴ the batch.
+    const prep = product(9, 'Шашлик ПФ', { kind: 'composite', mode: 'derived', parts: [[10, 2000, 'Яловичина']] });
+    prep.variants[0] = { ...prep.variants[0]!, recipe_yield: 1900 };
+    // 125 г of it: 125 × 100 000 000 / 1900 thousandths = 65,79 ₴ of a 260 ₴ dish.
+    const plate = dish(11, 'Шашлик', 26000, [[90, 125, 'Шашлик ПФ']]);
+    getProducts.mockResolvedValue([BEEF, prep, plate]);
+    open('/admin/tech-cards?tab=preps');
+    const row = await screen.findByTestId('tech-size-90');
+    expect(row).toHaveTextContent('1 000 ₴');
+    expect(within(row).getByTestId('tech-batch')).toHaveTextContent('варка 1,9 кг');
+
+    open('/admin/tech-cards');
+    const sizes = await screen.findAllByTestId('tech-size-110');
+    expect(sizes.at(-1)!).toHaveTextContent('65,79 ₴');
+    expect(within(sizes.at(-1)!).queryByTestId('tech-batch')).not.toBeInTheDocument();
   });
 
   it('explains itself to a shop with no recipes yet', async () => {

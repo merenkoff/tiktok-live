@@ -234,6 +234,10 @@ export const POS_MIGRATIONS = [
   '114_pos_refund_act_on_receipt_printer.sql',
   // «Роздача»: who carried how much of a round's line, and when (TechDocs/POS_PASS.md).
   '115_pos_bill_item_serves.sql',
+  // A semi-finished product's recipe written for a batch («вихід»): the yield
+  // on the variant and the exact share in the flat table, which this file
+  // rebuilds on every boot from now on (TechDocs/POS_VERTICALS.md §7u).
+  '116_pos_recipe_yield.sql',
 ] as const;
 
 export function readMigration(file: string): string {

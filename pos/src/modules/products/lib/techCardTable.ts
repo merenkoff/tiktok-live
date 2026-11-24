@@ -13,7 +13,7 @@ import type { DelimitedTable } from '../../../lib/parseDelimited';
  * the preview and the write can never disagree with what this page thought.
  */
 
-export type TechCardColumn = 'dish' | 'variant' | 'ingredient' | 'quantity' | 'unit' | 'price';
+export type TechCardColumn = 'dish' | 'variant' | 'ingredient' | 'quantity' | 'unit' | 'price' | 'yield';
 
 export const TECH_CARD_COLUMNS: Array<{ key: TechCardColumn; title: string; match: RegExp }> = [
   { key: 'dish', title: 'Страва', match: /страв|dish|блюд/i },
@@ -22,6 +22,8 @@ export const TECH_CARD_COLUMNS: Array<{ key: TechCardColumn; title: string; matc
   { key: 'quantity', title: 'Кількість', match: /кількість|к-сть|qty|quantity|вага|обсяг/i },
   { key: 'unit', title: 'Од.', match: /^од|одиниц|unit/i },
   { key: 'price', title: 'Ціна закупівлі', match: /ціна|price|вартість/i },
+  // A semi-finished written for a batch (migration 116): «1,9 кг», «1900 г».
+  { key: 'yield', title: 'Вихід', match: /вихід|выход|yield/i },
 ];
 
 export interface TechCardRowOut {
@@ -32,6 +34,8 @@ export interface TechCardRowOut {
   quantity: string;
   unit: string;
   price: string;
+  /** The dish's «вихід», on any one of its rows; '' = the recipe is for one unit. */
+  yield: string;
 }
 
 /** Which column of the file holds each field; `null` for a missing optional one. */
@@ -56,7 +60,7 @@ export function tableToRows(table: DelimitedTable): { rows: TechCardRowOut[]; he
   const headerFound = mapped.dish != null && mapped.ingredient != null;
   const columns: Record<TechCardColumn, number | null> = headerFound
     ? mapped
-    : { dish: 0, variant: 1, ingredient: 2, quantity: 3, unit: 4, price: 5 };
+    : { dish: 0, variant: 1, ingredient: 2, quantity: 3, unit: 4, price: 5, yield: 6 };
   const body = headerFound ? table.rows : [table.headers, ...table.rows];
   const firstLine = headerFound ? 2 : 1;
   const cell = (row: string[], key: TechCardColumn) => {
@@ -72,19 +76,27 @@ export function tableToRows(table: DelimitedTable): { rows: TechCardRowOut[]; he
       quantity: cell(row, 'quantity'),
       unit: cell(row, 'unit'),
       price: cell(row, 'price'),
+      yield: cell(row, 'yield'),
     }))
     .filter((r) => r.dish || r.ingredient || r.quantity);
   return { rows, headerFound };
 }
 
-/** The sample the dialog offers to download: the headings and two dishes. */
+/**
+ * The sample the dialog offers to download: the headings, two dishes, and a
+ * semi-finished written for a batch with the dish that takes a portion of it.
+ */
 export const TECH_CARD_SAMPLE: string[][] = [
-  ['Страва', 'Варіант', 'Складник', 'Кількість', 'Од.', 'Ціна закупівлі (грн за кг / л / шт)'],
-  ['Борщ', '', 'Буряк', '80', 'г', '20'],
-  ['Борщ', '', 'Капуста', '50', 'г', '15'],
-  ['Борщ', '', 'Яловичина', '70', 'г', '280'],
-  ['Взвар', '1 л', 'Сухофрукти', '120', 'г', '200'],
-  ['Взвар', '1 л', 'Цукор', '30', 'г', '40'],
-  ['Взвар', '300 мл', 'Сухофрукти', '40', 'г', ''],
-  ['Взвар', '300 мл', 'Цукор', '10', 'г', ''],
+  ['Страва', 'Варіант', 'Складник', 'Кількість', 'Од.', 'Ціна закупівлі (грн за кг / л / шт)', 'Вихід (для напівфабрикату на варку)'],
+  ['Борщ', '', 'Буряк', '80', 'г', '20', ''],
+  ['Борщ', '', 'Капуста', '50', 'г', '15', ''],
+  ['Борщ', '', 'Яловичина', '70', 'г', '280', ''],
+  ['Взвар', '1 л', 'Сухофрукти', '120', 'г', '200', ''],
+  ['Взвар', '1 л', 'Цукор', '30', 'г', '40', ''],
+  ['Взвар', '300 мл', 'Сухофрукти', '40', 'г', '', ''],
+  ['Взвар', '300 мл', 'Цукор', '10', 'г', '', ''],
+  ['Шашлик ПФ', '', 'Шия свинна', '2', 'кг', '300', '1,9 кг'],
+  ['Шашлик ПФ', '', 'Цибуля', '500', 'г', '20', ''],
+  ['Шашлик', '', 'Шашлик ПФ', '125', 'г', '', ''],
+  ['Шашлик', '', 'Лаваш', '50', 'г', '80', ''],
 ];

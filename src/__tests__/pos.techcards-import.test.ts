@@ -21,7 +21,7 @@ import {
   type TestStore,
 } from './helpers/pos-fixtures.js';
 
-type Row = { dish: string; variant?: string; ingredient: string; quantity: string; unit: string; price?: string; line?: number };
+type Row = { dish: string; variant?: string; ingredient: string; quantity: string; unit: string; price?: string; line?: number; yield?: string };
 
 describe.skipIf(!hasDb)('POST /api/pos/products/tech-cards/import', () => {
   let app: FastifyInstance;
@@ -203,6 +203,74 @@ describe.skipIf(!hasDb)('POST /api/pos/products/tech-cards/import', () => {
     expect(res.json().warnings.join('\n')).not.toMatch(/найменшу можливу/);
     // 900 мл × 0,3 коп = 2,70 ₴ — a cost, where whole kopecks had to invent «1 коп/мл» (9 ₴).
     expect(res.json().dishes[0]).toMatchObject({ cost_cents: 270 });
+  });
+
+  it('takes a semi-finished written for a batch («Вихід») and the dish that holds a portion of it', async () => {
+    await createProduct(store.storeId, {
+      name: 'Шашлик ПФ',
+      sellable: false,
+      variants: [{ attributes: {}, unit: 'г', price_cents: 0, quantity: 0 }],
+    });
+    await createProduct(store.storeId, { name: 'Шашлик', variants: [{ attributes: {}, unit: 'шт', price_cents: 26000, quantity: 0 }] });
+    const rows: Row[] = [
+      { dish: 'Шашлик ПФ', ingredient: 'Шия свинна', quantity: '2', unit: 'кг', price: '300', yield: '1,9 кг' },
+      { dish: 'Шашлик ПФ', ingredient: 'Сіль', quantity: '10', unit: 'г', price: '10' },
+      { dish: 'Шашлик ПФ', ingredient: 'Цибуля', quantity: '500', unit: 'г', price: '20', yield: '1900' },
+      { dish: 'Шашлик', ingredient: 'Шашлик ПФ', quantity: '125', unit: 'г' },
+      { dish: 'Шашлик', ingredient: 'Лаваш', quantity: '50', unit: 'г', price: '80' },
+    ];
+    const preview = (await send(rows)).json();
+    expect(preview.ok).toBe(true);
+    const pf = preview.dishes.find((d: { dish: string }) => d.dish === 'Шашлик ПФ');
+    // The batch: 2000 × 30 + 10 × 1 + 500 × 2 коп = 61 010 коп for 1900 г — 32 коп a gram.
+    expect(pf).toMatchObject({ recipe_yield: 1900, cost_cents: Math.round(61010 / 1900), error: null });
+    expect(preview.dishes.find((d: { dish: string }) => d.dish === 'Шашлик').recipe_yield).toBeNull();
+
+    expect((await send(rows, true)).json()).toMatchObject({ ok: true, applied: true });
+    const yieldRow = await pool.query(
+      `SELECT v.recipe_yield FROM pos_variants v JOIN pos_products p ON p.id = v.product_id WHERE p.store_id = $1 AND p.name = 'Шашлик ПФ'`,
+      [store.storeId]
+    );
+    expect(Number(yieldRow.rows[0].recipe_yield)).toBe(1900);
+    const flat = await pool.query(
+      `SELECT lp.name, f.quantity_per_unit
+         FROM pos_product_components_flat f
+         JOIN pos_variants v ON v.id = f.variant_id JOIN pos_products p ON p.id = v.product_id
+         JOIN pos_variants lv ON lv.id = f.leaf_variant_id JOIN pos_products lp ON lp.id = lv.product_id
+        WHERE p.store_id = $1 AND p.name = 'Шашлик' ORDER BY lp.name`,
+      [store.storeId]
+    );
+    expect(Object.fromEntries(flat.rows.map((r) => [r.name, Number(r.quantity_per_unit)]))).toEqual({
+      'Лаваш': 50,
+      'Сіль': 1,
+      'Цибуля': 33,
+      'Шия свинна': 132,
+    });
+
+    // The table is the recipe: imported again without «Вихід», it is for one gram.
+    const again = rows.map(({ yield: _y, ...row }) => row);
+    expect((await send(again.slice(0, 3), true)).json()).toMatchObject({ ok: true, applied: true });
+    const cleared = await pool.query(
+      `SELECT v.recipe_yield FROM pos_variants v JOIN pos_products p ON p.id = v.product_id WHERE p.store_id = $1 AND p.name = 'Шашлик ПФ'`,
+      [store.storeId]
+    );
+    expect(cleared.rows[0].recipe_yield).toBeNull();
+  });
+
+  it('refuses a «Вихід» it cannot read, in another unit, or two different ones', async () => {
+    const plan = (
+      await send([
+        { dish: 'Шашлик ПФ', ingredient: 'Сіль', quantity: '10', unit: 'г', yield: '2 л' },
+        { dish: 'Компот', variant: '1 л', ingredient: 'Цукор', quantity: '30', unit: 'г', yield: '9' },
+        { dish: 'Компот', variant: '1 л', ingredient: 'Сухофрукти', quantity: '30', unit: 'г', yield: '10' },
+        { dish: 'Компот', variant: '300 мл', ingredient: 'Цукор', quantity: '10', unit: 'г', yield: 'багато', line: 12 },
+      ])
+    ).json();
+    expect(plan.ok).toBe(false);
+    const dishErrors = plan.dishes.map((d: { error: string | null }) => d.error).filter(Boolean).join('\n');
+    expect(dishErrors).toMatch(/«Шашлик ПФ» ведеться в г, а вихід «2 л» — ні/);
+    expect(dishErrors).toMatch(/«Компот»: різний вихід у рядках/);
+    expect(plan.errors.join('\n')).toMatch(/Рядок 12: вихід «багато»/);
   });
 
   it('is the owner’s alone', async () => {

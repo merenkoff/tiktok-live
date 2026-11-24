@@ -179,6 +179,9 @@ export function TechCardsImportDialog({ onClose, onApplied }: { onClose: () => v
                       {d.dish}
                       {d.variant ? <span className="text-sq-secondary"> · {d.variant}</span> : null}
                       {d.becomes === 'replaced' ? <span className="text-sq-secondary"> · оновиться</span> : null}
+                      {d.recipe_yield != null ? (
+                        <span className="text-sq-secondary"> · склад на вихід {d.recipe_yield.toLocaleString('uk-UA')}</span>
+                      ) : null}
                     </td>
                     <td className="text-right tabular-nums">{d.components.length}</td>
                     <td className="text-right tabular-nums">{d.cost_cents == null ? '—' : formatUah(d.cost_cents)}</td>

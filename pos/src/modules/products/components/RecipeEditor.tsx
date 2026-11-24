@@ -305,6 +305,7 @@ export function RecipeEditor({
   onPrint,
   losses = false,
   emptyText = 'Порожньо. Складений товар без складу продати не можна.',
+  batch,
 }: {
   value: ProductComponentInput[];
   /** What may go into this recipe — already without itself and within the vertical's depth. */
@@ -324,6 +325,13 @@ export function RecipeEditor({
    */
   losses?: boolean;
   emptyText?: string;
+  /**
+   * A kitchen's «вихід» (migration 116): the recipe is written for a batch —
+   * «шия 2000 г … вихід 1900 г» — and the server divides it into what one unit
+   * takes. Asked only where a recipe may hold a recipe (the café); `value` is
+   * the box's text, '' = for one unit.
+   */
+  batch?: { value: string; unit: string; onChange: (next: string) => void };
 }) {
   const [creating, setCreating] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
@@ -348,9 +356,11 @@ export function RecipeEditor({
   const byVariant = useMemo(() => new Map(options.map((option) => [option.variant_id, option])), [options]);
   const used = useMemo(() => new Set(value.map((row) => row.component_variant_id)), [value]);
   const available = useMemo(() => options.filter((option) => !used.has(option.variant_id)), [options, used]);
+  // The recipe is for this many units of the dish; one unit is its share.
+  const perUnits = batch && Number(batch.value) > 1 ? Number(batch.value) : 1;
   const cost = useMemo(
-    () => (money ? recipeCost(money.index, value, money.selfId) : null),
-    [money, value]
+    () => (money ? recipeCost(money.index, value, money.selfId, perUnits) : null),
+    [money, value, perUnits]
   );
 
   // A line that was just picked hands the caret to its quantity.
@@ -384,6 +394,10 @@ export function RecipeEditor({
 
   const toPicker = () => pickerRef.current?.focus();
   const portion = money && grossNet ? yieldText(recipeYield(money.index, value)) : '';
+  // The net of the lines is what a batch comes to: offered as its «вихід».
+  const netWeight = money && batch && (batch.unit === 'г' || batch.unit === 'мл') ? recipeYield(money.index, value).weight : 0;
+  // One unit of a batch costs a kopeck; 100 г (or 1 шт) is the figure a cook reads.
+  const shareStep = batch && (batch.unit === 'г' || batch.unit === 'мл') ? 100 : 1;
 
   const bps = cost && money ? foodCostBps(cost, money.priceCents) : null;
   const suggested =
@@ -603,6 +617,38 @@ export function RecipeEditor({
         )}
       </div>
 
+      {batch && value.length > 0 && (
+        <div className="space-y-1" data-testid="recipe-batch">
+          <label className="flex flex-wrap items-center gap-2 text-[15px] text-sq-secondary">
+            <span>Склад записано на</span>
+            <input
+              className="sq-input w-28 text-right tabular-nums"
+              inputMode="numeric"
+              aria-label="Вихід"
+              placeholder="1"
+              value={batch.value}
+              onChange={(e) => batch.onChange(e.target.value.replace(/\D/g, ''))}
+              data-testid="recipe-batch-yield"
+            />
+            <span>{batch.unit} виходу</span>
+            {batch.value === '' && netWeight > 1 && (
+              <button
+                type="button"
+                className="min-h-11 px-2 text-[15px] font-semibold text-sq-blue hover:bg-sq-sidebar rounded-[10px]"
+                onClick={() => batch.onChange(String(netWeight))}
+                data-testid="recipe-batch-take-net"
+              >
+                вписати нетто {netWeight} {batch.unit}
+              </button>
+            )}
+          </label>
+          <p className="text-[13px] text-sq-muted leading-snug">
+            Як у техкарті на варку: «шия 2000 г, сіль 10 г… вихід 1900 г» — кількості вище на всю варку, а страва
+            бере з неї свої грами. Порожньо — склад на 1 {batch.unit}.
+          </p>
+        </div>
+      )}
+
       {grossNet && value.length > 0 && (
         <p className="text-[13px] text-sq-muted leading-snug" data-testid="recipe-gross-net-hint">
           Брутто — скільки береться зі складу (воно списується й рахується в собівартість). Нетто — скільки
@@ -625,12 +671,26 @@ export function RecipeEditor({
           }`}
           data-testid="recipe-totals"
         >
-          <span className="text-[15px] text-sq-secondary">
-            Собівартість{' '}
-            <strong className="text-[17px] font-bold text-sq-heading tabular-nums">
-              {cost.unpriced ? `від ${moneyText(cost.cents)}` : moneyText(cost.cents)}
-            </strong>
-          </span>
+          {perUnits > 1 ? (
+            // A batch: what the whole of it costs, and the share a cook reads.
+            <span className="text-[15px] text-sq-secondary" data-testid="recipe-batch-cost">
+              Собівартість варки{' '}
+              <strong className="text-[17px] font-bold text-sq-heading tabular-nums">
+                {cost.unpriced ? `від ${moneyText(cost.batchCents)}` : moneyText(cost.batchCents)}
+              </strong>
+              <span className="text-[13px] text-sq-muted">
+                {' '}
+                · {shareStep} {batch!.unit} — {moneyText(Math.round((cost.milli * shareStep) / 1000))}
+              </span>
+            </span>
+          ) : (
+            <span className="text-[15px] text-sq-secondary">
+              Собівартість{' '}
+              <strong className="text-[17px] font-bold text-sq-heading tabular-nums">
+                {cost.unpriced ? `від ${moneyText(cost.cents)}` : moneyText(cost.cents)}
+              </strong>
+            </span>
+          )}
           {cost.unpriced ? (
             <span className="text-[14px] text-amber-800">
               Food cost невідомий — немає ціни: {cost.missing.slice(0, 3).join(', ')}

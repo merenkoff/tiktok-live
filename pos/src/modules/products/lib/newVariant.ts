@@ -6,6 +6,7 @@ import { uahInputToCents } from '@pos/platform';
 import type { AttributeValues, ProductComponentInput } from '@pos/platform';
 import type { ProductShape } from './productShape';
 import { openingStockOf } from './weighedUnit';
+import { recipeYieldOf } from './productDraft';
 
 /** Everything one NEW variant is typed as — text, parsed once when it is sent. */
 export interface NewVariantValues {
@@ -17,10 +18,22 @@ export interface NewVariantValues {
   barcode: string;
   pack: { qty: string; label: string };
   components: ProductComponentInput[];
+  /** A tech card's «вихід» as typed — '' = the composition is for one unit. */
+  recipeYield?: string;
 }
 
 export function emptyVariant(unit: string): NewVariantValues {
-  return { attributes: {}, unit, price: '', qty: '1', sku: '', barcode: '', pack: { qty: '', label: '' }, components: [] };
+  return {
+    attributes: {},
+    unit,
+    price: '',
+    qty: '1',
+    sku: '',
+    barcode: '',
+    pack: { qty: '', label: '' },
+    components: [],
+    recipeYield: '',
+  };
 }
 
 /** Whether anything was typed into the one-variant form beyond its blank start. */
@@ -34,7 +47,8 @@ export function singleTyped(v: NewVariantValues, defaultUnit: string): boolean {
     v.barcode.trim() !== '' ||
     v.pack.qty.trim() !== '' ||
     v.pack.label.trim() !== '' ||
-    v.components.length > 0
+    v.components.length > 0 ||
+    (v.recipeYield ?? '').trim() !== ''
   );
 }
 
@@ -61,7 +75,7 @@ export function newVariantInput(
     quantity: shape === 'derived' || menuOnly ? 0 : openingStockOf(v.qty, weighed),
     pack_qty: v.pack.qty.trim() === '' ? null : Number(v.pack.qty),
     pack_label: v.pack.label.trim() === '' ? null : v.pack.label,
-    ...(shape ? { components: v.components } : {}),
+    ...(shape ? { components: v.components, recipe_yield: recipeYieldOf(v.recipeYield) } : {}),
   };
 }
 
