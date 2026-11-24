@@ -276,7 +276,7 @@ test.describe('portrait tablet', () => {
     let bill = BILL;
     await context.route('**/api/pos/bills', async (route) =>
       route.request().method() === 'POST'
-        ? route.fulfill({ json: { bill: { id: 90 }, created: true } })
+        ? route.fulfill({ json: { bill, created: true } })
         : route.fulfill({ json: { bills: [] } })
     );
     await context.route('**/api/pos/bills/90', async (route) => route.fulfill({ json: bill }));
@@ -299,7 +299,9 @@ test.describe('portrait tablet', () => {
     await page.reload();
     await page.waitForURL(/\/tablet\/register$/);
     await page.goto('/tablet/tables');
+    // A free table asks how many guests first (TechDocs/POS_TABLES.md §4.14).
     await page.getByTestId('table-tile-11').click();
+    await page.getByTestId('guests-2').click();
     await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
 
     // No column for the bill at this width: the bar carries the figures.
