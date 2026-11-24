@@ -6,7 +6,7 @@
 // `kitchen.test.ts`; nothing here touches React or the network.
 
 import type { CatalogItem } from '@pos/platform';
-import type { KitchenOrder } from '../types';
+import type { KitchenOrder, KitchenOrderItem } from '../types';
 
 /** Waiting longer than this is worth a colour; longer than the second, a louder one. */
 export const WAIT_WARN_S = 300;
@@ -87,6 +87,24 @@ export function orderSubLabel(
 ): string | null {
   if (!isRound(order) || order.round_seq == null) return null;
   return `раунд ${order.round_seq}`;
+}
+
+/** How many of a line's plates the waiters have carried («Роздача»); 0 when nobody says. */
+export function carriedOf(item: Pick<KitchenOrderItem, 'quantity' | 'served_quantity'>): number {
+  return Math.min(item.quantity, Math.max(0, item.served_quantity ?? 0));
+}
+
+/**
+ * What of a round has gone to the table — «Винесено 3 з 5» on the card —
+ * or null while nothing has (and always for a counter sale, which leaves the
+ * counter whole). A partly carried round keeps its card: the rest is still
+ * the kitchen's to hand over.
+ */
+export function carriedSummary(order: Pick<KitchenOrder, 'items'>): { carried: number; total: number; left: number } | null {
+  const total = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const carried = order.items.reduce((sum, item) => sum + carriedOf(item), 0);
+  if (carried === 0) return null;
+  return { carried, total, left: total - carried };
 }
 
 /**

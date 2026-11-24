@@ -8,6 +8,8 @@
 
 import { useEffect, useReducer } from 'react';
 import {
+  carriedOf,
+  carriedSummary,
   formatWait,
   orderKey,
   orderLabel,
@@ -145,6 +147,9 @@ function OrderCard({
   const stations = new Set<Station>();
   for (const item of order.items) for (const s of item.stations) stations.add(s);
   const sub = orderSubLabel(order);
+  // «Роздача»: what of a round the waiters already carried. The card stays
+  // until the last plate goes; the rest is still the kitchen's to hand over.
+  const carried = carriedSummary(order);
 
   return (
     <article
@@ -167,6 +172,11 @@ function OrderCard({
             </p>
           ) : (
             <p className="text-[13px] text-sq-secondary">за стійкою</p>
+          )}
+          {carried && (
+            <p className="text-[13px] font-semibold text-sq-success" data-testid="kitchen-order-carried">
+              Винесено {carried.carried} з {carried.total}
+            </p>
           )}
           {stations.size > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -193,18 +203,35 @@ function OrderCard({
       </div>
 
       <ul className="flex flex-col gap-1 py-2 shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
-        {order.items.map((item) => (
-          <li key={item.id} className="flex gap-2.5 text-base leading-snug text-sq-text">
-            <span className="font-bold tabular-nums shrink-0">{item.quantity}×</span>
-            <span className="min-w-0">
-              {item.product_name}
-              {/* `variant_label` is the fired caption, «M · вівсяне» — the answers
-                  are already in it (`lineCaption`), so they are not listed again. */}
-              {item.variant_label && <span className="text-sq-secondary"> {item.variant_label}</span>}
-              {item.note && <span className="font-semibold text-sq-warning"> · {item.note}</span>}
-            </span>
-          </li>
-        ))}
+        {order.items.map((item) => {
+          const out = carriedOf(item);
+          const gone = out >= item.quantity;
+          return (
+            <li
+              key={item.id}
+              className={`flex gap-2.5 text-base leading-snug ${gone ? 'text-sq-muted' : 'text-sq-text'}`}
+              data-testid={`kitchen-line-${item.id}`}
+              data-carried={gone ? 'all' : out > 0 ? 'part' : 'none'}
+            >
+              <span className={`font-bold tabular-nums shrink-0 ${gone ? 'line-through' : ''}`}>{item.quantity}×</span>
+              <span className="min-w-0">
+                <span className={gone ? 'line-through' : ''}>
+                  {item.product_name}
+                  {/* `variant_label` is the fired caption, «M · вівсяне» — the answers
+                      are already in it (`lineCaption`), so they are not listed again. */}
+                  {item.variant_label && <span className={gone ? '' : 'text-sq-secondary'}> {item.variant_label}</span>}
+                </span>
+                {item.note && !gone && <span className="font-semibold text-sq-warning"> · {item.note}</span>}
+                {out > 0 && (
+                  <span className="text-[13px] font-semibold text-sq-success">
+                    {' '}
+                    · винесено {out} з {item.quantity}
+                  </span>
+                )}
+              </span>
+            </li>
+          );
+        })}
       </ul>
 
       {order.note && <p className="text-sm text-sq-secondary -mt-1">Замовлення: {order.note}</p>}
@@ -218,7 +245,7 @@ function OrderCard({
         data-testid={actionTestId}
       >
         {action === 'ready' && <Check size={20} aria-hidden />}
-        {action === 'ready' ? 'Готово' : 'Видано'}
+        {action === 'ready' ? 'Готово' : carried ? `Видати решту (${carried.left})` : 'Видано'}
       </button>
     </article>
   );

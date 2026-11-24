@@ -23,6 +23,12 @@ export interface KitchenOrderItem {
   note: string;
   /** Where the line is made, from its product's tags; empty = the kitchen. */
   stations: Station[];
+  /**
+   * A round's line only: how many of `quantity` the waiters have already
+   * carried to the table («Роздача», TechDocs/POS_PASS.md). Absent on a
+   * counter sale's line and from a server older than migration 115.
+   */
+  served_quantity?: number;
 }
 
 export interface KitchenOrder {
