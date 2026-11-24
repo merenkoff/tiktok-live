@@ -636,8 +636,13 @@ export async function createXReport(opts: AuthedOpts): Promise<CheckboxReport> {
   return result;
 }
 
-export async function getReportText(opts: AuthedOpts, reportId: string): Promise<string> {
-  const res = await fetch(`${BASE_URL}/reports/${reportId}/text`, {
+/**
+ * `width` — characters per line (Checkbox: 10..250, its default 42, which
+ * wraps on a 58 mm roll of 32). Absent = Checkbox's default.
+ */
+export async function getReportText(opts: AuthedOpts, reportId: string, width?: number): Promise<string> {
+  const query = width ? `?width=${Math.min(250, Math.max(10, Math.trunc(width)))}` : '';
+  const res = await fetch(`${BASE_URL}/reports/${reportId}/text${query}`, {
     method: 'GET',
     headers: {
       'x-license-key': opts.licenseKey,

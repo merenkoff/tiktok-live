@@ -563,6 +563,12 @@ export interface FiscalCallCtx {
    * fail. Making this required means nobody can forget to pass it.
    */
   signal: AbortSignal;
+  /**
+   * Characters per line for a text render the provider makes for us (X/Z
+   * reports): the store's `receipt_width`, so the report fits its roll when
+   * printed. Optional; an adapter that cannot honour it ignores it.
+   */
+  textWidth?: number;
 }
 
 /**

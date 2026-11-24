@@ -376,6 +376,19 @@ describe('createXReport / getReportText', () => {
     const text = await getReportText(authed, 'report-1');
     expect(text).toBe('X-ЗВІТ №1');
   });
+
+  it('asks for the roll’s width when it is given, kept inside Checkbox’s 10..250', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'Z' });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    await getReportText(authed, 'report-1', 32);
+    await getReportText(authed, 'report-1', 999);
+    await getReportText(authed, 'report-1');
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      'https://api.checkbox.in.ua/api/v1/reports/report-1/text?width=32',
+      'https://api.checkbox.in.ua/api/v1/reports/report-1/text?width=250',
+      'https://api.checkbox.in.ua/api/v1/reports/report-1/text',
+    ]);
+  });
 });
 
 describe('signOutRequest', () => {

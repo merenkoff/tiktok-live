@@ -29,6 +29,7 @@ import {
   requestHandover,
 } from '../data/fiscalApi';
 import { FiscalErrorCard } from './FiscalErrorCard';
+import { ReportText } from './ReportText';
 import { deviceLabel } from '../lib/deviceLabel';
 import type { FiscalStatus } from '../types';
 
@@ -204,14 +205,7 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
       )}
 
       {note && <p className="text-[15px] text-sq-secondary">{note}</p>}
-      {zReportText && (
-        <div>
-          <p className="text-[13px] font-semibold text-sq-secondary">Z-звіт</p>
-          <pre className="mt-2 max-h-64 overflow-auto rounded-xl bg-sq-sidebar p-3 font-mono text-[13px] whitespace-pre-wrap">
-            {zReportText}
-          </pre>
-        </div>
-      )}
+      {zReportText && <ReportText title="Z-звіт" text={zReportText} />}
       {Boolean(error) && <FiscalErrorCard error={error} />}
     </section>
   );
