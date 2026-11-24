@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest';
 import type { CatalogItem } from '@pos/platform';
 import {
   applyPrep,
+  carriedOf,
+  carriedSummary,
   clockOffset,
   formatWait,
   groupStopList,
@@ -167,5 +169,31 @@ describe('serverMessage', () => {
     expect(serverMessage({ response: { data: { error: '  ' } } }, 'x')).toBe('x');
     expect(serverMessage(new Error('boom'), 'x')).toBe('x');
     expect(serverMessage(null, 'x')).toBe('x');
+  });
+});
+
+describe('what of a round the waiters carried («Роздача»)', () => {
+  const item = (quantity: number, served?: number) => ({
+    id: 1,
+    product_name: 'Борщ',
+    variant_label: '',
+    quantity,
+    modifiers: [],
+    note: '',
+    stations: [],
+    ...(served === undefined ? {} : { served_quantity: served }),
+  });
+
+  it('counts a line’s carried plates, never more than were fired', () => {
+    expect(carriedOf(item(3, 1))).toBe(1);
+    expect(carriedOf(item(3, 5))).toBe(3);
+    expect(carriedOf(item(3))).toBe(0);
+  });
+
+  it('says «винесено k з n» only once something has gone', () => {
+    expect(carriedSummary({ items: [item(3, 1), item(2, 0)] })).toEqual({ carried: 1, total: 5, left: 4 });
+    expect(carriedSummary({ items: [item(3, 0), item(2)] })).toBeNull();
+    // A counter sale's lines carry no such field at all.
+    expect(carriedSummary({ items: [item(1)] })).toBeNull();
   });
 });

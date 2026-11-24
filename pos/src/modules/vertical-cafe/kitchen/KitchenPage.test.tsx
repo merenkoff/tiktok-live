@@ -177,6 +177,52 @@ describe('KitchenPage', () => {
     await waitFor(() => expect(screen.queryByTestId('kitchen-order-sale-7')).toBeNull());
   });
 
+  it('shows a round the waiters carried in part, and hands over the rest', async () => {
+    const round = {
+      id: 9,
+      kind: 'round',
+      title: 'Стіл 5 · раунд 1',
+      table_name: '5',
+      round_seq: 1,
+      order_no: null,
+      receipt_number: '',
+      prep_status: 'ready',
+      created_at: new Date(Date.now() - 300_000).toISOString(),
+      ready_at: new Date().toISOString(),
+      staff_name: 'Оля',
+      note: null,
+      items: [
+        { id: 90, product_name: 'Борщ', variant_label: '', quantity: 2, modifiers: [], note: '', stations: ['kitchen'], served_quantity: 2 },
+        { id: 91, product_name: 'Вареники', variant_label: '', quantity: 3, modifiers: [], note: '', stations: ['kitchen'], served_quantity: 1 },
+      ],
+    };
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'get' && path === '/kitchen/orders') return { orders: [round], now: new Date().toISOString() };
+      if (method === 'patch' && path === '/kitchen/rounds/9/prep') {
+        return { id: 9, prep_status: 'served', ready_at: 'x', served_at: 'y' };
+      }
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<KitchenPage />);
+    const card = await screen.findByTestId('kitchen-order-round-9');
+    expect(within(card).getByTestId('kitchen-order-carried')).toHaveTextContent('Винесено 3 з 5');
+    expect(within(card).getByTestId('kitchen-line-90')).toHaveAttribute('data-carried', 'all');
+    expect(within(card).getByTestId('kitchen-line-91')).toHaveAttribute('data-carried', 'part');
+    expect(within(card).getByTestId('kitchen-line-91')).toHaveTextContent('винесено 1 з 3');
+    const button = within(card).getByTestId('kitchen-served-round-9');
+    expect(button).toHaveTextContent('Видати решту (2)');
+    await user.click(button);
+    expect(posRequest).toHaveBeenCalledWith('patch', '/kitchen/rounds/9/prep', { prep_status: 'served' });
+  });
+
+  it('draws a card nobody carried from exactly as before', async () => {
+    renderWithProviders(<KitchenPage />);
+    const card = await screen.findByTestId('kitchen-order-sale-7');
+    expect(within(card).queryByTestId('kitchen-order-carried')).toBeNull();
+    expect(within(card).getByTestId('kitchen-line-70')).toHaveAttribute('data-carried', 'none');
+  });
+
   it("shows the server's words when a tap is refused", async () => {
     const user = userEvent.setup();
     renderWithProviders(<KitchenPage />);
