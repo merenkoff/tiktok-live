@@ -1099,6 +1099,13 @@ export const FEATURES = {
   tablesRounds: { status: 'available', label: 'Раунди на кухню: ціна замикається, склад списується при відправці' },
   tablesPrecheck: { status: 'available', label: 'Передчек на принтері (десктоп-каса)' },
   tablesSplitBill: { status: 'available', label: 'Розділити рахунок: за стравами або порівну' },
+  // «Роздача», the `pass` module (TechDocs/POS_PASS.md), with its kitchen card
+  // and the bill's marks — available once the three Module Releases are out.
+  dishRunner: {
+    status: 'available',
+    label:
+      'Роздача: офіціанти відмічають, які страви раунду вже винесли на стіл, — по одній і різні офіціанти; кухня бачить «Винесено 3 з 5», а повністю винесений раунд сам зникає з дошки',
+  },
   waiterTablet: { status: 'available', label: 'Планшет офіціанта як застосунок: відкривається без мережі й показує зал, рахунки й меню' },
   // Track МР (TechDocs/POS_MARKETER_ROLE.md): live at «Шабля» since 2026-11-07.
   marketerRole: {
@@ -1213,6 +1220,7 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'tablesRounds',
   'tablesPrecheck',
   'tablesSplitBill',
+  'dishRunner',
   'waiterTablet',
   'marketerRole',
   'exciseStamps',
@@ -1376,7 +1384,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для ресторану зі столами',
     tagline: 'План залу, відкриті рахунки, раунди на кухню, передчек і розділення рахунку — з планшета офіціанта.',
     bullets: ['План залу з рахунками столів', 'Раунди на кухню з планшета', 'Розділити рахунок, передчек'],
-    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet', 'marketerRole', 'menuChangeLog', 'exciseStamps', 'openBottles', 'ageCheck', 'dualRegister'],
+    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'dishRunner', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet', 'marketerRole', 'menuChangeLog', 'exciseStamps', 'openBottles', 'ageCheck', 'dualRegister'],
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },
