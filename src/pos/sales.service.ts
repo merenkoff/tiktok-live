@@ -30,6 +30,7 @@ import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import * as preorders from './preorders.service.js';
 import * as bills from './bills.service.js';
 import * as debtLines from './debt-lines.service.js';
+import * as remoteKitchen from './remote-kitchen.service.js';
 import * as modifiers from './modifiers.service.js';
 import type { LineModifierSnapshot, ModifierGroup } from './modifiers.service.js';
 import { parseCashRoundingStep, refundRoundingCents, saleRoundingCents } from './cashRounding.js';
@@ -329,6 +330,13 @@ export interface CompleteSaleParams {
    * bill that nobody has paid for yet; naming a subset is a split.
    */
   bill_part?: { bill_id: number; line_ids?: number[] } | null;
+  /**
+   * A remote-kitchen order this receipt pays (117, TechDocs/POS_REMOTE_KITCHEN.md
+   * РК2). Each of the order's lines must be on the receipt as a plain line of
+   * the same dish and quantity; those lines move no CAFE stock (the kitchen's
+   * moves instead), and the order goes to the kitchen in this same transaction.
+   */
+  remote_order_id?: number | null;
   /**
    * A repayment of goods taken «під запис» (migration 073, grocery Г3).
    *
@@ -1099,6 +1107,14 @@ export async function completeSaleTx(
   const sale = saleResult.rows[0];
   const saleId = Number(sale.id);
 
+  // A remote-kitchen order this receipt pays (РК2): its lines are matched to
+  // the receipt's plain lines one by one — same dish, same quantity — and the
+  // matched ones skip the cafe's shelf below. Locked here, so two tills
+  // cannot both pay the same order.
+  const remoteUnclaimed = params.remote_order_id
+    ? await remoteKitchen.remoteLinesForSaleTx(client, params.storeId, params.remote_order_id)
+    : [];
+
   for (const line of lineItems) {
     const itemResult = await client.query(
       `INSERT INTO pos_sale_items
@@ -1165,6 +1181,22 @@ export async function completeSaleTx(
       );
     }
 
+    // A dish the remote kitchen cooks (РК2): it comes off the KITCHEN's shelf
+    // when the order is paid just below, so the cafe moves nothing for it.
+    if (remoteUnclaimed.length > 0 && !line.bill_item_id && !line.debt_item_id && !line.components) {
+      const at = remoteUnclaimed.findIndex(
+        (remote) => remote.cafeVariantId === line.variant_id && remote.quantity === line.quantity
+      );
+      if (at >= 0) {
+        const remote = remoteUnclaimed.splice(at, 1)[0];
+        await client.query(`UPDATE pos_sale_items SET remote_order_item_id = $1 WHERE id = $2`, [
+          remote.id,
+          saleItemId,
+        ]);
+        continue;
+      }
+    }
+
     // A line of a table bill: its round already took the stock, so moving it
     // again would write dinner off twice. What it took is copied across
     // verbatim, and the refund reverses the copy — never the recipe.
@@ -1208,6 +1240,20 @@ export async function completeSaleTx(
   }
   // A bottle this sale would open without its stamp: every one named at once (Д4).
   await assertNoShortfall(client, pour);
+
+  if (params.remote_order_id) {
+    if (remoteUnclaimed.length > 0) {
+      throw new remoteKitchen.RemoteKitchenConflict(
+        'Кошик не збігається із замовленням кухні — оновіть замовлення або приберіть страву'
+      );
+    }
+    await remoteKitchen.markPaidTx(
+      client,
+      { storeId: params.storeId, staffId: params.staffId },
+      params.remote_order_id,
+      saleId
+    );
+  }
 
   for (const payment of params.payments) {
     await client.query(
@@ -1851,6 +1897,14 @@ export async function voidSale(params: {
       throw new Error('Cannot void a sale with refunds');
     }
 
+    // A receipt that paid a remote-kitchen order (РК2) paid nothing after all:
+    // an order still in the kitchen is cancelled there, its stock goes back.
+    await remoteKitchen.onCafeSaleVoidedTx(
+      client,
+      { storeId: params.storeId, staffId: params.staffId },
+      params.saleId
+    );
+
     // A receipt for goods whose stock moved EARLIER — a table bill's part
     // (the round took it) or a repayment of goods taken «під запис» (the
     // handover took it) — is undone by giving its lines back, never its stock:
@@ -1872,6 +1926,9 @@ export async function voidSale(params: {
     );
 
     for (const item of items.rows) {
+      // A remote-kitchen dish (РК2) took nothing off this store's shelf; what
+      // the kitchen took comes back only if its order is cancelled there.
+      if (item.remote_order_item_id != null) continue;
       await returnStockForSaleItem(client, {
         storeId: params.storeId,
         saleItemId: Number(item.id),
@@ -2363,16 +2420,24 @@ export async function refundSaleTx(
       );
     }
 
-    await returnStockForSaleItem(client, {
-      storeId: params.storeId,
-      saleItemId: line.sale_item_id,
-      variantId: line.variant_id,
-      quantity: line.quantity,
-      reason: 'refund',
-      staffId: params.staffId,
-      referenceType: 'refund',
-      referenceId: refundId,
-    });
+    // A remote-kitchen dish (РК2) took nothing off this store's shelf, so a
+    // refund gives nothing back to it either.
+    const remoteLine = await client.query(
+      `SELECT 1 FROM pos_sale_items WHERE id = $1 AND remote_order_item_id IS NOT NULL`,
+      [line.sale_item_id]
+    );
+    if (remoteLine.rows.length === 0) {
+      await returnStockForSaleItem(client, {
+        storeId: params.storeId,
+        saleItemId: line.sale_item_id,
+        variantId: line.variant_id,
+        quantity: line.quantity,
+        reason: 'refund',
+        staffId: params.staffId,
+        referenceType: 'refund',
+        referenceId: refundId,
+      });
+    }
     // A pour returned whole no longer stands (ДК5): the bottle's stamp it
     // carried goes on this return and to the next pour from that bottle.
     if (line.whole) {

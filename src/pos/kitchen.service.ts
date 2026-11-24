@@ -171,6 +171,8 @@ export async function listOpenOrders(
 
   const saleIds = heads.rows.map((row) => Number(row.id));
   const itemsBySale = new Map<number, KitchenOrderItem[]>();
+  /** Receipts with a remote-kitchen line; those left with nothing else drop off the board. */
+  const remoteOnly = new Set<number>();
   if (saleIds.length > 0) {
     const modifierRows = await pool.query(
       `SELECT m.sale_item_id, m.group_name, m.name
@@ -191,6 +193,7 @@ export async function listOpenOrders(
     const itemRows = await pool.query(
       `SELECT i.id, i.sale_id, i.product_name, i.variant_label, i.quantity, i.note,
               ${STATIONS_SQL} AS stations
+              , i.remote_order_item_id
        FROM pos_sale_items i
        WHERE i.sale_id = ANY($1::bigint[])
        ORDER BY i.sale_id, i.id`,
@@ -198,6 +201,11 @@ export async function listOpenOrders(
     );
     for (const row of itemRows.rows) {
       const saleId = Number(row.sale_id);
+      // A dish the remote kitchen cooks (117) is not this kitchen's to make.
+      if (row.remote_order_item_id != null) {
+        remoteOnly.add(saleId);
+        continue;
+      }
       const list = itemsBySale.get(saleId) ?? [];
       list.push({
         id: Number(row.id),
@@ -212,7 +220,9 @@ export async function listOpenOrders(
     }
   }
 
-  const orders: KitchenOrder[] = heads.rows.map((row) => {
+  // A receipt made only of remote-kitchen dishes (117) has nothing for this board.
+  const ownWork = heads.rows.filter((row) => !remoteOnly.has(Number(row.id)) || itemsBySale.has(Number(row.id)));
+  const orders: KitchenOrder[] = ownWork.map((row) => {
     const orderNo = row.order_no == null ? null : Number(row.order_no);
     return {
       id: Number(row.id),

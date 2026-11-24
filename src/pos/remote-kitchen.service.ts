@@ -1044,63 +1044,105 @@ export async function guestDeclined(actor: Actor, orderId: number): Promise<Remo
 export async function markPaid(actor: Actor, orderId: number, input: { sale_id?: unknown }): Promise<RemoteOrderView> {
   const saleId = Number(input.sale_id);
   if (!Number.isInteger(saleId) || saleId < 1) throw new RemoteKitchenError('Вкажіть чек, яким оплачено');
-  return inTransaction(async (client) => {
-    const order = await lockOrder(client, actor.storeId, orderId, 'cafe');
-    if (order.cafe_sale_id != null) {
-      if (Number(order.cafe_sale_id) === saleId) return reread(client, actor.storeId, orderId);
-      throw new RemoteKitchenConflict('Замовлення вже оплачено іншим чеком');
-    }
-    const sale = await client.query(
-      `SELECT id, status, created_at FROM pos_sales WHERE id = $1 AND store_id = $2`,
-      [saleId, actor.storeId]
-    );
-    const saleRow = sale.rows[0];
-    if (!saleRow) throw new RemoteKitchenNotFound('Чек не знайдено');
-    if (saleRow.status === 'voided') throw new RemoteKitchenConflict('Чек анульовано');
+  return inTransaction((client) => markPaidTx(client, actor, orderId, saleId));
+}
 
-    // A sale made while the time still held pays it, even if the till only
-    // reports a moment later and the read-time expiry has run in between.
-    const soldAt = new Date(saleRow.created_at as string).getTime();
-    const expiresAt = order.quote_expires_at == null ? null : new Date(order.quote_expires_at as string).getTime();
-    const quotedWhenSold =
-      order.status === 'quoted' ||
-      (order.status === 'expired' && order.quote_source != null && expiresAt != null && soldAt <= expiresAt);
-    if (!quotedWhenSold) {
-      throw new RemoteKitchenConflict('Час від кухні не діє — спитайте кухню знову');
-    }
-    const quoted = Number(order.quoted_minutes);
-    const kitchenStoreId = Number(order.kitchen_store_id);
-    const clock = await storeClock(client, kitchenStoreId);
-    const orderNo = await nextCounterValue(client, kitchenStoreId, dailyCounterKey('remote', clock.today));
+/**
+ * Everything `markPaid` does, inside a transaction the caller owns — also
+ * checkout's own, when the till rings the sale with `remote_order_id` and the
+ * receipt and the kitchen order must commit together.
+ */
+export async function markPaidTx(
+  client: DbClient,
+  actor: Actor,
+  orderId: number,
+  saleId: number
+): Promise<RemoteOrderView> {
+  const order = await lockOrder(client, actor.storeId, orderId, 'cafe');
+  if (order.cafe_sale_id != null) {
+    if (Number(order.cafe_sale_id) === saleId) return reread(client, actor.storeId, orderId);
+    throw new RemoteKitchenConflict('Замовлення вже оплачено іншим чеком');
+  }
+  const sale = await client.query(
+    `SELECT id, status, created_at FROM pos_sales WHERE id = $1 AND store_id = $2`,
+    [saleId, actor.storeId]
+  );
+  const saleRow = sale.rows[0];
+  if (!saleRow) throw new RemoteKitchenNotFound('Чек не знайдено');
+  if (saleRow.status === 'voided') throw new RemoteKitchenConflict('Чек анульовано');
 
-    await client.query(
-      `UPDATE pos_remote_orders
-          SET status = 'cooking', cafe_sale_id = $2, order_no = $3,
-              paid_at = NOW(), promised_at = NOW() + make_interval(mins => $4), updated_at = NOW()
-        WHERE id = $1`,
-      [orderId, saleId, orderNo, quoted]
+  // A sale made while the time still held pays it, even if the till only
+  // reports a moment later and the read-time expiry has run in between.
+  const soldAt = new Date(saleRow.created_at as string).getTime();
+  const expiresAt = order.quote_expires_at == null ? null : new Date(order.quote_expires_at as string).getTime();
+  const quotedWhenSold =
+    order.status === 'quoted' ||
+    (order.status === 'expired' && order.quote_source != null && expiresAt != null && soldAt <= expiresAt);
+  if (!quotedWhenSold) {
+    throw new RemoteKitchenConflict('Час від кухні не діє — спитайте кухню знову');
+  }
+  const quoted = Number(order.quoted_minutes);
+  const kitchenStoreId = Number(order.kitchen_store_id);
+  const clock = await storeClock(client, kitchenStoreId);
+  const orderNo = await nextCounterValue(client, kitchenStoreId, dailyCounterKey('remote', clock.today));
+
+  await client.query(
+    `UPDATE pos_remote_orders
+        SET status = 'cooking', cafe_sale_id = $2, order_no = $3,
+            paid_at = NOW(), promised_at = NOW() + make_interval(mins => $4), updated_at = NOW()
+      WHERE id = $1`,
+    [orderId, saleId, orderNo, quoted]
+  );
+  // The kitchen's stock moves now — as a sale, with the order as reference.
+  // No kitchen staff did it, so no staff id; the event log says who in the cafe.
+  const items = await client.query(
+    `SELECT id, kitchen_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
+    [orderId]
+  );
+  for (const item of items.rows) {
+    await consumeStockForLine(client, {
+      storeId: kitchenStoreId,
+      target: 'remote',
+      lineId: Number(item.id),
+      referenceType: 'remote_order',
+      referenceId: orderId,
+      variantId: Number(item.kitchen_variant_id),
+      quantity: Number(item.quantity),
+      staffId: null,
+    });
+  }
+  await logEvent(client, orderId, actor, 'paid', { sale_id: saleId, order_no: orderNo, minutes: quoted });
+  return reread(client, actor.storeId, orderId);
+}
+
+/**
+ * Checkout's half (РК2): a sale rung with `remote_order_id` pays the order in
+ * the same transaction. This locks the order, checks it can be paid now and
+ * hands back its lines, so checkout can match its own lines to them and skip
+ * the CAFE's stock for those — the dishes come off the kitchen's shelf instead.
+ */
+export async function remoteLinesForSaleTx(
+  client: DbClient,
+  cafeStoreId: number,
+  orderId: number
+): Promise<Array<{ id: number; cafeVariantId: number; quantity: number }>> {
+  const order = await lockOrder(client, cafeStoreId, orderId, 'cafe');
+  if (order.status !== 'quoted') {
+    throw new RemoteKitchenConflict(
+      order.status === 'expired'
+        ? 'Час від кухні вже не діє — спитайте кухню знову'
+        : 'Замовлення кухні не чекає на оплату'
     );
-    // The kitchen's stock moves now — as a sale, with the order as reference.
-    // No kitchen staff did it, so no staff id; the event log says who in the cafe.
-    const items = await client.query(
-      `SELECT id, kitchen_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
-      [orderId]
-    );
-    for (const item of items.rows) {
-      await consumeStockForLine(client, {
-        storeId: kitchenStoreId,
-        target: 'remote',
-        lineId: Number(item.id),
-        referenceType: 'remote_order',
-        referenceId: orderId,
-        variantId: Number(item.kitchen_variant_id),
-        quantity: Number(item.quantity),
-        staffId: null,
-      });
-    }
-    await logEvent(client, orderId, actor, 'paid', { sale_id: saleId, order_no: orderNo, minutes: quoted });
-    return reread(client, actor.storeId, orderId);
-  });
+  }
+  const rows = await client.query(
+    `SELECT id, cafe_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
+    [orderId]
+  );
+  return rows.rows.map((row) => ({
+    id: Number(row.id),
+    cafeVariantId: Number(row.cafe_variant_id),
+    quantity: Number(row.quantity),
+  }));
 }
 
 /** The cafe's two taps at the end: the courier came, the guest got it. */
@@ -1266,38 +1308,78 @@ export async function cancelPaid(actor: Actor, orderId: number, input: { reason?
     const order = await lockOrder(client, actor.storeId, orderId, 'either');
     if (order.status === 'cancelled') return reread(client, actor.storeId, orderId);
     statusIs(order, ['paid', 'cooking', 'ready'], 'Скасувати можна лише оплачене й ще не відправлене замовлення');
-    const kitchenStoreId = Number(order.kitchen_store_id);
-    const items = await client.query(
-      `SELECT id, kitchen_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1`,
-      [orderId]
-    );
-    // `returnStockForLine` wants a staff id for the movement; only a kitchen
-    // person can be on the kitchen's books, so a cancel from the cafe is null.
-    const staffForKitchen = actor.storeId === kitchenStoreId ? actor.staffId : null;
-    for (const item of items.rows) {
-      await returnStockForLine(client, {
-        storeId: kitchenStoreId,
-        target: 'remote',
-        lineId: Number(item.id),
-        variantId: Number(item.kitchen_variant_id),
-        quantity: Number(item.quantity),
-        reason: 'void',
-        staffId: staffForKitchen,
-        referenceType: 'remote_order',
-        referenceId: orderId,
-      });
-    }
-    await client.query(
-      `UPDATE pos_remote_orders
-          SET status = 'cancelled', decline_reason = $2, closed_at = NOW(), updated_at = NOW()
-        WHERE id = $1`,
-      [orderId, reason]
-    );
-    await logEvent(client, orderId, actor, 'cancelled', {
-      reason,
-      by: actor.storeId === kitchenStoreId ? 'kitchen' : 'cafe',
-    });
+    await cancelLockedTx(client, actor, order, reason);
     return reread(client, actor.storeId, orderId);
+  });
+}
+
+/**
+ * The cafe voided the receipt that paid for a kitchen order (РК2): the guest
+ * did not pay after all — a cashier's void, or ПРРО refusing the receipt
+ * (`abortSale` → `voidSale`). Runs inside the void's transaction.
+ *
+ * An order still in the kitchen is cancelled and its stock goes back, the
+ * same as «Скасувати». One already on its way cannot be called back by a
+ * void, so it only gets an event the kitchen will see; returning the food is
+ * then a conversation, not a button.
+ */
+export async function onCafeSaleVoidedTx(
+  client: DbClient,
+  actor: Actor,
+  saleId: number
+): Promise<void> {
+  const found = await client.query(
+    `SELECT id FROM pos_remote_orders WHERE cafe_store_id = $1 AND cafe_sale_id = $2`,
+    [actor.storeId, saleId]
+  );
+  if (found.rows.length === 0) return;
+  const orderId = Number(found.rows[0].id);
+  const order = await lockOrder(client, actor.storeId, orderId, 'cafe');
+  if (order.status === 'cancelled') return;
+  if (['paid', 'cooking', 'ready'].includes(String(order.status))) {
+    await cancelLockedTx(client, actor, order, 'Чек кафе скасовано');
+    return;
+  }
+  await logEvent(client, orderId, actor, 'cafe_sale_voided', { sale_id: saleId });
+}
+
+async function cancelLockedTx(
+  client: DbClient,
+  actor: Actor,
+  order: Record<string, unknown>,
+  reason: string
+): Promise<void> {
+  const orderId = Number(order.id);
+  const kitchenStoreId = Number(order.kitchen_store_id);
+  const items = await client.query(
+    `SELECT id, kitchen_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1`,
+    [orderId]
+  );
+  // `returnStockForLine` wants a staff id for the movement; only a kitchen
+  // person can be on the kitchen's books, so a cancel from the cafe is null.
+  const staffForKitchen = actor.storeId === kitchenStoreId ? actor.staffId : null;
+  for (const item of items.rows) {
+    await returnStockForLine(client, {
+      storeId: kitchenStoreId,
+      target: 'remote',
+      lineId: Number(item.id),
+      variantId: Number(item.kitchen_variant_id),
+      quantity: Number(item.quantity),
+      reason: 'void',
+      staffId: staffForKitchen,
+      referenceType: 'remote_order',
+      referenceId: orderId,
+    });
+  }
+  await client.query(
+    `UPDATE pos_remote_orders
+        SET status = 'cancelled', decline_reason = $2, closed_at = NOW(), updated_at = NOW()
+      WHERE id = $1`,
+    [orderId, reason]
+  );
+  await logEvent(client, orderId, actor, 'cancelled', {
+    reason,
+    by: actor.storeId === kitchenStoreId ? 'kitchen' : 'cafe',
   });
 }
 

@@ -33,6 +33,7 @@ import {
 } from './helpers/pos-fixtures.js';
 import * as rk from '../pos/remote-kitchen.service.js';
 import { readStoreClock } from '../pos/core/storeClock.js';
+import { listOpenOrders } from '../pos/kitchen.service.js';
 
 describe('remote kitchen estimate', () => {
   it('rounds every promise up to five minutes, never below five', () => {
@@ -461,5 +462,131 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     });
     expect(revoke.statusCode).toBe(400);
     await rk.updateLink(linkId, { auto_confirm_max_min: 40, answer_seconds: 60 });
+  });
+
+  // ── РК2: the cafe's own receipt pays the order ───────────────────────
+
+  const checkout = (items: Array<{ variant_id: number; quantity: number }>, remoteOrderId: unknown) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/pos/sales/complete',
+      headers: auth(cafe.sellerToken),
+      payload: {
+        items,
+        // Every seeded dish costs 100 ₴; pay the cart exactly.
+        payments: [{ method: 'cash', amount_cents: items.reduce((sum, i) => sum + i.quantity * 10000, 0) }],
+        remote_order_id: remoteOrderId,
+      },
+    });
+  const orderView = async (id: number) =>
+    (await app.inject({ method: 'GET', url: `/api/pos/remote-kitchen/orders/${id}`, headers: auth(cafe.sellerToken) })).json();
+
+  it('one cafe receipt pays the kitchen order: the kitchen’s shelf pays for its dishes, the cafe’s for the rest', async () => {
+    // A cafe, so its own board is on — the remote dish must not appear there.
+    await pool.query(`UPDATE pos_stores SET vertical = 'cafe' WHERE id = $1`, [cafe.storeId]);
+    const order = (await ask([{ variant_id: cafePizza, quantity: 2 }])).json();
+    expect(order.status).toBe('quoted');
+    const kitchenBefore = await stockOf(kitchenPizza);
+    const pizzaBefore = await stockOf(cafePizza);
+    const rollBefore = await stockOf(cafeRoll);
+
+    // Not an id, someone else's order, a cart that does not match: refused, nothing moves.
+    expect((await checkout([{ variant_id: cafePizza, quantity: 2 }], 'abc')).statusCode).toBe(400);
+    expect((await checkout([{ variant_id: cafePizza, quantity: 2 }], 999999999)).statusCode).toBe(404);
+    const wrong = await checkout([{ variant_id: cafePizza, quantity: 1 }], order.id);
+    expect(wrong.statusCode).toBe(409);
+    expect(wrong.json().error).toBe('remote_order_conflict');
+    expect(await stockOf(kitchenPizza)).toBe(kitchenBefore);
+    expect(await stockOf(cafePizza)).toBe(pizzaBefore);
+    expect((await orderView(order.id)).status).toBe('quoted');
+
+    const res = await checkout(
+      [
+        { variant_id: cafePizza, quantity: 2 },
+        { variant_id: cafeRoll, quantity: 1 },
+      ],
+      order.id
+    );
+    expect(res.statusCode, res.body).toBe(201);
+    const saleId = Number(res.json().id);
+    expect(await stockOf(kitchenPizza)).toBe(kitchenBefore - 2);
+    expect(await stockOf(cafePizza)).toBe(pizzaBefore);
+    expect(await stockOf(cafeRoll)).toBe(rollBefore - 1);
+
+    const paid = await orderView(order.id);
+    expect(paid.status).toBe('cooking');
+    expect(paid.cafe_sale_id).toBe(saleId);
+    expect(paid.order_no).toBeGreaterThanOrEqual(1);
+
+    // The cafe's board shows its own roll, not the kitchen's pizza.
+    const board = await listOpenOrders(cafe.storeId);
+    const onBoard = board.orders.find((o) => o.kind === 'sale' && o.id === saleId);
+    expect(onBoard?.items.map((i) => i.product_name)).toEqual(['Філадельфія']);
+
+    // The same order cannot be paid by a second receipt.
+    expect((await checkout([{ variant_id: cafePizza, quantity: 2 }], order.id)).statusCode).toBe(409);
+    expect(await stockOf(kitchenPizza)).toBe(kitchenBefore - 2);
+  });
+
+  it('a receipt of kitchen dishes only stays off the cafe’s board', async () => {
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    const res = await checkout([{ variant_id: cafePizza, quantity: 1 }], order.id);
+    expect(res.statusCode, res.body).toBe(201);
+    const saleId = Number(res.json().id);
+    const board = await listOpenOrders(cafe.storeId);
+    expect(board.orders.some((o) => o.kind === 'sale' && o.id === saleId)).toBe(false);
+  });
+
+  it('voiding the cafe receipt cancels a kitchen order still cooking, and each shelf gets back its own', async () => {
+    const order = (await ask([{ variant_id: cafePizza, quantity: 2 }])).json();
+    const kitchenBefore = await stockOf(kitchenPizza);
+    const pizzaBefore = await stockOf(cafePizza);
+    const rollBefore = await stockOf(cafeRoll);
+    const res = await checkout(
+      [
+        { variant_id: cafePizza, quantity: 2 },
+        { variant_id: cafeRoll, quantity: 1 },
+      ],
+      order.id
+    );
+    expect(res.statusCode, res.body).toBe(201);
+    const saleId = Number(res.json().id);
+
+    const voided = await app.inject({
+      method: 'POST',
+      url: `/api/pos/sales/${saleId}/void`,
+      headers: auth(cafe.sellerToken),
+    });
+    expect(voided.statusCode, voided.body).toBe(200);
+    expect(await stockOf(kitchenPizza)).toBe(kitchenBefore);
+    expect(await stockOf(cafePizza)).toBe(pizzaBefore);
+    expect(await stockOf(cafeRoll)).toBe(rollBefore);
+    const after = await orderView(order.id);
+    expect(after.status).toBe('cancelled');
+    expect(after.decline_reason).toBe('Чек кафе скасовано');
+  });
+
+  it('an order already on the road is not called back by a void, only noted for the kitchen', async () => {
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    const res = await checkout([{ variant_id: cafePizza, quantity: 1 }], order.id);
+    const saleId = Number(res.json().id);
+    await step(kitchen.sellerToken, order.id, 'ready');
+    await step(kitchen.sellerToken, order.id, 'dispatched');
+    const kitchenAfterDispatch = await stockOf(kitchenPizza);
+
+    const voided = await app.inject({
+      method: 'POST',
+      url: `/api/pos/sales/${saleId}/void`,
+      headers: auth(cafe.sellerToken),
+    });
+    expect(voided.statusCode, voided.body).toBe(200);
+    expect((await orderView(order.id)).status).toBe('dispatched');
+    expect(await stockOf(kitchenPizza)).toBe(kitchenAfterDispatch);
+    const events = await app.inject({
+      method: 'GET',
+      url: `/api/pos/remote-kitchen/orders/${order.id}/events`,
+      headers: auth(kitchen.sellerToken),
+    });
+    expect(events.json().events.map((e: { kind: string }) => e.kind)).toContain('cafe_sale_voided');
   });
 });
