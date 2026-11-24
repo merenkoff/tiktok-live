@@ -32,6 +32,7 @@ import { registerSuperRoutes } from './routes/super.routes.js';
 import { registerPublicMenuRoutes } from './routes/public-menu.routes.js';
 import { registerGuestFeedbackRoutes } from './routes/guest-feedback.routes.js';
 import { registerGuestOrdersRoutes } from './routes/guest-orders.routes.js';
+import { registerRemoteKitchenRoutes } from './routes/remote-kitchen.routes.js';
 import { registerDebtsRoutes } from './routes/debts.routes.js';
 import { registerServingRoutes } from './routes/serving.routes.js';
 
@@ -102,6 +103,11 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   { moduleId: null, register: registerPublicMenuRoutes },
   // The waiter's side of a guest's request for dishes (Q6); the guest's side is in the group above.
   { moduleId: null, register: registerGuestOrdersRoutes },
+  // «Віддалена кухня» (117, TechDocs/POS_REMOTE_KITCHEN.md): a cafe till asks
+  // another store's kitchen for a time. Core for the same reason as the group
+  // above — the screens opt in through `module_remotes`; the gate is the link
+  // between the two stores, written by the super-admin.
+  { moduleId: null, register: registerRemoteKitchenRoutes },
   // The owner's side of what guests wrote from the QR menu (F4); the guest's side is in the menu group.
   { moduleId: null, register: registerGuestFeedbackRoutes },
   // Goods given «під запис» (073, TechDocs/grocery/G3_DEBTS.md). Core for the

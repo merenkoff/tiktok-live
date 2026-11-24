@@ -259,6 +259,13 @@ export async function dropTestStore(storeId: number | undefined): Promise<void> 
     'DELETE FROM pos_debt_item_components WHERE store_id = $1',
     'DELETE FROM pos_debt_items WHERE store_id = $1',
     'DELETE FROM pos_debt_entries WHERE store_id = $1',
+    // Remote kitchen (117): a paid line's snapshot points at the kitchen's
+    // variants with NO ACTION, and an order belongs to two stores.
+    'DELETE FROM pos_remote_order_item_components WHERE store_id = $1',
+    `DELETE FROM pos_remote_order_item_components WHERE remote_order_item_id IN (
+       SELECT i.id FROM pos_remote_order_items i JOIN pos_remote_orders o ON o.id = i.remote_order_id
+        WHERE o.cafe_store_id = $1 OR o.kitchen_store_id = $1)`,
+    'DELETE FROM pos_remote_orders WHERE cafe_store_id = $1 OR kitchen_store_id = $1',
     // Open bottles (093): pours point at sale lines, refunds and bills.
     'DELETE FROM pos_bottle_pours WHERE store_id = $1',
     'DELETE FROM pos_refund_items WHERE refund_id IN (SELECT id FROM pos_refunds WHERE store_id = $1)',

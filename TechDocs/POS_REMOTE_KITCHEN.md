@@ -265,34 +265,55 @@ prep    = MAX(prep_minutes страв кухні в запиті)      -- піц
 | Хто | Що читає | Як часто |
 |---|---|---|
 | Каса кафе, поки чекає відповіді | `GET /remote-kitchen/orders/:id` | 2 с (до 60 с) |
-| Каса кафе, трекер | `GET /remote-kitchen/orders?scope=cafe&open=1` | 10 с |
-| Кухня | `GET /remote-kitchen/inbox` (запити) + `GET /kitchen/orders` (дошка) | 3 с / 5 с |
-| Плитки страв кухні в каталозі кафе | `GET /remote-kitchen/status` («≈30 хв», «пауза») | 30 с |
+| Каса кафе, трекер | `GET /remote-kitchen/orders?side=cafe` | 10 с |
+| Кухня | `GET /remote-kitchen/orders?side=kitchen` (запити) + `GET /kitchen/orders` (дошка) | 3 с / 5 с |
+| Плитки страв кухні в каталозі кафе | `GET /remote-kitchen/setup` («≈30 хв», «пауза») | 30 с |
 
 У POS ніде немає WebSocket, усе — поллінг; лишаємось у цьому. Фаза РК4 може додати long-poll
-`GET /remote-kitchen/inbox?wait=25` (сервер один, тож достатньо in-process `EventEmitter`), щоб звук на кухні
+`GET /remote-kitchen/orders?side=kitchen&wait=25` (сервер один, тож достатньо in-process `EventEmitter`), щоб звук на кухні
 лунав за долю секунди, а не за три.
 
-**Ендпоїнти (проєкт).**
+**Ендпоїнти (РК1, `src/pos/routes/remote-kitchen.routes.ts`).**
 
 ```
-Кафе (staff кафе, модуль remote-kitchen):
-  POST   /remote-kitchen/orders                 {client_uuid, link_id, items[], guest_label?, note?}
-  PUT    /remote-kitchen/orders/:id/items       нова ревізія кошика
-  POST   /remote-kitchen/orders/:id/phone-quote {minutes}         — час з телефону
-  POST   /remote-kitchen/orders/:id/decline     — гість відмовився
-  (оплата — звичайний POST /sales з remote_order_id; completeSale переводить у cooking)
-  POST   /remote-kitchen/orders/:id/arrived | /handed
-Кухня (staff кухні):
-  GET    /remote-kitchen/inbox
-  POST   /remote-kitchen/orders/:id/quote       {minutes, problems?: [{item_id, problem}]}
-  POST   /remote-kitchen/orders/:id/refuse      {reason}
-  POST   /remote-kitchen/orders/:id/delay       {minutes}
-  POST   /remote-kitchen/orders/:id/dispatched
-  PATCH  /kitchen/status                        {accepting, paused_until, load_minutes}
-Обидві:
+Обидві сторони (ensurePosAuth; сервіс перевіряє, з якого боку замовлення магазин сесії):
+  GET    /remote-kitchen/setup                  {as_cafe: {link, kitchen, items} | null, as_kitchen: {status, cafes} | null}
+  GET    /remote-kitchen/orders?side=cafe|kitchen   живі + закриті за останні 3 год
   GET    /remote-kitchen/orders/:id             (лише своя зв'язка; чуже — одна 404)
+  GET    /remote-kitchen/orders/:id/events      журнал
+  POST   /remote-kitchen/orders/:id/cancel      {reason} — оплачене й ще не відправлене; кухні повертається списане
+Кафе:
+  POST   /remote-kitchen/orders                 {client_uuid, items[{variant_id, quantity, modifiers?, note?}], guest_label?, note?}
+                                                201 новий / 200 той самий uuid
+  PUT    /remote-kitchen/orders/:id/items       {revision, items} — нова ревізія кошика
+  POST   /remote-kitchen/orders/:id/phone-quote {minutes} — лише коли час відповіді кухні минув (П3)
+  POST   /remote-kitchen/orders/:id/guest-declined
+  POST   /remote-kitchen/orders/:id/paid        {sale_id} — після звичайного POST /sales (П2), див. нижче
+  POST   /remote-kitchen/orders/:id/arrived | /handed
+Кухня:
+  POST   /remote-kitchen/orders/:id/quote       {minutes, revision} — час до виходу з кухні; дорогу додає сервер
+  POST   /remote-kitchen/orders/:id/decline     {reason?, problems?: [{item_id, problem}], revision?}
+  POST   /remote-kitchen/orders/:id/ready | /dispatched
+  POST   /remote-kitchen/orders/:id/delay       {minutes, reason?}
+  PUT    /remote-kitchen/status                 {accepting, pause_minutes?, load_minutes?}
+Власник кафе (ensurePosOwner):
+  PATCH  /remote-kitchen/link                   таймери, поріг, дорога, телефон, active/paused
+  GET    /remote-kitchen/link/dishes            страви кухні (лише назви й час, без цін і залишків)
+  GET    /remote-kitchen/link/items             (ensurePosAuth)
+  PUT    /remote-kitchen/link/items/:variantId  {kitchen_variant_id} — позначка «готується на кухні»
+  DELETE /remote-kitchen/link/items/:variantId
+Супер-адмін (ensureSuper):
+  POST   /super/remote-kitchen/links            {cafe_store_id, kitchen_store_id, kitchen_title, kitchen_phone?, transit_minutes?}
+  PATCH  /super/remote-kitchen/links/:id        те саме, що власник, плюс revoked
 ```
+
+**Оплата окремим кроком, а не полем у `POST /sales`.** Каса проводить звичайний продаж, а потім кличе
+`/paid` з номером чека. Сервер перевіряє, що чек цього кафе, не анульований і зроблений, поки названий час
+ще діяв (продаж за секунду до кінця і звіт за секунду після — проходить). Тоді замовлення отримує номер
+кухні на її день, промінь «буде о …» і списання зі складу **кухні** (`pos_remote_order_item_components`,
+ціль `remote` у `consumeStockForLine`). Повтор з тим самим чеком — те саме замовлення, другий чек — 409.
+Так `completeSale` не знає про віддалену кухню взагалі; РК2 лише вчить продаж не списувати склад кафе для
+рядка з `remote_order_item_id`.
 
 Кожен запис перевіряє, що магазин сесії — **ця** сторона **цієї** зв'язки, і зв'язка `active`. Кухня ніколи не
 бачить цін і чеків кафе, кафе — собівартості кухні.
@@ -343,13 +364,15 @@ prep    = MAX(prep_minutes страв кухні в запиті)      -- піц
 
 - **Онлайн-модуль `remote-kitchen`**, як `pass` і `tables`: коду в shell немає, підписаний бандл із каналу
   релізів, `shells: ['web','cashier','tablet']`. Клон без ключа підпису його не завантажить.
-- Увімкнення — супер-адмін, у `enabled_modules` **обох** магазинів. Сервер відмовляє створити зв'язку, якщо модуля
-  немає в одного з двох, і відповідає 409 `module_disabled` на кожен запит, якщо модуль вимкнули пізніше.
-- Зв'язку на першій фазі створює супер-адмін на `/super/stores/:id` («Кухня для цієї точки»). Запрошення
+- Увімкнення — як у `tables` і `pass`: екрани приходять через `module_remotes`, тож маршрути — core-група без
+  `enabled_modules`. Ворота — сама **зв'язка**: магазин без неї отримує 404 на кожен запит, призупинена
+  зв'язка — 409 з телефоном кухні, відкликана — як немає.
+- Зв'язку на першій фазі створює супер-адмін (`POST /super/remote-kitchen/links`; кнопка на `/super/stores/:id`
+  «Кухня для цієї точки» — РК2). Запрошення
   кодом між власниками — пізніше, коли з'явиться клієнт, у якого кафе й кухня належать різним людям.
 - **Налаштування зв'язки** — у звичайній адмінці магазину, сторінка «Кухня» в кафе і «Точки» на кухні:
   час відповіді кухні (`answer_seconds`, 60 с), автопідтвердження з порогом (`auto_confirm_max_min`, 40 хв),
-  дорога (`transit_minutes`, фіксована, 10 хв), телефон кухні. Змінює власник або адмін будь-якої з двох сторін.
+  дорога (`transit_minutes`, фіксована, 10 хв), телефон кухні. Змінює власник кафе (`PATCH /remote-kitchen/link`) або супер-адмін; кухня керує своєю паузою й чергою.
 - Тариф: модуль платний **для точки** (вона отримує зручність), кухня отримує його в парі. Ціну вирішує власник
   продукту, у коді лише прапорець.
 
@@ -367,7 +390,7 @@ prep    = MAX(prep_minutes страв кухні в запиті)      -- піц
 | Фаза | Що | Стан |
 |---|---|---|
 | РК0 | Цей документ, макети UX, меню-зразок, рішення власника §14 | затверджено 2026-11-24 |
-| РК1 | Міграція 117, `remote-kitchen.service.ts` (стани, таймери, пропозиція часу), маршрути, тести; зв'язка й імпорт меню кухні на `/super` | — |
+| РК1 | Міграція 117, `remote-kitchen.service.ts` (стани, таймери, пропозиція часу, автопідтвердження, оплата → списання на кухні), маршрути, тести; зв'язку створює супер-адмін через API | зроблено 2026-11-24, локально |
 | РК2 | Каса кафе: позначка на плитках, блок «З кухні» в кошику, запит, очікування, відповідь, «Гість згоден» → оплата; слот `sales.CartSection` | — |
 | РК3 | Кухня: скринька запитів зі звуком, відповідь одним тапом, замовлення на дошці, тікет у черзі друку, «Віддали кур'єру» | — |
 | РК4 | Автоматика: автопідтвердження, «+10 хв», виміряний час страв, long-poll | — |
