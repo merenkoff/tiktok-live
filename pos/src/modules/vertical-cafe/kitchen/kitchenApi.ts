@@ -12,7 +12,9 @@ import type { KitchenBoard, KitchenOrder, PrepStatusRow, StopListRow } from './t
 
 /** Today's open orders, oldest first, with the server's clock. */
 export function listOrders(): Promise<KitchenBoard> {
-  return posRequest<KitchenBoard>('get', '/kitchen/orders');
+  // `with=remote`: this board knows the third kind (РК3). A server without it
+  // ignores the parameter.
+  return posRequest<KitchenBoard>('get', '/kitchen/orders?with=remote');
 }
 
 /**
@@ -27,7 +29,13 @@ export function listOrders(): Promise<KitchenBoard> {
 export function setPrep(
   order: Pick<KitchenOrder, 'id' | 'kind'>,
   status: 'ready' | 'served'
-): Promise<PrepStatusRow> {
+): Promise<PrepStatusRow | null> {
+  // A cafe's order (РК3): «Готово» is the kitchen's `ready`, «Віддали кур'єру»
+  // is `dispatched`. The answer is the order, not a prep row — nobody reads it.
+  if (order.kind === 'remote') {
+    const step = status === 'ready' ? 'ready' : 'dispatched';
+    return posRequest<unknown>('post', `/remote-kitchen/orders/${order.id}/${step}`, {}).then(() => null);
+  }
   const path =
     order.kind === 'round' ? `/kitchen/rounds/${order.id}/prep` : `/sales/${order.id}/prep`;
   return posRequest<PrepStatusRow>('patch', path, { prep_status: status });

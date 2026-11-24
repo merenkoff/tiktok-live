@@ -589,4 +589,35 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     });
     expect(events.json().events.map((e: { kind: string }) => e.kind)).toContain('cafe_sale_voided');
   });
+
+  it('the kitchen’s board shows a paid order as a third kind, only to a board that asks', async () => {
+    await pool.query(`UPDATE pos_stores SET vertical = 'cafe' WHERE id = $1`, [kitchen.storeId]);
+    const order = (await ask([{ variant_id: cafePizza, quantity: 2 }])).json();
+    const res = await checkout([{ variant_id: cafePizza, quantity: 2 }], order.id);
+    expect(res.statusCode, res.body).toBe(201);
+
+    // An older board never sees it: its tap would go to `/sales/:id/prep`.
+    const plain = await listOpenOrders(kitchen.storeId);
+    expect(plain.orders.some((o) => o.kind === 'remote')).toBe(false);
+
+    const board = await app.inject({
+      method: 'GET',
+      url: '/api/pos/kitchen/orders?with=remote',
+      headers: auth(kitchen.sellerToken),
+    });
+    expect(board.statusCode, board.body).toBe(200);
+    const card = board.json().orders.find((o: { kind: string; id: number }) => o.kind === 'remote' && o.id === order.id);
+    expect(card.prep_status).toBe('new');
+    expect(card.title).toMatch(/П-\d+$/);
+    expect(card.promised_at).not.toBeNull();
+    expect(card.items).toEqual([expect.objectContaining({ quantity: 2 })]);
+
+    await step(kitchen.sellerToken, order.id, 'ready');
+    const ready = await listOpenOrders(kitchen.storeId, { withRemote: true });
+    expect(ready.orders.find((o) => o.kind === 'remote' && o.id === order.id)?.prep_status).toBe('ready');
+
+    await step(kitchen.sellerToken, order.id, 'dispatched');
+    const gone = await listOpenOrders(kitchen.storeId, { withRemote: true });
+    expect(gone.orders.some((o) => o.kind === 'remote' && o.id === order.id)).toBe(false);
+  });
 });

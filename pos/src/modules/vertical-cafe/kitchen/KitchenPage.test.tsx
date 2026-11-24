@@ -104,7 +104,7 @@ beforeEach(() => {
   stopped = false;
   useOfflineStatus.setState({ online: true });
   posRequest.mockImplementation(async (method: string, path: string, body?: { prep_status?: string; stop_listed?: boolean }) => {
-    if (method === 'get' && path === '/kitchen/orders') {
+    if (method === 'get' && path === '/kitchen/orders?with=remote') {
       return { orders: status === 'served' ? [] : [orderOf(status)], now: new Date().toISOString() };
     }
     if (method === 'patch' && path === '/sales/7/prep') {
@@ -197,7 +197,7 @@ describe('KitchenPage', () => {
       ],
     };
     posRequest.mockImplementation(async (method: string, path: string) => {
-      if (method === 'get' && path === '/kitchen/orders') return { orders: [round], now: new Date().toISOString() };
+      if (method === 'get' && path === '/kitchen/orders?with=remote') return { orders: [round], now: new Date().toISOString() };
       if (method === 'patch' && path === '/kitchen/rounds/9/prep') {
         return { id: 9, prep_status: 'served', ready_at: 'x', served_at: 'y' };
       }

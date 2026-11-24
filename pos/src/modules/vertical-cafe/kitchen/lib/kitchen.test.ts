@@ -99,6 +99,25 @@ describe('kitchen columns', () => {
     expect(orderSubLabel({ kind: 'sale', round_seq: null })).toBeNull();
   });
 
+  // РК3: an order cooked for the park cafe is called out by the number on the
+  // guest's slip, with where it goes and by when underneath.
+  it('calls out «П-12» for a cafe’s order, with the cafe and the promise under it', () => {
+    const promised = new Date(2026, 10, 24, 19, 40).toISOString();
+    const remote = {
+      kind: 'remote' as const,
+      order_no: 12,
+      receipt_number: '',
+      table_name: null,
+      title: 'Парк · П-12',
+      round_seq: null,
+      from_store: 'Парк',
+      promised_at: promised,
+    };
+    expect(orderLabel(remote)).toBe('П-12');
+    expect(orderSubLabel(remote)).toBe('Парк · до 19:40');
+    expect(orderKey({ id: 12, kind: 'remote' })).toBe('remote-12');
+  });
+
   // Sales and rounds are separate tables with separate sequences, so sale 7
   // and round 7 sit on the board together. Anything keyed on the bare id
   // would move, hide or re-render the wrong card.

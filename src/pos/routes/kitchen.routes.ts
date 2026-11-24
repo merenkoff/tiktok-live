@@ -28,7 +28,9 @@ export function registerKitchenRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
     try {
-      return await kitchen.listOpenOrders(auth.storeId);
+      // `?with=remote`: a board that knows the third kind (РК3) asks for it.
+      const query = (request.query ?? {}) as { with?: unknown };
+      return await kitchen.listOpenOrders(auth.storeId, { withRemote: query.with === 'remote' });
     } catch (error) {
       if (error instanceof kitchen.KitchenError) {
         return reply.code(409).send({ error: errorMessage(error) });

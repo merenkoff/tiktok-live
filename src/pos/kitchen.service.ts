@@ -73,7 +73,7 @@ export interface KitchenOrder {
    * that predates tables reads the same fields it always did, so
    * `POS_API_VERSION` stays at 2.
    */
-  kind: 'sale' | 'round';
+  kind: 'sale' | 'round' | 'remote';
   /** What the card says at the top: «№ 7», or «Стіл 5 · раунд 2». */
   title: string;
   /** Round only; null for a counter sale. */
@@ -89,6 +89,14 @@ export interface KitchenOrder {
   /** The receipt-level note («Замовлення: …» on the ticket). */
   note: string | null;
   items: KitchenOrderItem[];
+  /**
+   * A remote-kitchen order only (`kind: 'remote'`, POS_REMOTE_KITCHEN.md §11):
+   * when the kitchen promised it at the cafe, and which cafe it is for. The
+   * board's taps for it go to `/remote-kitchen/orders/:id/ready` and
+   * `/dispatched`, never to `/sales/:id/prep` — the id is another table's.
+   */
+  promised_at?: string | null;
+  from_store?: string;
 }
 
 export interface PrepStatusRow {
@@ -151,7 +159,8 @@ export function prepRowOf(row: Record<string, unknown>): PrepStatusRow {
  * sets. Read-only by construction — see the file header.
  */
 export async function listOpenOrders(
-  storeId: number
+  storeId: number,
+  options: { withRemote?: boolean } = {}
 ): Promise<{ orders: KitchenOrder[]; now: string }> {
   const clock = await readStoreClock(storeId);
   if (!clock.vertical.kitchen) throw new KitchenError(NO_KITCHEN);
@@ -242,10 +251,83 @@ export async function listOpenOrders(
   });
 
   orders.push(...(await openRounds(storeId)));
+  // Only for a board that asked: an older board would send a remote order's
+  // tap to `/sales/:id/prep`, where the same number is somebody's receipt.
+  if (options.withRemote) orders.push(...(await openRemoteOrders(storeId)));
   // One board, two sources, one order: oldest first, as the kitchen works.
   orders.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
 
   return { orders, now: new Date().toISOString() };
+}
+
+/**
+ * Orders this kitchen cooks for a linked cafe (РК3, POS_REMOTE_KITCHEN.md §11),
+ * for the same board: paid and cooking is `new`, cooked and waiting for the
+ * courier is `ready`. Gone from the board once dispatched — the cafe tracks it
+ * from there. No day window, like a round: an order paid at 23:55 is still
+ * cooked after midnight.
+ */
+async function openRemoteOrders(storeId: number): Promise<KitchenOrder[]> {
+  const heads = await pool.query(
+    `SELECT o.id, o.order_no, o.status, o.paid_at, o.requested_at, o.ready_at, o.promised_at,
+            o.guest_label, o.note, cs.name AS cafe_name
+       FROM pos_remote_orders o
+       JOIN pos_stores cs ON cs.id = o.cafe_store_id
+      WHERE o.kitchen_store_id = $1
+        AND o.status IN ('paid', 'cooking', 'ready')
+      ORDER BY o.id`,
+    [storeId]
+  );
+  if (heads.rows.length === 0) return [];
+  const orderIds = heads.rows.map((row) => Number(row.id));
+  const itemRows = await pool.query(
+    `SELECT i.id, i.remote_order_id, i.product_name, i.variant_label, i.quantity, i.note, i.modifiers,
+            ${STATIONS_SQL} AS stations
+       FROM (SELECT ri.*, ri.kitchen_variant_id AS variant_id FROM pos_remote_order_items ri) i
+      WHERE i.remote_order_id = ANY($1::bigint[])
+      ORDER BY i.remote_order_id, i.sort_order, i.id`,
+    [orderIds]
+  );
+  const itemsByOrder = new Map<number, KitchenOrderItem[]>();
+  for (const row of itemRows.rows) {
+    const orderId = Number(row.remote_order_id);
+    const list = itemsByOrder.get(orderId) ?? [];
+    list.push({
+      id: Number(row.id),
+      product_name: String(row.product_name ?? ''),
+      variant_label: String(row.variant_label ?? ''),
+      quantity: Number(row.quantity),
+      modifiers: parseLineModifierSnapshot(row.modifiers).map((m) => ({
+        group_name: m.group_name,
+        name: m.name,
+      })),
+      note: typeof row.note === 'string' ? row.note : '',
+      stations: stationsOf(row.stations),
+    });
+    itemsByOrder.set(orderId, list);
+  }
+  return heads.rows.map((row) => {
+    const orderNo = row.order_no == null ? null : Number(row.order_no);
+    const cafeName = String(row.cafe_name ?? '');
+    const notes = [row.guest_label, row.note].filter((x) => typeof x === 'string' && x.trim() !== '');
+    return {
+      id: Number(row.id),
+      kind: 'remote' as const,
+      title: orderNo == null ? cafeName : `${cafeName} · П-${orderNo}`,
+      table_name: null,
+      round_seq: null,
+      order_no: orderNo,
+      receipt_number: '',
+      prep_status: row.status === 'ready' ? ('ready' as const) : ('new' as const),
+      created_at: new Date((row.paid_at ?? row.requested_at) as string).toISOString(),
+      ready_at: isoOrNull(row.ready_at),
+      staff_name: '',
+      note: notes.length > 0 ? notes.join(' · ') : null,
+      items: itemsByOrder.get(Number(row.id)) ?? [],
+      promised_at: isoOrNull(row.promised_at),
+      from_store: cafeName,
+    };
+  });
 }
 
 /**
