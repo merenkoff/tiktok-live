@@ -42,6 +42,7 @@ import {
   withModuleTokens,
 } from '../pos/license/moduleToken.js';
 import { POS_UPLOADS_DIR } from '../pos/uploads.service.js';
+import { issueSuperToken } from '../pos/core/superAuth.js';
 import { auth, buildPosTestApp, createTestStore, dropTestStore, type TestStore } from './helpers/pos-fixtures.js';
 
 function ephemeralKey() {
@@ -536,5 +537,92 @@ describe('GET /api/pos/license/update-token', () => {
     const res = await app.inject({ method: 'GET', url: '/api/pos/license/update-token', headers: auth(store.sellerToken) });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ token: null });
+  });
+});
+
+// The super admin's «Перевірити джерело» (TechDocs/POS_SUPER_ADMIN.md): the
+// page reads a module's manifest from the address a till of this copy gets,
+// because a private module's bare URL answers 403 behind the delivery gate.
+// Here, beside the other tests that write this copy's token row, so parallel
+// files never race over it.
+describe('POST /api/pos/super/module-remotes/probe-url', () => {
+  let app: FastifyInstance;
+  let store: TestStore;
+  const env = {
+    LICENSE_SERVER_URL: process.env.LICENSE_SERVER_URL,
+    POS_SUPER_PASSWORD: process.env.POS_SUPER_PASSWORD,
+  };
+  const TOKEN = 'v1.probetoken0001.mac0123456789abcdefghijk';
+  const BARE = 'https://the-live.shop/api/modules/fiscal-checkbox/2.9.4/remote-entry.js';
+  const url = '/api/pos/super/module-remotes/probe-url';
+  let superHeaders: Record<string, string> = {};
+
+  beforeAll(async () => {
+    process.env.POS_SUPER_PASSWORD = 'correct-horse-battery-staple';
+    process.env.LICENSE_SERVER_URL = 'https://the-live.shop';
+    app = await buildPosTestApp();
+    store = await createTestStore('probeurl');
+    superHeaders = { 'x-pos-super-token': issueSuperToken()!.token };
+  }, 60000);
+
+  afterAll(async () => {
+    await dropTestStore(store?.storeId);
+    await app?.close();
+    await pool.query(`UPDATE pos_license_state SET module_token = NULL, module_token_expires_at = NULL WHERE id = 1`);
+    resetModuleTokenCacheForTests();
+    for (const [key, value] of Object.entries(env)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  async function plantToken(token: string | null) {
+    await pool.query(`UPDATE pos_license_state SET module_token = $1, module_token_expires_at = $2 WHERE id = 1`, [
+      token,
+      token ? new Date(Date.now() + 40 * DAY) : null,
+    ]);
+    resetModuleTokenCacheForTests();
+  }
+
+  it('is the super admin\'s alone — no token, a staff token and an owner token are all refused', async () => {
+    await plantToken(TOKEN);
+    const none = await app.inject({ method: 'POST', url, payload: { url: BARE } });
+    expect(none.statusCode).toBe(401);
+    for (const token of [store.sellerToken, store.ownerToken]) {
+      const res = await app.inject({ method: 'POST', url, payload: { url: BARE }, headers: auth(token) });
+      expect(res.statusCode).toBe(401);
+      expect(res.body).not.toContain(TOKEN);
+    }
+  });
+
+  it('answers a private module\'s bare URL with the address a till gets, token in the path', async () => {
+    await plantToken(TOKEN);
+    const res = await app.inject({ method: 'POST', url, payload: { url: BARE }, headers: superHeaders });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.json()).toEqual({
+      url: `https://the-live.shop/api/modules/t/${TOKEN}/fiscal-checkbox/2.9.4/remote-entry.js`,
+    });
+  });
+
+  it('gives any other URL back unchanged, and every URL while the copy holds no token', async () => {
+    await plantToken(TOKEN);
+    for (const other of [
+      'https://cdn.jsdelivr.net/gh/merenkoff/tiktok-live@module-builds/stocktake/2.9.4/remote-entry.js',
+      'https://elsewhere.example/api/modules/fiscal-checkbox/2.9.4/remote-entry.js',
+    ]) {
+      const res = await app.inject({ method: 'POST', url, payload: { url: other }, headers: superHeaders });
+      expect(res.json()).toEqual({ url: other });
+    }
+    await plantToken(null);
+    const res = await app.inject({ method: 'POST', url, payload: { url: BARE }, headers: superHeaders });
+    expect(res.json()).toEqual({ url: BARE });
+  });
+
+  it('wants a URL', async () => {
+    for (const payload of [{}, { url: '' }, { url: 42 }, { url: `https://x.example/${'a'.repeat(2100)}` }]) {
+      const res = await app.inject({ method: 'POST', url, payload, headers: superHeaders });
+      expect(res.statusCode).toBe(400);
+    }
   });
 });

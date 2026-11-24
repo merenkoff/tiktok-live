@@ -41,6 +41,7 @@
 | Обзор | `GET /api/pos/super/stores` — id, название, slug, `enabled_modules` (эффективный набор), `module_remotes`, TikTok-ник, ПРРО (вкл/провайдер), активные сотрудники, последняя продажа | таблица; remote-модули показаны как `id версия`, если URL — релиз `module-release.yml`, иначе id + короткий URL |
 | Правка одного магазина | `PATCH /api/pos/super/stores/:id {enabled_modules?, module_remotes?, vertical?, attribution?}` | «Редагувати» в строке: чекбоксы модулей, override-URL для вбудованих, онлайн-модули (URL, «Перевірити джерело», добавить/убрать), галочка «Атрибуція The Live Shop» (чеки, цінники, QR-меню — [POS_LICENSING.md](POS_LICENSING.md) «Атрибуція в магазині»; пише лише супер-адмін, міграція `108`) |
 | Перенацелить модуль | `POST /api/pos/super/module-remotes/repoint {module_id, url, store_ids?}` | панель «Перенацілити модуль»: id, новый URL (версия из URL, проба манифеста), чекбоксы магазинов; отчёт `updated / skipped / failed` |
+| Адрес для проверки источника | `POST /api/pos/super/module-remotes/probe-url {url}` → `{url}` | «Перевірити джерело» (оба места): адрес, который касса этой копии получила бы при входе, — для закрытого модуля с токеном доставки; ничего не хранит |
 | Новый магазин | `POST /api/pos/super/stores {name, slug, template_store_id, owner_login, owner_password, owner_name?}` → 201 / 400 / 409 | кнопка «Новий магазин»: назва, код (підказка з назви), шаблон, власник, пароль; після — плашка «Передайте власнику» без пароля ([POS_ONBOARDING.md](POS_ONBOARDING.md)) |
 | Лиды с сайта | `GET /api/pos/super/leads?status=&interest=&q=&limit=&offset=`, `GET /api/pos/super/leads/:id`, `PATCH /api/pos/super/leads/:id {status?, note?}` | вкладка «Ліди» (`/super/leads`): статус-чипи, фільтр за продуктом, пошук; картка з історією заявок, статусом і нотаткою ([CRM_LEADS.md](CRM_LEADS.md)) |
 | Відкриття QR-меню | `GET /api/pos/super/menu-scans` (зведення), `GET /api/pos/super/menu-wall-key` (ключ телевізора), `GET /api/pos/super/menu-wall?key=&after=` (знімок — за ключем, не за токеном) | вкладка «QR-меню» (`/super/menu-scans`): плитки сьогодні / 7 д / 30 д / усього, таблиця закладів, кнопка «📺 Відкрити віджет» → `/super/wall?key=…` ([POS_MENU_WALL.md](POS_MENU_WALL.md)) |
@@ -57,6 +58,21 @@
 должно быть) — «Перевірити джерело» делает это в браузере тем же
 `inspectRemoteManifest`, что и Settings владельца, включая предупреждение о
 `minHostPlatform` ([POS_MODULE_PLATFORM_VERSION.md](POS_MODULE_PLATFORM_VERSION.md)).
+
+**Закрытый модуль (2026-11-24).** Пока включён гейт выдачи
+(`LICENSE_MODULE_GATE=on`, [POS_OPENCORE.md](POS_OPENCORE.md) §8), голый URL
+закрытого модуля на сервере лицензий (`https://the-live.shop/api/modules/<id>/<ver>/…`)
+отвечает 403 без токена доставки — проверка писала «remote verification failed:
+manifest HTTP 403» на каждый закрытый модуль. Теперь страница сначала спрашивает
+`POST /api/pos/super/module-remotes/probe-url {url}` (только супер-токен,
+`Cache-Control: no-store`) и читает манифест по адресу, который получила бы касса
+этой копии при входе: тот же `moduleUrlForTill`, что и у логина, — токен этой
+копии в пути, любой другой URL и любой URL у копии без токена — как есть.
+Подпись проверяет по-прежнему браузер ключами своей сборки; сервер только
+говорит, откуда читать. В `module_remotes` хранится голый URL — адрес с токеном
+нигде не сохраняется. Старый сервер или нет связи — проверяется голый URL; 403
+после этого объясняется словами («модуль закритий, а ця копія не має чинного
+токена доставки»). Settings владельца по-прежнему проверяет голый URL.
 
 ## Лиды с сайта (CRM_LEADS.md, 2026-10-24)
 

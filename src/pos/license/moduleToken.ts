@@ -207,6 +207,16 @@ export function withModuleTokens(
   return out;
 }
 
+/**
+ * One module URL as a till of this copy receives it at login — for a check
+ * that must read the bundle the way a till will (the super admin's «Перевірити
+ * джерело»). Any URL that is not a bare module URL of the licence server comes
+ * back unchanged, and so does every URL while this copy holds no token.
+ */
+export async function moduleUrlForTill(url: string): Promise<string> {
+  return withModuleToken(url, await currentModuleToken(), licenseServerUrl());
+}
+
 /** `module_remotes` for a login answer: bare URLs of the licence server get this copy's token. */
 export async function moduleRemotesForTill(
   remotes: Record<string, string | ModuleRemoteEntry>
