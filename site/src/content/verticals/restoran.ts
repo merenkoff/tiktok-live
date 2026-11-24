@@ -30,6 +30,7 @@ import restaurantGuestAlerts from '../../assets/screenshots/restaurant-guest-ale
 import restaurantFeedbackSheet from '../../assets/screenshots/restaurant-feedback-sheet.png';
 import restaurantReviews from '../../assets/screenshots/restaurant-reviews.png';
 import restaurantQrMenuRules from '../../assets/screenshots/restaurant-qr-menu-rules.png';
+import restaurantPass from '../../assets/screenshots/restaurant-pass.png';
 
 const tables = TABLES_ADDON;
 const restoapp = COMPETITOR_FACTS.restoapp;
@@ -115,6 +116,11 @@ export const restoran: VerticalContent = {
         'Столи з готовими стравами — першими, той, що чекає найдовше, — на початку',
         'Окремий модуль поверх «Столів»: підключається на запит',
       ],
+      shot: {
+        src: restaurantPass,
+        alt: 'Екран «Роздача» на телефоні офіціанта: столи з кількістю страв до виносу, раунди «готово · 6 хв» і «готується · 9 хв», «винесено 1 з 2» під брускетою і питання «Несете на стіл 5?» з вибором «1 / Усі 2» та кнопками «Ні» і «Несу 2»',
+        phone: true,
+      },
     },
     {
       eyebrow: 'Розрахунок',
