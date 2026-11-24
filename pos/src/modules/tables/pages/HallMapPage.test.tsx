@@ -172,13 +172,58 @@ describe('HallMapPage', () => {
     expect(screen.getByTestId('tables-legend')).toHaveTextContent('Мій стіл');
   });
 
-  it('opens the bill on one tap, whether the table was free or not', async () => {
+  it('opens an occupied table without a write', async () => {
+    renderWithProviders(<HallMapPage />);
+    await userEvent.click(await screen.findByTestId('table-tile-11'));
+    expect(navigate).toHaveBeenCalledWith('/tables/90');
+    expect(posRequest).not.toHaveBeenCalledWith('post', '/bills', expect.anything());
+  });
+
+  it('asks how many guests at a free table, and seats it only with an answer', async () => {
+    posRequest.mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
+      if (method === 'get' && path === '/halls') return { halls: HALLS };
+      if (method === 'get' && path === '/bills') return { bills };
+      if (method === 'post' && path === '/bills') return { bill: { id: 91, guests: body?.guests }, created: true };
+      throw new Error(`unexpected ${method} ${path}`);
+    });
     renderWithProviders(<HallMapPage />);
     await userEvent.click(await screen.findByTestId('table-tile-12'));
-    // The server answers with the bill already there for an occupied table,
-    // so the screen never has to ask which the waiter meant.
+    // Looking at a table writes nothing: the sheet asks first.
+    expect(await screen.findByTestId('guests-sheet')).toHaveTextContent('Скільки гостей?');
+    expect(posRequest).not.toHaveBeenCalledWith('post', '/bills', expect.anything());
+
+    await userEvent.click(screen.getByTestId('guests-3'));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/tables/91'));
-    expect(posRequest).toHaveBeenCalledWith('post', '/bills', { table_id: 12 });
+    expect(posRequest).toHaveBeenCalledWith(
+      'post',
+      '/bills',
+      expect.objectContaining({ table_id: 12, guests: 3, client_uuid: expect.any(String) })
+    );
+  });
+
+  it('opens a free table without seating it on «Пізніше»', async () => {
+    renderWithProviders(<HallMapPage />);
+    await userEvent.click(await screen.findByTestId('table-tile-12'));
+    await userEvent.click(await screen.findByTestId('guests-later'));
+    expect(navigate).toHaveBeenCalledWith('/tables/table/12', {
+      state: { table: { id: 12, name: '6', hall_name: 'Зала' } },
+    });
+    expect(posRequest).not.toHaveBeenCalledWith('post', '/bills', expect.anything());
+  });
+
+  it('keeps its own count when somebody seated the table a moment earlier', async () => {
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'get' && path === '/halls') return { halls: HALLS };
+      if (method === 'get' && path === '/bills') return { bills };
+      if (method === 'post' && path === '/bills') return { bill: { id: 93, guests: 2 }, created: false };
+      if (method === 'patch' && path === '/bills/93') return { id: 93 };
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+    renderWithProviders(<HallMapPage />);
+    await userEvent.click(await screen.findByTestId('table-tile-12'));
+    await userEvent.click(await screen.findByTestId('guests-5'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/tables/93'));
+    expect(posRequest).toHaveBeenCalledWith('patch', '/bills/93', { guests: 5 });
   });
 
   it('shows the refusal from the server instead of swallowing it', async () => {
@@ -189,8 +234,15 @@ describe('HallMapPage', () => {
     });
     renderWithProviders(<HallMapPage />);
     await userEvent.click(await screen.findByTestId('table-tile-12'));
+    await userEvent.click(await screen.findByTestId('guests-2'));
     expect(await screen.findByTestId('tables-banner')).toHaveTextContent('Столи не налаштовано');
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('says «Без замовлення» on a table seated with nothing ordered', async () => {
+    bills = [{ ...bills[0], fired_total_cents: 0, draft_count: 0, live_rounds: 0, prep_status: null }];
+    renderWithProviders(<HallMapPage />);
+    expect(await screen.findByTestId('table-empty-11')).toHaveTextContent('Без замовлення');
   });
 
   it('switches halls without re-reading the room', async () => {
@@ -250,6 +302,21 @@ describe('HallMapPage', () => {
     expect(await screen.findByTestId('tables-banner')).toHaveTextContent('Потрібна мережа');
     expect(posRequest).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('opens an occupied table from the till’s memory when the Wi-Fi blinks', async () => {
+    const { unmount } = renderWithProviders(<HallMapPage />, { shell: 'cashier' });
+    await screen.findByTestId('table-tile-11');
+    await waitFor(async () => expect(await mirror.loadRoom(7)).not.toBeNull());
+    unmount();
+
+    useOfflineStatus.setState({ online: false });
+    posRequest.mockClear();
+    renderWithProviders(<HallMapPage />, { shell: 'cashier' });
+    await userEvent.click(await screen.findByTestId('table-tile-11'));
+    // Reading is not a write: the bill screen draws its own copy.
+    expect(navigate).toHaveBeenCalledWith('/tables/90');
+    expect(posRequest).not.toHaveBeenCalled();
   });
 
   it('keeps no mirror on the waiter’s web tablet', async () => {

@@ -197,7 +197,17 @@ export interface OpenBillSummary {
   fired_total_cents: number;
   /** Lines waiting to be sent — the dot that says «не відправлено». */
   draft_count: number;
-  /** The earliest unserved round, so the tile can show what the table waits for. */
+  /**
+   * Rounds that are not cancelled. With `draft_count` it is what makes a tile
+   * «Без замовлення» — `fired_total_cents` alone cannot, because a round of
+   * zero-priced dishes is still dinner.
+   */
+  live_rounds: number;
+  /**
+   * What the table is waiting on: `ready` when any round is waiting to be
+   * carried out (the waiter has something to do), else `new` while one is
+   * cooking, else null.
+   */
   prep_status: 'new' | 'ready' | null;
 }
 
@@ -530,6 +540,7 @@ export async function listOpenBills(storeId: number): Promise<OpenBillSummary[]>
             b.opened_by, b.opened_by_guest, s.display_name AS opened_by_name,
             COALESCE(fired.total, 0) AS fired_total,
             COALESCE(draft.lines, 0) AS draft_lines,
+            COALESCE(live.rounds, 0) AS live_rounds,
             waiting.prep_status
        FROM pos_bills b
        LEFT JOIN pos_staff s ON s.id = b.opened_by
@@ -545,11 +556,16 @@ export async function listOpenBills(storeId: number): Promise<OpenBillSummary[]>
           WHERE i.bill_id = b.id AND i.round_id IS NULL
        ) draft ON TRUE
        LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS rounds
+           FROM pos_bill_rounds r
+          WHERE r.bill_id = b.id AND r.cancelled_at IS NULL
+       ) live ON TRUE
+       LEFT JOIN LATERAL (
          SELECT r.prep_status
            FROM pos_bill_rounds r
           WHERE r.bill_id = b.id AND r.cancelled_at IS NULL
             AND r.prep_status IN ('new', 'ready')
-          ORDER BY CASE r.prep_status WHEN 'new' THEN 0 ELSE 1 END, r.seq ASC
+          ORDER BY CASE r.prep_status WHEN 'ready' THEN 0 ELSE 1 END, r.seq ASC
           LIMIT 1
        ) waiting ON TRUE
       WHERE b.store_id = $1 AND b.status = 'open'
@@ -570,13 +586,19 @@ export async function listOpenBills(storeId: number): Promise<OpenBillSummary[]>
         : new Date(row.precheck_printed_at as string).toISOString(),
     fired_total_cents: Number(row.fired_total ?? 0),
     draft_count: Number(row.draft_lines ?? 0),
+    live_rounds: Number(row.live_rounds ?? 0),
     prep_status: (row.prep_status as 'new' | 'ready' | null) ?? null,
   }));
 }
 
 // ── the draft ──────────────────────────────────────────────────────────────
 
-async function loadOpenBill(client: DbClient, storeId: number, billId: number): Promise<void> {
+/**
+ * Lock the bill row and refuse one that is no longer open. Every write to a
+ * bill — and to its rounds — takes this lock first, so the order is always
+ * bill → round → lines and two writers can never wait on each other in a ring.
+ */
+export async function loadOpenBill(client: DbClient, storeId: number, billId: number): Promise<void> {
   const bill = await client.query(
     `SELECT status FROM pos_bills WHERE store_id = $1 AND id = $2 FOR UPDATE`,
     [storeId, billId]
@@ -947,6 +969,9 @@ export async function removeDraftItem(
       [storeId, billId, itemId]
     );
     if (result.rowCount === 0) await refuseFiredLine(client, storeId, billId, itemId);
+    // The bill was touched just now: an emptied bill is idle from here, not
+    // from when it was opened (autoCancelEmptyBills).
+    await client.query(`UPDATE pos_bills SET updated_at = NOW() WHERE id = $1`, [billId]);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1138,6 +1163,11 @@ export async function cancelBill(
     if (fired.rows.length > 0) {
       throw new BillConflict('Раунди вже на кухні — спершу скасуйте їх');
     }
+    // A receipt already stands for part of it: that money is real, and a bill
+    // that took it is paid in part, not «nobody is going to pay».
+    if (await hasPaidLine(client, billId)) {
+      throw new BillConflict('Частину рахунку вже оплачено — його не можна скасувати');
+    }
     await client.query(
       `DELETE FROM pos_excise_labels l USING pos_bill_items i
         WHERE l.bill_item_id = i.id AND i.bill_id = $1 AND i.round_id IS NULL AND l.sale_item_id IS NULL`,
@@ -1160,6 +1190,105 @@ export async function cancelBill(
     client.release();
   }
   return getBill(storeId, billId);
+}
+
+async function hasPaidLine(client: DbClient, billId: number): Promise<boolean> {
+  const paid = await client.query(
+    `SELECT 1 FROM pos_bill_items WHERE bill_id = $1 AND sale_id IS NOT NULL LIMIT 1`,
+    [billId]
+  );
+  return paid.rows.length > 0;
+}
+
+/**
+ * A bill with nothing on it: no round that is still alive, no line in the
+ * draft and no line on a receipt. Closing one loses nothing — it is a table
+ * that was opened and then left alone (or whose every round was taken back).
+ */
+export async function isEmptyBillTx(client: DbClient, billId: number): Promise<boolean> {
+  const busy = await client.query(
+    `SELECT 1
+       WHERE EXISTS (SELECT 1 FROM pos_bill_rounds WHERE bill_id = $1 AND cancelled_at IS NULL)
+          OR EXISTS (SELECT 1 FROM pos_bill_items
+                      WHERE bill_id = $1 AND (round_id IS NULL OR sale_id IS NOT NULL))`,
+    [billId]
+  );
+  return busy.rows.length === 0;
+}
+
+/** How long an empty bill may sit untouched before the cron closes it. */
+export const EMPTY_BILL_IDLE_HOURS = 3;
+
+/**
+ * Close open bills that hold nothing and have not been touched for a while
+ * (TechDocs/POS_TABLES.md §4.1): a table opened by mistake, a party that sat
+ * down and left before ordering, a bill whose every round was taken back. Left
+ * alone they keep the table «occupied» for days — a tile reading «0 ₴ ·
+ * 180:05» — and nobody can say who should close them.
+ *
+ * Idle is measured from the bill's last trace: its opening, any write that
+ * bumps `updated_at`, a round fired or cancelled. Each candidate is closed in
+ * its own transaction, re-checked under the bill's lock: a waiter may be adding
+ * the first dish this very second, and a single UPDATE … WHERE NOT EXISTS would
+ * not see that line (READ COMMITTED re-checks only the locked row). The close
+ * names nobody (`closed_by` NULL), which is how the history tells it from a
+ * waiter's «Закрити стіл».
+ */
+export async function autoCancelEmptyBills(
+  options: { idleHours?: number; storeId?: number } = {}
+): Promise<number> {
+  const idleHours = options.idleHours ?? EMPTY_BILL_IDLE_HOURS;
+  const idle = `GREATEST(
+      b.opened_at,
+      b.updated_at,
+      (SELECT MAX(COALESCE(r.cancelled_at, r.fired_at)) FROM pos_bill_rounds r WHERE r.bill_id = b.id)
+    ) < NOW() - make_interval(hours => $1::int)`;
+  const candidates = await pool.query(
+    `SELECT b.id
+       FROM pos_bills b
+      WHERE b.status = 'open'
+        AND NOT EXISTS (SELECT 1 FROM pos_bill_rounds r WHERE r.bill_id = b.id AND r.cancelled_at IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM pos_bill_items i
+                         WHERE i.bill_id = b.id AND (i.round_id IS NULL OR i.sale_id IS NOT NULL))
+        AND ${idle}
+        AND ($2::bigint IS NULL OR b.store_id = $2::bigint)
+      ORDER BY b.id`,
+    [idleHours, options.storeId ?? null]
+  );
+  let closed = 0;
+  for (const row of candidates.rows) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Locked first, then every condition read again: the guests may have
+      // been set, or the first dish added, since the list above was taken.
+      const bill = await client.query(
+        `SELECT b.status, ${idle} AS idle FROM pos_bills b WHERE b.id = $2 FOR UPDATE`,
+        [idleHours, row.id]
+      );
+      const locked = bill.rows[0];
+      if (
+        locked?.status === 'open' &&
+        locked.idle === true &&
+        (await isEmptyBillTx(client, Number(row.id)))
+      ) {
+        await client.query(
+          `UPDATE pos_bills
+              SET status = 'cancelled', closed_by = NULL, closed_at = NOW(), updated_at = NOW()
+            WHERE id = $1`,
+          [row.id]
+        );
+        closed += 1;
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  return closed;
 }
 
 /** Mark that the sum has been read out loud. Never freezes anything (§4.6). */

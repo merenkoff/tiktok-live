@@ -287,16 +287,23 @@ test('one evening at table 5: seat, ring, fire, pay', async ({ page }) => {
   await expect(page.getByTestId('table-tile-11')).toContainText('5');
   await expect(page.getByTestId('table-tile-11')).toHaveAttribute('data-tone', 'free');
 
-  // One tap seats the table and opens its bill — the server answers with the
-  // bill already there for an occupied one, so the screen never asks which.
+  // A tap on a free table only asks (§4.14): «Пізніше» opens the bill screen
+  // on the table alone, and nothing is written yet — the table stays free.
   await page.getByTestId('table-tile-11').click();
+  await expect(page.getByTestId('guests-sheet')).toContainText('Скільки гостей?');
+  await page.getByTestId('guests-later').click();
   await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
+  await expect(page.getByTestId('bill-guests')).toContainText('Гостей: —');
+  expect(sent.find((s) => s.path === '/bills')).toBeUndefined();
 
   // The menu is on the screen beside the bill: a tap on the tile is the whole
-  // order, and the line is on the draft before the server has answered.
+  // order, and the line is on the draft before the server has answered. That
+  // first dish is what seats the table — the bill is opened first, then the
+  // dish goes onto it.
   await page.getByTestId('menu-tile-4').click();
   await expect(page.getByTestId('bill-draft')).toContainText('Круасан');
   await expect(page.getByTestId('bill-line-21')).toHaveAttribute('data-pending', 'no');
+  expect(sent.map((s) => s.path)).toEqual(['/bills', '/items']);
 
   // The two sums are named apart: nothing is owed until the round fires.
   await expect(page.getByTestId('bill-owed')).toContainText('0');
@@ -411,8 +418,10 @@ test('a guest’s request on the bill screen: accepted into that bill, round on 
 
   await page.goto('/tables');
   await page.getByTestId('table-tile-11').click();
+  await page.getByTestId('guests-later').click();
   await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
   // This table's requests only, above the menu — and not on the bill yet.
+  // The table has no bill at all: accepting is what opens it.
   await expect(page.getByTestId('bill-requests')).toContainText('Гість просить');
   await expect(page.getByTestId('bill-owed')).toContainText('0');
 
@@ -480,6 +489,7 @@ test('a bottle sold whole goes to the table only with its stamp scanned (ДК4-�
 
   await page.goto('/tables');
   await page.getByTestId('table-tile-11').click();
+  await page.getByTestId('guests-later').click();
   await page.getByTestId('menu-tile-50').click();
   await expect(page.getByTestId('bill-stamps-31')).toContainText('Марок 0 з 1');
 
@@ -546,13 +556,15 @@ test('a pour waiting for the bar’s stamp is marked, and the rest of the bill p
   expect(paid.parts[0].line_ids).toEqual([21]);
 });
 
-test('five taps: open the table and ring three simple dishes', async ({ page }) => {
+test('six taps: open the table for two and ring three simple dishes', async ({ page }) => {
   await signInAsWaiter(page);
   const sent = await mockTables(page);
   await page.goto('/tables');
   const { tap, count } = counter(page);
 
+  // The guests' count is the one tap §4.14 added: it is what seats the table.
   await tap('table-tile-11');
+  await tap('guests-2');
   await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
   await tap('menu-tile-4');
   await tap('menu-tile-4');
@@ -563,7 +575,8 @@ test('five taps: open the table and ring three simple dishes', async ({ page }) 
   await tap('bill-fire');
   await expect(page.getByTestId('bill-owed')).toContainText('55');
 
-  expect(count()).toBe(5);
+  expect(count()).toBe(6);
+  expect(sent.find((s) => s.path === '/bills')?.body).toMatchObject({ table_id: 11, guests: 2 });
   expect(sent.filter((s) => s.path === '/items')).toHaveLength(3);
   expect(sent.filter((s) => s.path === '/fire')).toHaveLength(1);
 });
@@ -573,6 +586,7 @@ test('four taps: a latte with two changed answers', async ({ page }) => {
   const sent = await mockTables(page);
   await page.goto('/tables');
   await page.getByTestId('table-tile-11').click();
+  await page.getByTestId('guests-2').click();
   await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
   const { tap, count } = counter(page);
 

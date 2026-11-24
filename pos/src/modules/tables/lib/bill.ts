@@ -21,6 +21,16 @@ export function liveRounds(bill: Bill): BillRound[] {
 }
 
 /**
+ * Nothing on the table: no round alive, nothing in the draft, nothing on a
+ * receipt. Such a bill can simply be closed («Закрити стіл») — the server
+ * agrees on the same three conditions and refuses otherwise.
+ */
+export function isEmptyBill(bill: Bill): boolean {
+  if (bill.status !== 'open' || bill.draft.length > 0) return false;
+  return bill.rounds.every((r) => r.cancelled_at != null && r.items.every((l) => l.sale_id == null));
+}
+
+/**
  * A round can be taken back until it is handed over.
  *
  * `served` is the line: a dish that reached the guest is RETURNED, not

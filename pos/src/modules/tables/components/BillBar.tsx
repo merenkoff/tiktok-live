@@ -25,12 +25,25 @@ interface Props {
   online: boolean;
   onOpen: () => void;
   onFire: () => void;
+  /** Given only when the bill holds nothing: «Закрити стіл» takes the place of «На кухню». */
+  onCloseTable?: () => void;
 }
 
 /** How many draft rows the card shows before «ще N» — the menu keeps the rest of the screen. */
 const SHOWN = 2;
 
-export function BillBar({ draft, rounds, summary, owedCents, hasPending, busy, online, onOpen, onFire }: Props): JSX.Element {
+export function BillBar({
+  draft,
+  rounds,
+  summary,
+  owedCents,
+  hasPending,
+  busy,
+  online,
+  onOpen,
+  onFire,
+  onCloseTable,
+}: Props): JSX.Element {
   const hasDraft = summary.lines > 0;
   const cooking = [...rounds].reverse().find((r) => r.cancelled_at == null && r.prep_status !== 'served');
   return (
@@ -75,16 +88,28 @@ export function BillBar({ draft, rounds, summary, owedCents, hasPending, busy, o
           <p className="text-[13px] text-sq-secondary">До сплати</p>
           <p className="text-2xl font-bold text-sq-heading tabular-nums">{formatUah(owedCents)}</p>
         </div>
-        <button
-          type="button"
-          className="pos-btn-primary min-h-14 rounded-xl px-5 sm:min-w-[240px] text-[17px] gap-2"
-          data-testid="bill-bar-fire"
-          disabled={busy || !online || hasPending || !hasDraft}
-          onClick={onFire}
-        >
-          <ChefHat size={24} />
-          На кухню{hasDraft ? ` · ${summary.lines}` : ''}
-        </button>
+        {onCloseTable ? (
+          <button
+            type="button"
+            className="min-h-14 rounded-xl bg-white ring-1 ring-sq-divider px-5 sm:min-w-[240px] text-[17px] font-semibold text-sq-danger disabled:opacity-40"
+            data-testid="bill-bar-close-table"
+            disabled={busy || !online}
+            onClick={onCloseTable}
+          >
+            Закрити стіл
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="pos-btn-primary min-h-14 rounded-xl px-5 sm:min-w-[240px] text-[17px] gap-2"
+            data-testid="bill-bar-fire"
+            disabled={busy || !online || hasPending || !hasDraft}
+            onClick={onFire}
+          >
+            <ChefHat size={24} />
+            На кухню{hasDraft ? ` · ${summary.lines}` : ''}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -29,6 +29,11 @@
 // look like it is. Accepting goes through the same serial queue as every other
 // write, so it can never overtake the taps before it.
 //
+// A free table opens here with NO bill (§4.1): the menu, an empty draft and
+// «Гостей: —». The first dish or the guests' count seats the table; until then
+// the map keeps it free. A bill with nothing on it — opened and left alone, or
+// every round taken back — offers «Закрити стіл» where «Оплатити» would be.
+//
 // Calls and orders that went straight to the kitchen (Q8/Q9) sit there too,
 // for this table. The poll reads the WHOLE room and filters here, for one
 // reason: a waiter on table 3's bill must still learn that table 5 is calling.
@@ -55,13 +60,16 @@ import { BillSheet } from '../components/BillSheet';
 import { GuestAlertsPanel } from '../components/GuestAlertsPanel';
 import { GuestOrdersPanel } from '../components/GuestOrdersPanel';
 import type { AcceptOutcome } from '../components/GuestOrdersPanel';
+import { GuestsSheet } from '../components/GuestsSheet';
 import { MenuCatalog } from '../components/MenuCatalog';
 import { PaySheet } from '../components/PaySheet';
 import { countsByProduct, draftSummary, draftView, rowsNeedingStamps } from '../lib/draft';
 import type { DraftLineView } from '../lib/draft';
+import { isEmptyBill } from '../lib/bill';
 import { isSettled, payableLines } from '../lib/pay';
 import { buildPrecheck } from '../lib/precheck';
 import { useBill } from '../lib/useBill';
+import type { BillTarget } from '../lib/useBill';
 import { useGuestOrders } from '../lib/useGuestOrders';
 import { useIsWide } from '../lib/useIsWide';
 import { guestsLabel, seatedFor } from '../lib/hallMap';
@@ -70,19 +78,46 @@ import { useChimeSetting, useNotifyChime } from '../lib/useNotifyChime';
 import { serverMessage } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 import type { PayPart } from '../lib/tablesApi';
-import type { GuestOrder, LowFeedback, SentGuestOrder, WaiterCall } from '../lib/types';
+import { newUuid } from '../lib/uuid';
+import type { Bill, GuestOrder, LowFeedback, SentGuestOrder, WaiterCall } from '../lib/types';
 
-function newUuid(): string {
-  const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
-  if (c?.randomUUID) return c.randomUUID();
-  // Only a very old webview lands here; the value still has to look like one,
-  // because the server validates the shape before it dedupes on it.
-  return '00000000-0000-4000-8000-' + String(Date.now()).padStart(12, '0').slice(-12);
+/** The table's name and hall, for a screen that may have no bill to read them from. */
+interface TableInfo {
+  name: string;
+  hall_name: string;
 }
 
-export function BillPage(): JSX.Element {
-  const { billId } = useParams<{ billId: string }>();
-  const id = Number(billId);
+/**
+ * Where the header's «Стіл 5 · Зала» comes from: the bill once there is one;
+ * before that what the map handed over on the way in, or — on a link opened
+ * cold — the room as the server lays it out.
+ */
+function useTableInfo(tableId: number | null, bill: Bill | null, handed: TableInfo | null, online: boolean): TableInfo | null {
+  const [looked, setLooked] = useState<TableInfo | null>(null);
+  const known = bill != null || handed != null;
+  useEffect(() => {
+    if (known || tableId == null || !online) return;
+    let live = true;
+    tablesApi
+      .listHalls()
+      .then(({ halls }) => {
+        const hall = halls.find((h) => h.tables.some((t) => t.id === tableId));
+        const table = hall?.tables.find((t) => t.id === tableId);
+        if (live && hall && table) setLooked({ name: table.name, hall_name: hall.name });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [known, tableId, online]);
+  if (bill) return { name: bill.table_name, hall_name: bill.hall_name };
+  return handed ?? looked;
+}
+
+export function BillPage({ target: given }: { target?: BillTarget } = {}): JSX.Element {
+  const params = useParams<{ billId: string }>();
+  const target: BillTarget = given ?? { billId: Number(params.billId) };
+  const targetTableId = 'tableId' in target ? target.tableId : null;
   const online = useOfflineStatus((s) => s.online);
   const shell = usePosShell();
   const storeId = useAuthStore((s) => s.auth?.store.id ?? null);
@@ -106,14 +141,17 @@ export function BillPage(): JSX.Element {
     notice,
     reload,
     addLine,
+    setGuests,
     run,
+    runFree,
   } = useBill(
-    id,
+    target,
     // The till and the tablet PWA keep a copy so a blink of the Wi-Fi does not
     // take the bill off the screen mid-dinner; the web shell has no offline
     // runtime to read one back (§4.12).
     { online, mirrored: shell !== 'web', storeId }
   );
+  const [guestsOpen, setGuestsOpen] = useState(false);
   const wide = useIsWide();
   const vertical = useVertical();
   const sizeLabel = vertical.attributes.find((a) => a.key === 'size')?.label ?? 'Розмір';
@@ -131,8 +169,9 @@ export function BillPage(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // The whole room's, once there is a bill to stand at: this table's go on
+  // The whole room's, once there is a table to stand at: this table's go on
   // the cards, the rest into the «Інші столи» line and the chime.
+  const tableId = bill?.table_id ?? targetTableId;
   const {
     orders: roomRequests,
     sent: roomSent,
@@ -140,8 +179,7 @@ export function BillPage(): JSX.Element {
     feedback: roomFeedback,
     loaded: feedLoaded,
     refresh: refreshRequests,
-  } = useGuestOrders({ online: online && bill != null });
-  const tableId = bill?.table_id ?? null;
+  } = useGuestOrders({ online: online && tableId != null });
   const requests = useMemo(() => roomRequests.filter((o) => o.table_id === tableId), [roomRequests, tableId]);
   const tableSent = useMemo(() => roomSent.filter((o) => o.table_id === tableId), [roomSent, tableId]);
   const tableCalls = useMemo(() => roomCalls.filter((c) => c.table_id === tableId), [roomCalls, tableId]);
@@ -159,10 +197,19 @@ export function BillPage(): JSX.Element {
 
   // The hall map sends the server's warning along when accepting a request
   // left something for this screen to finish («відправте на кухню самі»).
-  const arrival = (location.state as { notice?: unknown } | null)?.notice;
+  const arrivalState = location.state as { notice?: unknown; table?: unknown } | null;
+  const arrival = arrivalState?.notice;
   useEffect(() => {
     if (typeof arrival === 'string' && arrival) notice(arrival);
   }, [arrival, notice]);
+  // The map hands the table's name over with a free table, so the header has
+  // something to say before any bill exists.
+  const handedRaw = arrivalState?.table as { name?: unknown; hall_name?: unknown } | undefined;
+  const handed: TableInfo | null =
+    handedRaw && typeof handedRaw.name === 'string'
+      ? { name: handedRaw.name, hall_name: typeof handedRaw.hall_name === 'string' ? handedRaw.hall_name : '' }
+      : null;
+  const table = useTableInfo(tableId, bill, handed, online);
 
   const draft = useMemo(() => (bill ? draftView(bill.draft, pending) : []), [bill, pending]);
   const summary = useMemo(() => draftSummary(draft), [draft]);
@@ -204,7 +251,8 @@ export function BillPage(): JSX.Element {
 
   if (loading) return <p className="p-6 text-center text-sm text-sq-muted">Завантаження…</p>;
 
-  if (error || !bill) {
+  // A table-only screen with no bill is the empty table, not an error.
+  if (error || (!bill && targetTableId == null)) {
     return (
       <div className="p-4">
         <div className="sq-card p-6 text-center">
@@ -229,8 +277,8 @@ export function BillPage(): JSX.Element {
     // An object rather than two `let`s: TypeScript cannot see the closure
     // assign them, and would narrow both to their initial value below.
     const outcome = { settled: false, warning: null as string | null };
-    const ok = await run(async () => {
-      const paid = await tablesApi.payBill(bill.id, parts, cashRounding);
+    const ok = await run(async (id) => {
+      const paid = await tablesApi.payBill(id, parts, cashRounding);
       outcome.settled = isSettled(paid.bill);
       outcome.warning = paid.warning ?? null;
       return paid.bill;
@@ -258,8 +306,9 @@ export function BillPage(): JSX.Element {
    * Rust command simply never runs.
    */
   const precheck = async (): Promise<void> => {
+    if (!bill) return;
     setPrintStatus(null);
-    const ok = await run(() => tablesApi.markPrecheck(bill.id));
+    const ok = await run((id) => tablesApi.markPrecheck(id));
     if (!ok || shell !== 'cashier') return;
     try {
       const [name, mm] = await Promise.all([
@@ -285,9 +334,9 @@ export function BillPage(): JSX.Element {
       return;
     }
     void run(
-      async () => {
+      async (id) => {
         try {
-          return await tablesApi.fireRound(bill.id, newUuid());
+          return await tablesApi.fireRound(id, newUuid());
         } catch (err) {
           // A stamp the server counts differently (another tablet scanned or
           // took one off meanwhile): back to the stamps, in its words.
@@ -308,9 +357,9 @@ export function BillPage(): JSX.Element {
     if (row?.id == null) return;
     const lineId = row.id;
     setStampSheet({ error: null });
-    void run(async () => {
+    void run(async (id) => {
       try {
-        return await tablesApi.setExciseLabels(bill.id, lineId, labels);
+        return await tablesApi.setExciseLabels(id, lineId, labels);
       } catch (err) {
         setStampSheet({ error: serverMessage(err, 'Не вдалося зберегти марку') });
         throw err;
@@ -321,15 +370,15 @@ export function BillPage(): JSX.Element {
   const less = (row: DraftLineView): void => {
     if (row.id == null) return;
     const lineId = row.id;
-    void run(() =>
-      row.quantity > 1 ? tablesApi.setQuantity(bill.id, lineId, row.quantity - 1) : tablesApi.removeLine(bill.id, lineId)
+    void run((id) =>
+      row.quantity > 1 ? tablesApi.setQuantity(id, lineId, row.quantity - 1) : tablesApi.removeLine(id, lineId)
     );
   };
 
   const more = (row: DraftLineView): void => {
     if (row.id == null) return;
     const lineId = row.id;
-    void run(() => tablesApi.setQuantity(bill.id, lineId, row.quantity + 1));
+    void run((id) => tablesApi.setQuantity(id, lineId, row.quantity + 1));
   };
 
   /**
@@ -352,7 +401,7 @@ export function BillPage(): JSX.Element {
     const lineId = editing?.row.id;
     setEditing(null);
     if (lineId == null) return;
-    void run(() => tablesApi.updateLine(bill.id, lineId, { variant_id: item.variant_id, modifiers, note }));
+    void run((id) => tablesApi.updateLine(id, lineId, { variant_id: item.variant_id, modifiers, note }));
   };
 
   /**
@@ -363,7 +412,8 @@ export function BillPage(): JSX.Element {
    */
   const acceptRequest = async (order: GuestOrder, excludeLineIds: number[]): Promise<AcceptOutcome> => {
     const result: { warning: string | null; refused: number | null } = { warning: null, refused: null };
-    const ok = await run(
+    // Free of the bill: accepting opens it itself when the table has none.
+    const ok = await runFree(
       async () => {
         try {
           const done = await tablesApi.acceptGuestOrder(order.id, excludeLineIds);
@@ -453,12 +503,30 @@ export function BillPage(): JSX.Element {
     }
   };
 
+  /** «Закрити стіл»: the bill holds nothing, so closing it loses nothing — the table is free again. */
+  const closeTable = async (): Promise<void> => {
+    setSheetOpen(false);
+    const ok = await run((id) => tablesApi.cancelBill(id));
+    if (ok) navigate('/tables', { state: { note: `Стіл ${table?.name ?? ''} вільний` } });
+  };
+
+  const changeGuests = async (n: number): Promise<void> => {
+    setGuestsOpen(false);
+    await setGuests(n);
+  };
+
+  // Offered only when the server would agree: nothing alive, nothing typed,
+  // nothing on a receipt, and no tap still on its way.
+  const canClose = bill != null && isEmptyBill(bill) && pending.length === 0 && !stale;
+  const tableName = table?.name ?? '';
+
   const pane = (
     <BillPane
-      bill={bill}
+      rounds={bill?.rounds ?? []}
+      precheckPrinted={bill?.precheck_printed_at != null}
       draft={draft}
       summary={summary}
-      owedCents={bill.fired_total_cents}
+      owedCents={bill?.fired_total_cents ?? 0}
       busy={busy}
       online={online}
       hasPending={pending.length > 0}
@@ -472,7 +540,7 @@ export function BillPage(): JSX.Element {
         setSheetOpen(false);
         setStampSheet({ error: null });
       }}
-      onCancelRound={(roundId) => void run(() => tablesApi.cancelRound(bill.id, roundId), { stock: true })}
+      onCancelRound={(roundId) => void run((id) => tablesApi.cancelRound(id, roundId), { stock: true })}
       onFire={fire}
       onPay={() => {
         setSheetOpen(false);
@@ -481,6 +549,8 @@ export function BillPage(): JSX.Element {
         setPaying(true);
       }}
       onPrecheck={() => void precheck()}
+      canClose={canClose}
+      onCloseTable={() => void closeTable()}
     />
   );
 
@@ -493,13 +563,24 @@ export function BillPage(): JSX.Element {
           onClick={() => navigate('/tables')}
         >
           <ArrowLeft size={20} />
-          {bill.hall_name || 'Зала'}
+          {table?.hall_name || 'Зала'}
         </button>
         <div className={`min-w-0 flex-1 ${wide ? '' : 'text-center pr-16'}`}>
-          <p className="truncate text-xl font-bold text-sq-heading">Стіл {bill.table_name}</p>
+          <p className="truncate text-xl font-bold text-sq-heading">Стіл {tableName}</p>
           <p className="truncate text-[13px] text-sq-muted">
-            {guestsLabel(bill.guests)} · {bill.opened_by_name} · {seatedFor(bill.opened_at, new Date().toISOString())} ·
-            рахунок {bill.bill_no}
+            {/* The count is a button: the guests are set here, and setting them seats a free table. */}
+            <button
+              type="button"
+              className="font-semibold text-sq-blue disabled:text-sq-muted"
+              data-testid="bill-guests"
+              disabled={!online || busy || stale}
+              onClick={() => setGuestsOpen(true)}
+            >
+              {bill ? guestsLabel(bill.guests) : 'Гостей: —'}
+            </button>
+            {bill
+              ? ` · ${bill.opened_by_name} · ${seatedFor(bill.opened_at, new Date().toISOString())} · рахунок ${bill.bill_no}`
+              : ' · стіл вільний'}
           </p>
         </div>
       </header>
@@ -584,24 +665,28 @@ export function BillPage(): JSX.Element {
       {!wide && (
         <BillBar
           draft={draft}
-          rounds={bill.rounds}
+          rounds={bill?.rounds ?? []}
           summary={summary}
-          owedCents={bill.fired_total_cents}
+          owedCents={bill?.fired_total_cents ?? 0}
           hasPending={pending.length > 0}
           busy={busy}
           online={online}
           onOpen={() => setSheetOpen(true)}
           onFire={fire}
+          onCloseTable={canClose ? () => void closeTable() : undefined}
         />
       )}
 
       {!wide && sheetOpen && (
-        <BillSheet title={`Стіл ${bill.table_name} · рахунок ${bill.bill_no}`} onClose={() => setSheetOpen(false)}>
+        <BillSheet
+          title={bill ? `Стіл ${tableName} · рахунок ${bill.bill_no}` : `Стіл ${tableName}`}
+          onClose={() => setSheetOpen(false)}
+        >
           {pane}
         </BillSheet>
       )}
 
-      {paying && (
+      {paying && bill && (
         <PaySheet
           bill={bill}
           busy={busy}
@@ -626,6 +711,16 @@ export function BillPage(): JSX.Element {
             setStampSheet(null);
             fire();
           }}
+        />
+      )}
+
+      {guestsOpen && (
+        <GuestsSheet
+          title={`Стіл ${tableName}`}
+          current={bill?.guests ?? null}
+          busy={busy}
+          onPick={(n) => void changeGuests(n)}
+          onClose={() => setGuestsOpen(false)}
         />
       )}
 

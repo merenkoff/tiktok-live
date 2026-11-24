@@ -11,11 +11,14 @@
 import { formatUah } from '@pos/platform';
 import { canCancelRound, firedLineCents, ROUND_STATUS } from '../lib/bill';
 import type { DraftLineView, DraftSummary } from '../lib/draft';
-import type { Bill, BillLine, BillRound } from '../lib/types';
+import type { BillLine, BillRound } from '../lib/types';
 import { ChefHat, Minus, Pencil, Plus, Printer } from '@pos/platform/ui';
 
 export interface BillPaneProps {
-  bill: Bill;
+  /** The bill's rounds — none for a table nobody has ordered at yet. */
+  rounds: BillRound[];
+  /** The pre-bill was printed already: the button says «ще раз». */
+  precheckPrinted: boolean;
   draft: DraftLineView[];
   summary: DraftSummary;
   /** What the rounds locked — the money. */
@@ -37,10 +40,17 @@ export interface BillPaneProps {
   onFire: () => void;
   onPay: () => void;
   onPrecheck: () => void;
+  /**
+   * The bill holds nothing (no live round, no draft, nothing paid): «Закрити
+   * стіл» stands where «Оплатити» would, since there is nothing to pay.
+   */
+  canClose?: boolean;
+  onCloseTable?: () => void;
 }
 
 export function BillPane({
-  bill,
+  rounds,
+  precheckPrinted,
   draft,
   summary,
   owedCents,
@@ -58,6 +68,8 @@ export function BillPane({
   onFire,
   onPay,
   onPrecheck,
+  canClose = false,
+  onCloseTable,
 }: BillPaneProps): JSX.Element {
   const firedLine = (l: BillLine): JSX.Element => (
     <LineRow
@@ -149,7 +161,7 @@ export function BillPane({
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="bill-pane">
       <div className="flex-1 overflow-auto px-3.5 pt-3.5 pb-2 space-y-2.5">
-        {bill.rounds.map((round) => {
+        {rounds.map((round) => {
           const cancelled = round.cancelled_at != null;
           return (
             <section
@@ -246,17 +258,29 @@ export function BillPane({
             <ChefHat size={24} />
             На кухню{summary.lines > 0 ? ` · ${summary.lines}` : ''}
           </button>
-          <button
-            type="button"
-            className="pos-btn-primary flex-1 min-h-[52px] rounded-xl text-[17px]"
-            data-testid="bill-pay"
-            // The draft is the server's own rule, said here before it has to
-            // refuse: a plate the kitchen does not know about is not owed for.
-            disabled={busy || !online || hasPending || !canPay || draft.length > 0}
-            onClick={onPay}
-          >
-            Оплатити
-          </button>
+          {canClose && onCloseTable ? (
+            <button
+              type="button"
+              className="flex-1 min-h-[52px] rounded-xl bg-white ring-1 ring-sq-divider text-[16px] font-semibold text-sq-danger disabled:opacity-40"
+              data-testid="bill-close-table"
+              disabled={busy || !online}
+              onClick={onCloseTable}
+            >
+              Закрити стіл
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="pos-btn-primary flex-1 min-h-[52px] rounded-xl text-[17px]"
+              data-testid="bill-pay"
+              // The draft is the server's own rule, said here before it has to
+              // refuse: a plate the kitchen does not know about is not owed for.
+              disabled={busy || !online || hasPending || !canPay || draft.length > 0}
+              onClick={onPay}
+            >
+              Оплатити
+            </button>
+          )}
         </div>
         <button
           type="button"
@@ -266,7 +290,7 @@ export function BillPane({
           onClick={onPrecheck}
         >
           <Printer size={20} />
-          {bill.precheck_printed_at ? 'Передчек надруковано · ще раз' : 'Передчек'}
+          {precheckPrinted ? 'Передчек надруковано · ще раз' : 'Передчек'}
         </button>
         {printStatus && (
           <p className="text-xs text-sq-muted text-center" data-testid="bill-print-status">

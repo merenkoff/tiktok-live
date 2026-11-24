@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   guestsLabel,
   hallExtent,
+  isEmptySummary,
   kitchenState,
   seatedFor,
   seatsLabel,
@@ -127,6 +128,41 @@ describe('seatedFor', () => {
 
   it('never reads negative when a clock has drifted', () => {
     expect(seatedFor('2026-09-21T18:00:00Z', '2026-09-21T17:58:00Z')).toBe('0 хв');
+  });
+
+  it('says days from a day up — «180:05» reads as a time of day', () => {
+    expect(seatedFor('2026-09-21T18:00:00Z', '2026-09-22T17:59:00Z')).toBe('23:59');
+    expect(seatedFor('2026-09-21T18:00:00Z', '2026-09-22T18:00:00Z')).toBe('1 дн');
+    expect(seatedFor('2026-09-21T18:00:00Z', '2026-09-29T06:05:00Z')).toBe('7 дн');
+  });
+});
+
+describe('isEmptySummary', () => {
+  const summary = (over: Partial<OpenBillSummary>): OpenBillSummary => ({
+    id: 1,
+    bill_no: 1,
+    table_id: 1,
+    guests: 2,
+    opened_at: '2026-09-21T18:00:00Z',
+    opened_by_name: 'Марта',
+    precheck_printed_at: null,
+    fired_total_cents: 0,
+    draft_count: 0,
+    prep_status: null,
+    ...over,
+  });
+
+  it('is empty with no live round and nothing typed', () => {
+    expect(isEmptySummary(summary({ live_rounds: 0 }))).toBe(true);
+  });
+
+  it('is not empty with a round of free dishes or a typed line', () => {
+    expect(isEmptySummary(summary({ live_rounds: 1 }))).toBe(false);
+    expect(isEmptySummary(summary({ live_rounds: 0, draft_count: 2 }))).toBe(false);
+  });
+
+  it('never calls a bill empty when an older backend does not say', () => {
+    expect(isEmptySummary(summary({}))).toBe(false);
   });
 });
 

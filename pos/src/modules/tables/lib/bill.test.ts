@@ -7,6 +7,7 @@ import {
   billTotals,
   canCancelRound,
   firedLineCents,
+  isEmptyBill,
   lineTitle,
   liveRounds,
   previewLineCents,
@@ -82,6 +83,21 @@ describe('liveRounds and canCancelRound', () => {
     // A dish that reached the guest is RETURNED, not cancelled (К4d).
     expect(canCancelRound(round({ prep_status: 'served' }))).toBe(false);
     expect(canCancelRound(round({ cancelled_at: 'x' }))).toBe(false);
+  });
+});
+
+describe('isEmptyBill', () => {
+  it('is empty with nothing alive, nothing typed and nothing paid', () => {
+    expect(isEmptyBill(bill({ rounds: [], draft: [] }))).toBe(true);
+    expect(isEmptyBill(bill({ rounds: [round({ cancelled_at: 'x' })], draft: [] }))).toBe(true);
+  });
+
+  it('is not empty with a live round, a typed line, a paid line or once closed', () => {
+    expect(isEmptyBill(bill({ rounds: [round()], draft: [] }))).toBe(false);
+    expect(isEmptyBill(bill({ rounds: [], draft: [line()] }))).toBe(false);
+    const paid = round({ cancelled_at: 'x', items: [line({ id: 9, sale_id: 4 })] });
+    expect(isEmptyBill(bill({ rounds: [paid], draft: [] }))).toBe(false);
+    expect(isEmptyBill(bill({ rounds: [], draft: [], status: 'cancelled' }))).toBe(false);
   });
 });
 

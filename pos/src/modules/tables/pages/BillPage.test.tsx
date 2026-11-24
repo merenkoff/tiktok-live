@@ -1187,5 +1187,89 @@ describe('BillPage — guest requests (Q7)', () => {
     expect(screen.queryByTestId('bill-requests')).toBeNull();
     expect(screen.queryByTestId('bill-banner')).toBeNull();
   });
-});
 
+  describe('a free table and an empty bill (§4.1)', () => {
+    const empty = (over: Partial<Bill> = {}): Bill => ({
+      ...bill,
+      rounds: [],
+      draft: [],
+      fired_total_cents: 0,
+      draft_preview_cents: 0,
+      guests: 1,
+      ...over,
+    });
+
+    it('opens a free table with no bill, and seats nobody by looking', async () => {
+      routeState = { table: { id: 11, name: '5', hall_name: 'Зала' } };
+      posRequest.mockImplementation(async (method: string, path: string) => {
+        if (method === 'get' && path === '/bills') return { bills: [] };
+        throw new Error(`unexpected ${method} ${path}`);
+      });
+      renderWithProviders(<BillPage target={{ tableId: 11 }} />, { route: '/tables/table/11' });
+      expect(await screen.findByTestId('bill-guests')).toHaveTextContent('Гостей: —');
+      expect(screen.getByTestId('bill-page')).toHaveTextContent('Стіл 5');
+      expect(screen.getByTestId('bill-page')).toHaveTextContent('стіл вільний');
+      expect(screen.queryByTestId('bill-close-table')).toBeNull();
+      expect(posRequest).not.toHaveBeenCalledWith('post', '/bills', expect.anything());
+    });
+
+    it('seats the table with the first dish, then puts it on the new bill', async () => {
+      routeState = { table: { id: 11, name: '5', hall_name: 'Зала' } };
+      posRequest.mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
+        if (method === 'get' && path === '/bills') return { bills: [] };
+        if (method === 'post' && path === '/bills') return { bill: empty({ id: 95 }), created: true };
+        if (method === 'post' && path === '/bills/95/items') {
+          return empty({
+            id: 95,
+            draft: [line({ id: 4, variant_id: Number(body?.variant_id), product_name: 'Круасан', variant_label: '' })],
+          });
+        }
+        throw new Error(`unexpected ${method} ${path}`);
+      });
+      renderWithProviders(<BillPage target={{ tableId: 11 }} />, { route: '/tables/table/11' });
+      await userEvent.click(await screen.findByTestId('menu-tile-2'));
+      await waitFor(() => expect(screen.getByTestId('bill-page')).toHaveTextContent('рахунок 12'));
+      const calls = posRequest.mock.calls.filter((c) => c[0] === 'post').map((c) => c[1]);
+      expect(calls).toEqual(['/bills', '/bills/95/items']);
+      expect(posRequest.mock.calls.find((c) => c[1] === '/bills' && c[0] === 'post')?.[2]).toEqual(
+        expect.objectContaining({ table_id: 11, client_uuid: expect.any(String) })
+      );
+    });
+
+    it('sets the guests from the header', async () => {
+      posRequest.mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
+        if (method === 'get' && path === '/bills/90') return bill;
+        if (method === 'patch' && path === '/bills/90') return { ...bill, guests: Number(body?.guests) };
+        throw new Error(`unexpected ${method} ${path}`);
+      });
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      await userEvent.click(await screen.findByTestId('bill-guests'));
+      await userEvent.click(await screen.findByTestId('guests-6'));
+      await waitFor(() => expect(screen.getByTestId('bill-guests')).toHaveTextContent('6 гостей'));
+      expect(posRequest).toHaveBeenCalledWith('patch', '/bills/90', { guests: 6 });
+      expect(screen.queryByTestId('guests-sheet')).toBeNull();
+    });
+
+    it('offers «Закрити стіл» on a bill with nothing on it, and frees the table', async () => {
+      bill = empty({ rounds: [round({ cancelled_at: '2026-09-21T18:05:00.000Z' })] });
+      posRequest.mockImplementation(async (method: string, path: string) => {
+        if (method === 'get' && path === '/bills/90') return bill;
+        if (method === 'post' && path === '/bills/90/cancel') return { ...bill, status: 'cancelled' };
+        throw new Error(`unexpected ${method} ${path}`);
+      });
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      const close = await screen.findByTestId('bill-close-table');
+      // Where «Оплатити» would be: there is nothing to pay.
+      expect(screen.queryByTestId('bill-pay')).toBeNull();
+      await userEvent.click(close);
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith('/tables', { state: { note: 'Стіл 5 вільний' } }));
+      expect(posRequest.mock.calls.some((c) => c[0] === 'post' && c[1] === '/bills/90/cancel')).toBe(true);
+    });
+
+    it('never offers it while anything is on the bill', async () => {
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      expect(await screen.findByTestId('bill-pay')).toBeInTheDocument();
+      expect(screen.queryByTestId('bill-close-table')).toBeNull();
+    });
+  });
+});
