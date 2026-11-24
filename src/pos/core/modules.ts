@@ -258,6 +258,42 @@ export class VerticalRemoteConflictError extends ModuleRemoteConflictError {
 }
 
 /**
+ * A store's `module_remotes` names a module without the module it works on.
+ *
+ * Thrown by `assertRequiredRemotes`, mapped to 400 by the caller.
+ */
+export class ModuleDependencyError extends ModuleRemoteConflictError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ModuleDependencyError';
+  }
+}
+
+/**
+ * Online-only modules that only make sense on top of another one. «Роздача»
+ * (`pass`, TechDocs/POS_PASS.md) marks what of a table's rounds was carried:
+ * without `tables` there are no tables, no bills and no rounds to carry.
+ *
+ * A remote bundle cannot say this itself — `ModuleDescriptor.requires` is
+ * dropped from a remote's descriptor — so the server says it, where every
+ * other rule about `module_remotes` lives.
+ */
+export const MODULE_REQUIRES: Readonly<Record<string, readonly string[]>> = {
+  pass: ['tables'],
+};
+
+/** Refuse a `module_remotes` map in which a module comes without what it needs. */
+export function assertRequiredRemotes(remotes: Record<string, string | ModuleRemoteEntry>): void {
+  for (const [id, needs] of Object.entries(MODULE_REQUIRES)) {
+    if (!(id in remotes)) continue;
+    const missing = needs.filter((need) => !(need in remotes));
+    if (missing.length > 0) {
+      throw new ModuleDependencyError(`Module remote "${id}" needs ${missing.map((m) => `"${m}"`).join(', ')}`);
+    }
+  }
+}
+
+/**
  * At most one `fiscal-*` entry may exist, and it must name the provider the
  * store is actually configured for.
  *

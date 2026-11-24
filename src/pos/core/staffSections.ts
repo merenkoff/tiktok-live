@@ -80,6 +80,9 @@ export const SECTION_ROUTES: Readonly<Record<string, readonly string[]>> = {
     'POST /guest-orders/:id/reject',
     'POST /waiter-calls/:id/answer',
   ],
+  // «Роздача» (TechDocs/POS_PASS.md): a seller the owner keeps off the floor
+  // marks no plate as carried.
+  pass: ['GET /serving', 'GET /serving/bills/:id', 'POST /serving/serve', 'POST /serving/undo'],
   'vertical-cafe': [
     'GET /kitchen/orders',
     'POST /kitchen/stop-list/:productId',

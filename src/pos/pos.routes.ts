@@ -33,6 +33,7 @@ import { registerPublicMenuRoutes } from './routes/public-menu.routes.js';
 import { registerGuestFeedbackRoutes } from './routes/guest-feedback.routes.js';
 import { registerGuestOrdersRoutes } from './routes/guest-orders.routes.js';
 import { registerDebtsRoutes } from './routes/debts.routes.js';
+import { registerServingRoutes } from './routes/serving.routes.js';
 
 export interface PosRouteGroup {
   /** null = core: always registered, no per-request module gate. */
@@ -79,6 +80,9 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // (TechDocs/POS_TABLES.md §4.11). Reading the map is `ensurePosAuth`,
   // changing the furniture is `ensurePosOwner`.
   { moduleId: null, register: registerTablesRoutes },
+  // «Роздача» (TechDocs/POS_PASS.md): what of the rounds the waiters carried.
+  // Core for the same reason — the `pass` module opts in through `module_remotes`.
+  { moduleId: null, register: registerServingRoutes },
   // Table receipts on the bar's printer (ДК3-Г, Д13): a core group, polled by
   // the desktop that holds the «Чеки столів» printer.
   { moduleId: null, register: registerReceiptPrintRoutes },

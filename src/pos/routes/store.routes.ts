@@ -7,6 +7,7 @@ import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import * as analyticsService from '../analytics.service.js';
 import {
   assertSingleFiscalRemote,
+  assertRequiredRemotes,
   assertSingleVerticalRemote,
   ModuleRemoteConflictError,
   sanitizeEnabledModules,
@@ -83,6 +84,8 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
           // to be the vertical the store is actually set to, or the module
           // downloads and is then never asked to render.
           assertSingleVerticalRemote(sanitized, auth.vertical);
+          // And a module never comes without the one it works on («Роздача» → «Столи»).
+          assertRequiredRemotes(sanitized);
         } catch (error) {
           if (error instanceof ModuleRemoteConflictError) {
             return reply.code(400).send({ error: errorMessage(error) });
