@@ -10,13 +10,16 @@
 // Like the kitchen's strip it hangs over every till screen, so it first asks
 // once whether this store is a cafe of some kitchen at all and polls only
 // then; a store that is not asks again every ten minutes. Only a visible tab
-// polls, and a failed read changes nothing on screen.
+// polls, and a failed read changes nothing on screen. A read that started
+// before a tap is dropped (`lib/writeGuard.ts`), so the answered red line or
+// the tapped «Привезли» never comes back for a poll.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as trackerApi from './trackerApi';
 import type { TrackedOrder } from './trackerApi';
 import { trackedOrders } from './lib';
 import { serverMessage } from '../lib/hostPlatform';
+import { useWriteGuard } from '../lib/writeGuard';
 
 export const CAFE_POLL_MS = 10_000;
 export const NOT_CAFE_RECHECK_MS = 10 * 60_000;
@@ -51,6 +54,7 @@ export function useCafeOrders(api: typeof trackerApi = trackerApi): CafeOrders {
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<number>>(new Set());
   const mountedRef = useRef(true);
+  const guard = useWriteGuard();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -80,16 +84,17 @@ export function useCafeOrders(api: typeof trackerApi = trackerApi): CafeOrders {
   }, [cafe, api]);
 
   const refresh = useCallback(async () => {
+    const stamp = guard.stamp();
     try {
       const read = await api.listCafeSide();
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || !guard.fresh(stamp)) return;
       const server = read.now ? Date.parse(read.now) : NaN;
       setOffset(Number.isNaN(server) ? 0 : server - Date.now());
       setAll(read.orders);
     } catch {
       // A blip, or a cashier the owner kept off the section: the tracker stays as it was.
     }
-  }, [api]);
+  }, [api, guard]);
 
   useEffect(() => {
     if (!cafe) return;
@@ -103,6 +108,7 @@ export function useCafeOrders(api: typeof trackerApi = trackerApi): CafeOrders {
   const act = useCallback(
     async (order: TrackedOrder, action: TrackerAction) => {
       setBusy((prev) => new Set(prev).add(order.id));
+      guard.begin();
       try {
         const next = await CALLS[action](api, order.id);
         if (mountedRef.current && next && typeof next === 'object') {
@@ -111,6 +117,7 @@ export function useCafeOrders(api: typeof trackerApi = trackerApi): CafeOrders {
       } catch (err) {
         if (mountedRef.current) setBanner(serverMessage(err, 'Не вдалося зберегти — спробуйте ще раз'));
       } finally {
+        guard.end();
         if (mountedRef.current) {
           setBusy((prev) => {
             const rest = new Set(prev);
@@ -121,7 +128,7 @@ export function useCafeOrders(api: typeof trackerApi = trackerApi): CafeOrders {
         }
       }
     },
-    [api, refresh]
+    [api, guard, refresh]
   );
 
   return {

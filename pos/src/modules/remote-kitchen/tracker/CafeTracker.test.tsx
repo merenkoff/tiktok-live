@@ -142,6 +142,72 @@ describe('CafeTracker', () => {
     expect(screen.queryByTestId('remote-tracker')).toBeNull();
   });
 
+  it('names the cafe’s receipt on the kitchen’s cancel, so the cashier finds it in «Чеки»', async () => {
+    const api = fakeApi(true, [
+      order({ status: 'cancelled', cancelled_by: 'kitchen', cafe_receipt_number: 'ЧК-000123' }),
+    ]);
+    render(trackerWith(api));
+    expect(await screen.findByTestId('remote-tracker-cancel-5')).toHaveTextContent(
+      'П-12 · Стіл 3 · чек ЧК-000123 — скасовано кухнею — поверніть гостю'
+    );
+  });
+
+  it('lets the cafe close an order the kitchen forgot to mark, well late, after one question', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const api = fakeApi(true, [order({ status: 'cooking', promised_at: new Date(Date.now() - 25 * 60_000).toISOString() })]);
+    render(trackerWith(api));
+    await user.click(await screen.findByRole('button', { name: 'Вже привезли' }));
+    expect(screen.getByTestId('remote-tracker-confirm-5')).toHaveTextContent('Кухня не відмітила');
+    expect(api.markArrived).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Ні' }));
+    expect(screen.queryByTestId('remote-tracker-confirm-5')).toBeNull();
+    expect(api.markArrived).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Вже привезли' }));
+    await user.click(screen.getByRole('button', { name: 'Так, привезли' }));
+    expect(api.markArrived).toHaveBeenCalledWith(5);
+    expect(await screen.findByRole('button', { name: 'Видали гостю' })).toBeInTheDocument();
+  });
+
+  it('offers nothing on an order the kitchen is cooking on time', async () => {
+    const api = fakeApi(true, [order({ status: 'cooking', promised_at: new Date(Date.now() - 5 * 60_000).toISOString() })]);
+    render(trackerWith(api));
+    expect(await screen.findByTestId('remote-tracker-time-5')).toHaveTextContent('запізнюється на 5 хв');
+    expect(screen.queryByTestId('remote-tracker-step-5')).toBeNull();
+  });
+
+  it('drops a read that started before a tap, so the answered cancel does not come back', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const cancelled = order({ status: 'cancelled', cancelled_by: 'kitchen' });
+    const api = fakeApi(true, [cancelled]);
+    render(trackerWith(api));
+    await screen.findByTestId('remote-tracker-cancel-5');
+
+    // A poll goes out and hangs; the cashier answers meanwhile.
+    let releaseStale: (v: { orders: TrackedOrder[]; now: string }) => void = () => undefined;
+    api.listCafeSide.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        releaseStale = resolve;
+      })
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CAFE_POLL_MS);
+    });
+    await user.click(screen.getByRole('button', { name: 'Гостю повернули' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.queryByTestId('remote-tracker')).toBeNull();
+
+    // The old read lands last, with the cancel still unanswered: ignored.
+    await act(async () => {
+      releaseStale({ orders: [cancelled], now: new Date().toISOString() });
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.queryByTestId('remote-tracker')).toBeNull();
+  });
+
   it('shows a refused tap in the server’s words', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const api = fakeApi(true, [order({ status: 'ready' })]);

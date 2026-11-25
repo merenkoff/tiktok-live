@@ -108,13 +108,6 @@ export function remoteCartControls(): RemoteCartControls | null {
   };
 }
 
-/** The store this till is signed in to, or null before login. Keys what is kept for offline. */
-export function currentStoreId(): number | null {
-  const store = member('useAuthStore') as { getState?: () => { auth?: { store?: { id?: unknown } } | null } };
-  const id = typeof store?.getState === 'function' ? Number(store.getState().auth?.store?.id) : NaN;
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
-
 /** One word on a catalog tile — the host's `TileMark` (platform 25), mirrored. */
 export interface TileMark {
   text: string;
@@ -169,6 +162,17 @@ export function onOnlineChange(listener: () => void): () => void {
 export function isKitchenStore(): boolean {
   const store = member('useAuthStore') as { getState?: () => { auth?: { store?: { remote_kitchen?: unknown } } | null } };
   return typeof store?.getState === 'function' && store.getState().auth?.store?.remote_kitchen === true;
+}
+
+/**
+ * The signed-in store's id, or null before a login. What a cached answer is
+ * kept under, so signing into another store on the same till never reads the
+ * first store's answer, nor the setup another store kept for offline.
+ */
+export function currentStoreId(): number | null {
+  const store = member('useAuthStore') as { getState?: () => { auth?: { store?: { id?: unknown } } | null } };
+  const id = typeof store?.getState === 'function' ? store.getState().auth?.store?.id : undefined;
+  return typeof id === 'number' ? id : null;
 }
 
 /** The server's sentence for a refusal, or ours when there is none. */
