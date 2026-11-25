@@ -35,6 +35,7 @@ import { createProductInTx } from './products.service.js';
 import { applyStockDelta } from './stock.service.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import { storeClock } from './core/storeClock.js';
+import { sqlMilliToCents } from './cost.js';
 import { verticalOrDefault } from './verticals/index.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 import { queueRemoteCancelTx, queueRemoteFireTx } from './remote-kitchen-print.service.js';
@@ -1878,4 +1879,207 @@ export async function listEvents(
           : 'cafe',
     payload: row.payload,
   }));
+}
+
+// ── the report (РК5, §12) ───────────────────────────────────────────
+
+export interface RemoteReportRow {
+  /** The other store's id: the row's key — two cafes may share a name. */
+  store_id: number;
+  /**
+   * The other side as this owner knows it: the cafe's name on a kitchen's
+   * report, the link's kitchen title («Кухня Пульчинелли») on a cafe's.
+   */
+  store_name: string;
+  /** The other store's public address, if it has one: what tells two same-named points apart. */
+  store_address: string | null;
+  /**
+   * Paid orders the cafe got: the kitchen tapped «Видано», or the cafe tapped
+   * «Привезли» / «Видали гостю» (a cook who taps only «Готово» never writes
+   * `dispatched_at`, and the cafe's late «Вже привезли» neither).
+   */
+  orders: number;
+  /** Paid orders cancelled before they left, by either side. */
+  cancelled: number;
+  /** Of `cancelled`, those the KITCHEN cancelled (`cancelled_by`, migration 118). */
+  cancelled_kitchen: number;
+  /** Of `orders`, at the cafe by the FIRST promise — the time the guest was told. */
+  on_time: number;
+  /** Of `orders`, at the cafe by the promise as it stood after every «+N хв». */
+  on_time_moved: number;
+  /** Of `orders`, those the kitchen moved with «+N хв». */
+  delayed: number;
+  /**
+   * What the orders the cafe got took off the kitchen's shelf, at TODAY's
+   * purchase prices (the snapshot records what left, not what it cost then) —
+   * the internal settlement between two points of one ФОП (П1). Lines whose
+   * cost is not known are left out and counted in `unpriced_lines`: a zero
+   * there would read as «free».
+   */
+  cost_cents: number;
+  unpriced_lines: number;
+  dishes: Array<{ name: string; label: string; quantity: number }>;
+}
+
+export interface RemoteReport {
+  side: 'cafe' | 'kitchen';
+  days: number;
+  /** The first day counted, on this store's calendar (`YYYY-MM-DD`). */
+  from: string;
+  rows: RemoteReportRow[];
+}
+
+export const REPORT_MAX_DAYS = 90;
+
+/** The orders that reached the cafe — whoever tapped it. */
+const REACHED_CAFE = `(o.dispatched_at IS NOT NULL OR o.arrived_at IS NOT NULL OR o.handed_at IS NOT NULL)`;
+
+/** When the order was at the cafe: the cafe's own tap, else out of the kitchen's door plus the road. */
+const AT_CAFE = `COALESCE(o.arrived_at, o.handed_at,
+  o.dispatched_at + make_interval(mins => COALESCE(o.transit_minutes, 0)))`;
+
+/**
+ * What ONE unit of a remote line took off the kitchen's shelf, in thousandths
+ * of a kopeck: its snapshot, else the kitchen dish's own cost card — the café
+ * analytics' rule (`cafe-analytics.service.ts`).
+ */
+const REMOTE_UNIT_COST_MILLI = `COALESCE((
+  SELECT SUM(c.quantity_per_unit * COALESCE(cv.cost_milli, 0))
+    FROM pos_remote_order_item_components c
+    JOIN pos_variants cv ON cv.id = c.component_variant_id
+   WHERE c.remote_order_item_id = i.id
+), kv.cost_milli, 0)`;
+
+/** Whether that cost can be trusted: an unpriced leaf (or dish) is «unknown», never 0. */
+const REMOTE_COST_IS_KNOWN = `(
+  CASE WHEN EXISTS (SELECT 1 FROM pos_remote_order_item_components c WHERE c.remote_order_item_id = i.id)
+       THEN NOT EXISTS (
+         SELECT 1 FROM pos_remote_order_item_components c
+           JOIN pos_variants cv ON cv.id = c.component_variant_id
+          WHERE c.remote_order_item_id = i.id AND COALESCE(cv.cost_milli, 0) <= 0
+       )
+       ELSE COALESCE(kv.cost_milli, 0) > 0
+  END
+)`;
+
+/**
+ * «Віддано на точки» (РК5): what the kitchen handed over to each cafe over the
+ * last `days` days of THIS store's calendar (1 = today), by dish and size, at
+ * what cost, and how many of those promises it kept — or, read by the cafe,
+ * what it got from its kitchen. Paid orders only; an order counts on the day
+ * it was paid. «Вчасно» is against the FIRST promise, the time the guest was
+ * told — a «+10 хв» pressed before the order ran late does not make it
+ * punctual — and `on_time_moved` says how many met the moved one.
+ */
+export async function remoteReport(storeId: number, side: 'cafe' | 'kitchen', days: number): Promise<RemoteReport> {
+  const span = Math.min(Math.max(Number.isFinite(days) ? Math.floor(days) : 7, 1), REPORT_MAX_DAYS);
+  const clock = await storeClock(pool, storeId);
+  const mine = side === 'kitchen' ? 'o.kitchen_store_id' : 'o.cafe_store_id';
+  const other = side === 'kitchen' ? 'o.cafe_store_id' : 'o.kitchen_store_id';
+  // The store's own calendar, as every other report of the POS reads it.
+  const scope = `
+      WHERE ${mine} = $1
+        AND o.paid_at IS NOT NULL
+        AND (o.paid_at AT TIME ZONE $2)::date >= $3::date - ($4::int - 1)`;
+  const params = [storeId, clock.timezone, clock.today, span];
+  // The first promise is the moved one less every «+N хв» the kitchen gave.
+  const heads = await pool.query(
+    `SELECT t.other_key AS other_id, s.name AS other_name, s.public_address AS other_address,
+            (SELECT l.kitchen_title FROM pos_kitchen_links l
+              WHERE l.cafe_store_id = t.cafe_id AND l.kitchen_store_id = t.kitchen_id
+              ORDER BY l.id DESC LIMIT 1) AS kitchen_title,
+            t.orders, t.cancelled, t.cancelled_kitchen, t.on_time, t.on_time_moved, t.delayed
+       FROM (
+         SELECT ${other} AS other_key, MIN(o.cafe_store_id) AS cafe_id, MIN(o.kitchen_store_id) AS kitchen_id,
+                COUNT(*) FILTER (WHERE ${REACHED_CAFE})::int AS orders,
+                COUNT(*) FILTER (WHERE o.status = 'cancelled' AND NOT ${REACHED_CAFE})::int AS cancelled,
+                COUNT(*) FILTER (
+                  WHERE o.status = 'cancelled' AND NOT ${REACHED_CAFE} AND o.cancelled_by = 'kitchen'
+                )::int AS cancelled_kitchen,
+                COUNT(*) FILTER (
+                  WHERE ${REACHED_CAFE} AND o.promised_at IS NOT NULL
+                    AND ${AT_CAFE} <= o.promised_at - make_interval(mins => d.minutes)
+                )::int AS on_time,
+                COUNT(*) FILTER (
+                  WHERE ${REACHED_CAFE} AND o.promised_at IS NOT NULL AND ${AT_CAFE} <= o.promised_at
+                )::int AS on_time_moved,
+                COUNT(*) FILTER (WHERE ${REACHED_CAFE} AND d.times > 0)::int AS delayed
+           FROM pos_remote_orders o
+           CROSS JOIN LATERAL (
+             SELECT COUNT(*)::int AS times, COALESCE(SUM((e.payload->>'minutes')::int), 0)::int AS minutes
+               FROM pos_remote_order_events e
+              WHERE e.remote_order_id = o.id AND e.kind = 'delayed'
+           ) d
+          ${scope}
+          GROUP BY ${other}
+       ) t
+       JOIN pos_stores s ON s.id = t.other_key
+      ORDER BY s.name, t.other_key`,
+    params
+  );
+  const dishes = await pool.query(
+    `SELECT ${other} AS other_id, i.product_name AS name, COALESCE(i.variant_label, '') AS label,
+            SUM(i.quantity)::int AS quantity,
+            ${sqlMilliToCents(`SUM(CASE WHEN ${REMOTE_COST_IS_KNOWN} THEN ${REMOTE_UNIT_COST_MILLI} * i.quantity ELSE 0 END)`)}
+              AS cost_cents,
+            COUNT(*) FILTER (WHERE NOT ${REMOTE_COST_IS_KNOWN})::int AS unpriced_lines
+       FROM pos_remote_orders o
+       JOIN pos_remote_order_items i ON i.remote_order_id = o.id
+       LEFT JOIN pos_variants kv ON kv.id = i.kitchen_variant_id
+      ${scope}
+        AND ${REACHED_CAFE}
+      GROUP BY ${other}, i.product_name, COALESCE(i.variant_label, '')
+      ORDER BY quantity DESC, i.product_name, label`,
+    params
+  );
+  return {
+    side,
+    days: span,
+    from: shiftDay(clock.today, -(span - 1)),
+    rows: heads.rows.map((row) => {
+      const otherId = Number(row.other_id);
+      const mineDishes = dishes.rows.filter((d) => Number(d.other_id) === otherId);
+      return {
+        store_id: otherId,
+        store_name:
+          side === 'cafe' && row.kitchen_title != null ? String(row.kitchen_title) : String(row.other_name),
+        store_address: row.other_address == null || row.other_address === '' ? null : String(row.other_address),
+        orders: Number(row.orders),
+        cancelled: Number(row.cancelled),
+        cancelled_kitchen: Number(row.cancelled_kitchen),
+        on_time: Number(row.on_time),
+        on_time_moved: Number(row.on_time_moved),
+        delayed: Number(row.delayed),
+        cost_cents: mineDishes.reduce((sum, d) => sum + Number(d.cost_cents), 0),
+        unpriced_lines: mineDishes.reduce((sum, d) => sum + Number(d.unpriced_lines), 0),
+        dishes: mineDishes.map((d) => ({ name: String(d.name), label: String(d.label), quantity: Number(d.quantity) })),
+      };
+    }),
+  };
+}
+
+/** `YYYY-MM-DD` moved by whole days, on the calendar alone. */
+function shiftDay(day: string, by: number): string {
+  const at = new Date(`${day}T00:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + by);
+  return at.toISOString().slice(0, 10);
+}
+
+/**
+ * Which sides this store has a report on: every link it was ever part of,
+ * revoked ones included — the season's settlement is read after the link is
+ * gone, and the owner's page asks this, not the live setup.
+ */
+export async function reportSides(storeId: number): Promise<Array<'cafe' | 'kitchen'>> {
+  const row = await pool.query(
+    `SELECT COALESCE(bool_or(cafe_store_id = $1), false) AS cafe,
+            COALESCE(bool_or(kitchen_store_id = $1), false) AS kitchen
+       FROM pos_kitchen_links
+      WHERE cafe_store_id = $1 OR kitchen_store_id = $1`,
+    [storeId]
+  );
+  const sides: Array<'cafe' | 'kitchen'> = [];
+  if (row.rows[0]?.kitchen) sides.push('kitchen');
+  if (row.rows[0]?.cafe) sides.push('cafe');
+  return sides;
 }
