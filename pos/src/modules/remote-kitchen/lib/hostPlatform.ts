@@ -91,6 +91,16 @@ export function remoteCartControls(): RemoteCartControls | null {
   };
 }
 
+/**
+ * Whether the login says this store cooks for a linked cafe (`store.remote_kitchen`,
+ * read at login and `/me`). Draws the kitchen's «Прийом запитів» on the till;
+ * an older login without the field reads as no.
+ */
+export function isKitchenStore(): boolean {
+  const store = member('useAuthStore') as { getState?: () => { auth?: { store?: { remote_kitchen?: unknown } } | null } };
+  return typeof store?.getState === 'function' && store.getState().auth?.store?.remote_kitchen === true;
+}
+
 /** The server's sentence for a refusal, or ours when there is none. */
 export function serverMessage(error: unknown, fallback: string): string {
   const sent = (error as { response?: { data?: { error?: unknown } } } | null)?.response?.data?.error;

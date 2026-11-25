@@ -31,6 +31,8 @@
 import type pg from 'pg';
 import { pool } from '../db.js';
 import { consumeStockForLine, returnStockForLine } from './composites.service.js';
+import { createProductInTx } from './products.service.js';
+import { applyStockDelta } from './stock.service.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import { storeClock } from './core/storeClock.js';
 import { verticalOrDefault } from './verticals/index.js';
@@ -282,6 +284,77 @@ export async function listLinksForKitchen(kitchenStoreId: number): Promise<Kitch
   return rows.rows.map(linkOf);
 }
 
+export interface StoreLinkView extends KitchenLink {
+  cafe_name: string;
+  kitchen_name: string;
+}
+
+/**
+ * Every link this store is either end of, revoked ones included — the
+ * super-admin's «Віддалена кухня» block, where a revoked pair is revived by
+ * creating it again.
+ */
+export async function listLinksForStore(storeId: number): Promise<StoreLinkView[]> {
+  const rows = await pool.query(
+    `SELECT l.*, cs.name AS cafe_name, ks.name AS kitchen_name
+       FROM pos_kitchen_links l
+       JOIN pos_stores cs ON cs.id = l.cafe_store_id
+       JOIN pos_stores ks ON ks.id = l.kitchen_store_id
+      WHERE l.cafe_store_id = $1 OR l.kitchen_store_id = $1
+      ORDER BY l.id`,
+    [storeId]
+  );
+  return rows.rows.map((row) => ({
+    ...linkOf(row),
+    cafe_name: String(row.cafe_name),
+    kitchen_name: String(row.kitchen_name),
+  }));
+}
+
+export interface KitchenCafeView {
+  link_id: number;
+  cafe_name: string;
+  status: KitchenLink['status'];
+  transit_minutes: number;
+  /** The kitchen's own dishes this cafe sells — never the cafe's prices or names. */
+  dishes: Array<{ variant_id: number; name: string; label: string; prep_minutes: number | null }>;
+}
+
+/** The kitchen's «Точки»: who may ask it, and which of its dishes each one sells. */
+export async function listCafesForKitchen(kitchenStoreId: number): Promise<KitchenCafeView[]> {
+  const links = await pool.query(
+    `SELECT l.id, l.status, l.transit_minutes, cs.name AS cafe_name
+       FROM pos_kitchen_links l JOIN pos_stores cs ON cs.id = l.cafe_store_id
+      WHERE l.kitchen_store_id = $1 AND l.status <> 'revoked'
+      ORDER BY l.id`,
+    [kitchenStoreId]
+  );
+  if (links.rows.length === 0) return [];
+  const dishes = await pool.query(
+    `SELECT DISTINCT li.link_id, kv.id AS variant_id, kp.name, kv.label, kp.prep_minutes
+       FROM pos_kitchen_link_items li
+       JOIN pos_variants kv ON kv.id = li.kitchen_variant_id
+       JOIN pos_products kp ON kp.id = kv.product_id
+      WHERE li.link_id = ANY($1::bigint[])
+      ORDER BY kp.name, kv.label`,
+    [links.rows.map((r) => Number(r.id))]
+  );
+  return links.rows.map((link) => ({
+    link_id: Number(link.id),
+    cafe_name: String(link.cafe_name),
+    status: link.status as KitchenLink['status'],
+    transit_minutes: Number(link.transit_minutes),
+    dishes: dishes.rows
+      .filter((d) => Number(d.link_id) === Number(link.id))
+      .map((d) => ({
+        variant_id: Number(d.variant_id),
+        name: String(d.name),
+        label: String(d.label ?? ''),
+        prep_minutes: numOrNull(d.prep_minutes),
+      })),
+  }));
+}
+
 export interface CreateLinkInput {
   cafe_store_id?: unknown;
   kitchen_store_id?: unknown;
@@ -455,6 +528,13 @@ export interface KitchenDishView {
 }
 
 /**
+ * A kitchen card a cafe may sell: active, on the kitchen's own menu
+ * (`sellable` — an ingredient or a semi-finished good is not), and not one the
+ * kitchen keeps off its guest menu (the cork fee and the like).
+ */
+const KITCHEN_DISH_SQL = `v.is_active AND p.is_active AND p.sellable AND NOT COALESCE(p.menu_hidden, false)`;
+
+/**
  * What the cafe owner may pick from when marking a dish «готується на кухні»:
  * the kitchen's active dishes, names and times only — never its prices,
  * costs or stock.
@@ -463,7 +543,7 @@ export async function listKitchenDishes(link: KitchenLink): Promise<KitchenDishV
   const rows = await pool.query(
     `SELECT v.id, p.name, v.label, p.prep_minutes
        FROM pos_variants v JOIN pos_products p ON p.id = v.product_id
-      WHERE v.store_id = $1 AND v.is_active AND p.is_active
+      WHERE v.store_id = $1 AND ${KITCHEN_DISH_SQL}
       ORDER BY p.name, v.label, v.id
       LIMIT 2000`,
     [link.kitchen_store_id]
@@ -477,23 +557,157 @@ export async function listKitchenDishes(link: KitchenLink): Promise<KitchenDishV
 }
 
 /** Mark (or re-point) a cafe dish as cooked in the kitchen. */
-export async function setLinkItem(link: KitchenLink, cafeVariantId: number, kitchenVariantId: number): Promise<void> {
-  const cafe = await pool.query(`SELECT 1 FROM pos_variants WHERE id = $1 AND store_id = $2`, [
+export async function setLinkItem(
+  link: KitchenLink,
+  cafeVariantId: number,
+  kitchenVariantId: number,
+  client: DbClient = pool
+): Promise<void> {
+  const cafe = await client.query(`SELECT 1 FROM pos_variants WHERE id = $1 AND store_id = $2`, [
     cafeVariantId,
     link.cafe_store_id,
   ]);
   if (!cafe.rows[0]) throw new RemoteKitchenNotFound('Страву кафе не знайдено');
-  const kitchen = await pool.query(`SELECT 1 FROM pos_variants WHERE id = $1 AND store_id = $2`, [
+  const kitchen = await client.query(`SELECT 1 FROM pos_variants WHERE id = $1 AND store_id = $2`, [
     kitchenVariantId,
     link.kitchen_store_id,
   ]);
   if (!kitchen.rows[0]) throw new RemoteKitchenNotFound('Страву кухні не знайдено');
-  await pool.query(
+  await client.query(
     `INSERT INTO pos_kitchen_link_items (link_id, cafe_variant_id, kitchen_variant_id)
      VALUES ($1, $2, $3)
      ON CONFLICT (link_id, cafe_variant_id) DO UPDATE SET kitchen_variant_id = EXCLUDED.kitchen_variant_id`,
     [link.id, cafeVariantId, kitchenVariantId]
   );
+}
+
+/** Stock the till never greys: a kitchen dish takes nothing off the cafe's shelf (§5.1). */
+export const KITCHEN_DISH_STOCK = 100000;
+const MAX_IMPORT = 200;
+
+export interface ImportDishInput {
+  kitchen_variant_id?: unknown;
+  price_cents?: unknown;
+}
+
+/** A cafe card reused by name whose own price stayed: the owner is told, nothing is overwritten. */
+export interface KeptPrice {
+  name: string;
+  price_cents: number;
+}
+
+/**
+ * «Імпорт меню кухні»: each picked kitchen dish becomes a card in the cafe's
+ * catalogue and is marked «готується на кухні» at once. The cafe sets its own
+ * price (§5.1: the price in the park may differ from the delivery one), so the
+ * owner sends one per dish and the kitchen's never leaves the kitchen. The
+ * card is named after the dish («Маргарита» or «Маргарита (32 см)»); a cafe
+ * dish card of that name (sellable, simple) is reused rather than doubled —
+ * its stock topped up so the till does not grey it, its own price kept and
+ * reported back — and a dish already marked is skipped: running the import
+ * twice changes nothing. All of it in one transaction: a refusal leaves the
+ * catalogue as it was.
+ */
+export async function importKitchenDishes(
+  link: KitchenLink,
+  raw: unknown
+): Promise<{ created: number; linked: number; skipped: number; kept_prices: KeptPrice[] }> {
+  if (!Array.isArray(raw) || raw.length === 0) throw new RemoteKitchenError('Оберіть страви кухні');
+  if (raw.length > MAX_IMPORT) throw new RemoteKitchenError(`За раз — не більше ${MAX_IMPORT} страв`);
+  const wanted: Array<{ kitchenVariantId: number; priceCents: number }> = [];
+  for (const entry of raw as ImportDishInput[]) {
+    const kitchenVariantId = Number(entry?.kitchen_variant_id);
+    const priceCents = Number(entry?.price_cents);
+    if (!Number.isInteger(kitchenVariantId) || kitchenVariantId < 1) throw new RemoteKitchenError('Некоректна страва кухні');
+    if (!Number.isInteger(priceCents) || priceCents < 1 || priceCents > 100_000_000) {
+      throw new RemoteKitchenError('Вкажіть ціну кафе для кожної страви');
+    }
+    if (!wanted.some((w) => w.kitchenVariantId === kitchenVariantId)) wanted.push({ kitchenVariantId, priceCents });
+  }
+  const dishes = await pool.query(
+    `SELECT v.id, p.name, v.label, (${KITCHEN_DISH_SQL}) AS is_dish
+       FROM pos_variants v JOIN pos_products p ON p.id = v.product_id
+      WHERE v.store_id = $1 AND v.id = ANY($2::bigint[])`,
+    [link.kitchen_store_id, wanted.map((w) => w.kitchenVariantId)]
+  );
+  if (dishes.rows.length !== wanted.length) throw new RemoteKitchenNotFound('Страву кухні не знайдено');
+  const notDish = dishes.rows.find((d) => !d.is_dish);
+  if (notDish) {
+    throw new RemoteKitchenError(
+      `«${String(notDish.name)}» — не страва меню кухні (інгредієнт, заготовка, прихований або знятий товар)`
+    );
+  }
+
+  return inTransaction(async (client) => {
+    const marked = await client.query(
+      `SELECT kitchen_variant_id FROM pos_kitchen_link_items WHERE link_id = $1`,
+      [link.id]
+    );
+    const alreadyMarked = new Set(marked.rows.map((r) => Number(r.kitchen_variant_id)));
+    let created = 0;
+    let linked = 0;
+    let skipped = 0;
+    const keptPrices: KeptPrice[] = [];
+    for (const want of wanted) {
+      if (alreadyMarked.has(want.kitchenVariantId)) {
+        skipped += 1;
+        continue;
+      }
+      const dish = dishes.rows.find((d) => Number(d.id) === want.kitchenVariantId)!;
+      const label = String(dish.label ?? '').trim();
+      const name = (label ? `${String(dish.name)} (${label})` : String(dish.name)).slice(0, 200);
+      // Only a card the till sells as it is: never an ingredient or a recipe.
+      const existing = await client.query(
+        `SELECT v.id, v.price_cents, COALESCE(s.quantity, 0) AS quantity
+           FROM pos_variants v
+           JOIN pos_products p ON p.id = v.product_id
+           LEFT JOIN pos_stock s ON s.variant_id = v.id AND s.store_id = v.store_id
+          WHERE p.store_id = $1 AND p.name = $2 AND v.is_active AND p.is_active
+            AND p.sellable AND p.kind = 'simple'
+            AND NOT EXISTS (SELECT 1 FROM pos_kitchen_link_items li WHERE li.link_id = $3 AND li.cafe_variant_id = v.id)
+          ORDER BY v.id LIMIT 1`,
+        [link.cafe_store_id, name, link.id]
+      );
+      let cafeVariantId: number;
+      if (existing.rows[0]) {
+        const row = existing.rows[0];
+        cafeVariantId = Number(row.id);
+        // A kitchen dish takes nothing off the cafe's shelf, but the till
+        // greys a tile with nothing on it (§5.1).
+        const short = KITCHEN_DISH_STOCK - Number(row.quantity);
+        if (short > 0) {
+          await applyStockDelta(client, {
+            storeId: link.cafe_store_id,
+            variantId: cafeVariantId,
+            delta: short,
+            reason: 'adjust',
+            staffId: null,
+            referenceType: 'remote_kitchen_import',
+            referenceId: link.id,
+          });
+        }
+        if (Number(row.price_cents) !== want.priceCents) {
+          keptPrices.push({ name, price_cents: Number(row.price_cents) });
+        }
+      } else {
+        let made: { variantIds: number[] };
+        try {
+          made = await createProductInTx(client, link.cafe_store_id, {
+            name,
+            variants: [{ price_cents: want.priceCents, unit: 'шт', quantity: KITCHEN_DISH_STOCK }],
+          });
+        } catch (error) {
+          // A validation of the card itself: the owner's words, not a 500.
+          throw new RemoteKitchenError(`«${name}»: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        cafeVariantId = made.variantIds[0];
+        created += 1;
+      }
+      await setLinkItem(link, cafeVariantId, want.kitchenVariantId, client);
+      linked += 1;
+    }
+    return { created, linked, skipped, kept_prices: keptPrices };
+  });
 }
 
 export async function removeLinkItem(link: KitchenLink, cafeVariantId: number): Promise<void> {

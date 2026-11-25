@@ -7,6 +7,7 @@
 // vertical carrying none of it — is `vertical-cafe/manifest.test.ts`.
 
 import { describe, expect, it } from 'vitest';
+import { useAuthStore } from '@pos/platform';
 import { remoteKitchenModule } from './manifest';
 import { REMOTE_KITCHEN_MODULE_ID, REQUIRED_HOST_API } from './lib/hostPlatform';
 import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '@host/modules/constants';
@@ -27,11 +28,33 @@ describe('remote-kitchen manifest', () => {
     expect(remoteKitchenModule.ownerOnly).toBeUndefined();
   });
 
-  it('fills the two host slots — the cafe’s «З кухні» and the kitchen’s strip — and owns no page', () => {
+  it('fills the two host slots — the cafe’s «З кухні» and the kitchen’s strip', () => {
     expect(remoteKitchenModule.checkout?.Action).toBeDefined();
     expect(remoteKitchenModule.till?.Banner).toBeDefined();
-    expect(remoteKitchenModule.routes).toEqual([]);
-    expect(remoteKitchenModule.nav).toEqual([]);
+  });
+
+  it('owns the owner’s page and the kitchen’s «Прийом запитів» on the till', () => {
+    expect(remoteKitchenModule.routes.map((r) => [r.path, r.mount])).toEqual([
+      ['remote-kitchen/*', 'admin'],
+      ['/remote-kitchen/*', undefined],
+    ]);
+    expect(remoteKitchenModule.nav.map((n) => [n.to, n.location, n.icon])).toEqual([
+      ['/admin/remote-kitchen', 'admin-sidebar', 'ChefHat'],
+      ['/remote-kitchen', 'cashier-primary', 'ChefHat'],
+    ]);
+  });
+
+  // The cook signs in with a PIN and never reaches the cabinet: the pause must
+  // be on the till — but only in a store that IS a kitchen.
+  it('shows the till entry only where the login says the store is a kitchen', () => {
+    const tillEntry = remoteKitchenModule.nav.find((n) => n.location === 'cashier-primary')!;
+    const ctx = { shell: 'cashier' as const, role: 'seller' as const };
+    useAuthStore.setState({ auth: { store: { remote_kitchen: true } } } as never);
+    expect(tillEntry.visible?.(ctx)).toBe(true);
+    useAuthStore.setState({ auth: { store: { remote_kitchen: false } } } as never);
+    expect(tillEntry.visible?.(ctx)).toBe(false);
+    useAuthStore.setState({ auth: null } as never);
+    expect(tillEntry.visible?.(ctx)).toBe(false);
   });
 
   it('keeps no offline queue: the kitchen cooks only on the server’s word', () => {

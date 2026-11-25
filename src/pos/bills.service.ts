@@ -632,6 +632,32 @@ interface CheckedDraftItem {
  * on the menu, the answers satisfy the product's required groups, and the dish
  * is not on today's stop-list. Price and stock are К4c's, at fire time.
  */
+/**
+ * A dish a remote kitchen cooks for this cafe (track РК,
+ * TechDocs/POS_REMOTE_KITCHEN.md) is sold only at the till, through «З кухні»:
+ * a table's round goes to THIS store's kitchen, which would cook a pizza the
+ * dark kitchen never hears of. Refused in words where the waiter — or a
+ * guest's QR order, which then waits for the waiter — adds it.
+ */
+async function assertNotRemoteDish(
+  client: DbClient,
+  storeId: number,
+  variantId: number,
+  name: string | null
+): Promise<void> {
+  const remote = await client.query(
+    `SELECT 1 FROM pos_kitchen_link_items li
+       JOIN pos_kitchen_links l ON l.id = li.link_id
+      WHERE l.cafe_store_id = $1 AND l.status <> 'revoked' AND li.cafe_variant_id = $2
+      LIMIT 1`,
+    [storeId, variantId]
+  );
+  if (remote.rows.length > 0) {
+    const what = name ? `«${name}»` : 'Цей варіант';
+    throw new BillError(`${what} готує віддалена кухня — продайте на касі через «З кухні», не на рахунок столу`);
+  }
+}
+
 async function checkDraftItem(
   client: DbClient,
   storeId: number,
@@ -671,6 +697,7 @@ async function checkDraftItem(
   if (dish.stop_listed_on === clock.today) {
     throw new BillConflict(`«${String(dish.name)}» сьогодні в стоп-листі`);
   }
+  await assertNotRemoteDish(client, storeId, variantId, String(dish.name));
 
   const chosen = await modifiers.resolveForVariant(client, storeId, variantId, modifierIds);
   const components = input.components?.length
@@ -889,6 +916,7 @@ export async function updateDraftItem(
       if (Number(sibling.rows[0].price_per ?? 1) > 1) {
         throw new BillError('Ваговий варіант на рахунок столу не додається');
       }
+      await assertNotRemoteDish(client, storeId, variantId, null);
     }
     const modifierIds =
       input.modifiers === undefined
