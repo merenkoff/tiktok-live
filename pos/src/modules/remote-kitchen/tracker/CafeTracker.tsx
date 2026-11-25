@@ -26,6 +26,7 @@ import {
   waitingTooLong,
 } from './lib';
 import { useCafeOrders } from './useCafeOrders';
+import { hasTicketPrinter, printGuestTicket, type TicketOutcome } from '../ticket/guestTicket';
 
 /** A tick every half minute while something shows: «запізнюється» moves on by itself. */
 function useHalfMinuteTick(active: boolean): void {
@@ -37,8 +38,45 @@ function useHalfMinuteTick(active: boolean): void {
   }, [active]);
 }
 
-export function CafeTracker({ hook = useCafeOrders }: { hook?: () => ReturnType<typeof useCafeOrders> } = {}) {
+/**
+ * «Талон» on a row: the guest's ticket again, when this device has a printer
+ * for it (the till that sold prints it once by itself). Null without one.
+ */
+function useTicketReprint(
+  check: () => Promise<boolean>,
+  print: (order: TrackedOrder) => Promise<TicketOutcome>
+): { reprint: ((order: TrackedOrder) => Promise<string | null>) | null } {
+  const [can, setCan] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void check().then((yes) => {
+      if (alive) setCan(yes);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [check]);
+  if (!can) return { reprint: null };
+  return {
+    reprint: async (order) => {
+      const outcome = await print(order);
+      return outcome.kind === 'failed' ? `Талон не надруковано: ${outcome.error}` : null;
+    },
+  };
+}
+
+export function CafeTracker({
+  hook = useCafeOrders,
+  ticketPrinter = hasTicketPrinter,
+  printTicket = printGuestTicket,
+}: {
+  hook?: () => ReturnType<typeof useCafeOrders>;
+  ticketPrinter?: () => Promise<boolean>;
+  printTicket?: (order: TrackedOrder) => Promise<TicketOutcome>;
+} = {}) {
   const { orders, offset, banner, busy, act, clearBanner } = hook();
+  const { reprint } = useTicketReprint(ticketPrinter, printTicket);
+  const [ticketError, setTicketError] = useState<string | null>(null);
   useHalfMinuteTick(orders.length > 0);
   if (orders.length === 0 && !banner) return null;
   const now = Date.now() + offset;
@@ -50,6 +88,14 @@ export function CafeTracker({ hook = useCafeOrders }: { hook?: () => ReturnType<
       aria-label="Замовлення з кухні"
     >
       <h2 className="text-[15px] font-bold text-sq-heading">Замовлення з кухні · {orders.length}</h2>
+      {ticketError && (
+        <div className="flex items-center justify-between gap-2 text-sm text-red-700" data-testid="remote-tracker-ticket-error">
+          <span>{ticketError}</span>
+          <button type="button" className="min-h-11 px-2" onClick={() => setTicketError(null)} aria-label="Закрити">
+            <X size={18} />
+          </button>
+        </div>
+      )}
       {banner && (
         <div className="flex items-center justify-between gap-2 text-sm text-red-700" data-testid="remote-tracker-banner">
           <span>{banner}</span>
@@ -74,6 +120,11 @@ export function CafeTracker({ hook = useCafeOrders }: { hook?: () => ReturnType<
               now={now}
               busy={busy.has(order.id)}
               onStep={(action) => void act(order, action)}
+              onTicket={
+                reprint && order.order_no != null
+                  ? () => void reprint(order).then((error) => setTicketError(error))
+                  : undefined
+              }
             />
           )
         )}
@@ -119,11 +170,13 @@ function OrderRow({
   now,
   busy,
   onStep,
+  onTicket,
 }: {
   order: TrackedOrder;
   now: number;
   busy: boolean;
   onStep: (action: 'arrived' | 'handed') => void;
+  onTicket?: () => void;
 }) {
   const stage = stageOf(order.status);
   const late = minutesLate(order, now);
@@ -168,6 +221,16 @@ function OrderRow({
           )}
         </p>
       </div>
+      {onTicket && (
+        <button
+          type="button"
+          className="min-h-11 px-3 rounded-xl bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text"
+          onClick={onTicket}
+          data-testid={`remote-tracker-ticket-${order.id}`}
+        >
+          Талон
+        </button>
+      )}
       {step && (
         <button
           type="button"

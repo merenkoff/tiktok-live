@@ -51,9 +51,14 @@ function fakeApi(cafe: boolean, orders: TrackedOrder[] = []) {
   };
 }
 
-function trackerWith(api: ReturnType<typeof fakeApi>) {
+const noPrinter = async () => false;
+
+function trackerWith(
+  api: ReturnType<typeof fakeApi>,
+  ticket: { printer?: () => Promise<boolean>; print?: (o: TrackedOrder) => Promise<never> } = {}
+) {
   const useFake = () => useCafeOrders(api as never);
-  return <CafeTracker hook={useFake} />;
+  return <CafeTracker hook={useFake} ticketPrinter={ticket.printer ?? noPrinter} printTicket={ticket.print} />;
 }
 
 beforeEach(() => {
@@ -149,5 +154,22 @@ describe('CafeTracker', () => {
     render(trackerWith(api));
     await user.click(await screen.findByRole('button', { name: 'Привезли' }));
     expect(await screen.findByTestId('remote-tracker-banner')).toHaveTextContent('Ще не відправлено');
+  });
+
+  it('prints the guest’s ticket again with «Талон» where this device has a printer for it', async () => {
+    const api = fakeApi(true, [order()]);
+    const print = vi.fn(async () => ({ kind: 'failed', error: 'немає паперу' }) as never);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(trackerWith(api, { printer: async () => true, print }));
+    await user.click(await screen.findByTestId('remote-tracker-ticket-5'));
+    expect(print).toHaveBeenCalledWith(expect.objectContaining({ id: 5, order_no: 12 }));
+    expect(await screen.findByTestId('remote-tracker-ticket-error')).toHaveTextContent('Талон не надруковано: немає паперу');
+  });
+
+  it('has no «Талон» on a device with no printer for it', async () => {
+    const api = fakeApi(true, [order()]);
+    render(trackerWith(api));
+    await screen.findByTestId('remote-tracker-5');
+    expect(screen.queryByTestId('remote-tracker-ticket-5')).toBeNull();
   });
 });

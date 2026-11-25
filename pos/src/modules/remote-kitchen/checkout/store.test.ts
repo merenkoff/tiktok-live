@@ -59,8 +59,9 @@ function harness() {
       cart.remoteOrderId = id;
     },
   };
-  const store = createRemoteCheckout(api as never, () => controls, () => NOW);
-  return { api, cart, store };
+  const printTicket = vi.fn(async () => undefined);
+  const store = createRemoteCheckout(api as never, () => controls, () => NOW, printTicket);
+  return { api, cart, store, printTicket };
 }
 
 async function ready(h: ReturnType<typeof harness>, lines = [pizza, coffee]) {
@@ -190,5 +191,43 @@ describe('the remote-kitchen checkout', () => {
     expect(h.api.guestDeclined).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }));
     expect(h.store.phase()).toBe('idle');
     expect(h.cart.hold).toMatch(/спершу запитайте кухню/);
+  });
+
+  async function agreedOrder() {
+    await ready(h);
+    await h.store.ask();
+    h.api.readOrder.mockResolvedValueOnce(view({ status: 'quoted', quoted_minutes: 35, quote_expires_at: at(300) }));
+    await h.store.refresh();
+    h.store.agree();
+  }
+
+  it('prints the guest’s ticket once the paid order is numbered', async () => {
+    await agreedOrder();
+    // The sale: the first read still sees the quote, the next one the paid, numbered order.
+    h.api.readOrder
+      .mockResolvedValueOnce(view({ status: 'quoted' }))
+      .mockResolvedValueOnce({ ...view({ status: 'cooking', promised_at: at(1800) }), order_no: 12 } as never);
+    vi.useFakeTimers();
+    try {
+      h.store.sync([]);
+      await vi.advanceTimersByTimeAsync(5000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(h.printTicket).toHaveBeenCalledTimes(1);
+    expect(h.printTicket).toHaveBeenCalledWith(expect.objectContaining({ order_no: 12, status: 'cooking' }));
+  });
+
+  it('prints no ticket when the cashier took the agreed dishes out before paying', async () => {
+    await agreedOrder();
+    h.api.readOrder.mockResolvedValue(view({ status: 'guest_declined' }));
+    vi.useFakeTimers();
+    try {
+      h.store.sync([coffee]);
+      await vi.advanceTimersByTimeAsync(10000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(h.printTicket).not.toHaveBeenCalled();
   });
 });
