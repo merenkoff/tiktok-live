@@ -1183,16 +1183,20 @@ export async function completeSaleTx(
 
     // A dish the remote kitchen cooks (РК2): it comes off the KITCHEN's shelf
     // when the order is paid just below, so the cafe moves nothing for it.
+    // Matched by dish, count AND answers: a pizza with double cheese on the
+    // receipt is not the plain one the kitchen was asked about.
     if (remoteUnclaimed.length > 0 && !line.bill_item_id && !line.debt_item_id && !line.components) {
-      const at = remoteUnclaimed.findIndex(
-        (remote) => remote.cafeVariantId === line.variant_id && remote.quantity === line.quantity
+      const lineModifiers = line.modifiers ?? [];
+      const at = remoteUnclaimed.findIndex((remote) =>
+        remoteKitchen.sameRemoteDish(remote, {
+          variantId: line.variant_id,
+          quantity: line.quantity,
+          modifierIds: remoteKitchen.modifierIdsOf(lineModifiers),
+        })
       );
       if (at >= 0) {
         const remote = remoteUnclaimed.splice(at, 1)[0];
-        await client.query(`UPDATE pos_sale_items SET remote_order_item_id = $1 WHERE id = $2`, [
-          remote.id,
-          saleItemId,
-        ]);
+        await remoteKitchen.claimRemoteLineTx(client, saleItemId, remote.id, lineModifiers);
         continue;
       }
     }
@@ -1611,6 +1615,9 @@ export async function getSale(storeId: number, saleId: number) {
       // Paid toward this «під запис» line earlier as «внески» (078): part of
       // the goods' price that is not in this receipt's sum.
       debt_prepaid_cents: Number(row.debt_prepaid_cents ?? 0),
+      // A dish a remote kitchen cooks (117): it is the KITCHEN's to make and
+      // print, so the cafe's own kitchen ticket leaves it out.
+      ...(row.remote_order_item_id != null ? { remote_order_item_id: Number(row.remote_order_item_id) } : {}),
       ...(row.fiscal_excise || bottleFacts.has(Number(row.id)) ? { excise: true } : {}),
       ...(bottleFacts.get(Number(row.id))?.labels.length
         ? { bottle_labels: bottleFacts.get(Number(row.id))!.labels }

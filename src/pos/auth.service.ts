@@ -116,9 +116,16 @@ export interface AuthResponse {
     /**
      * The store pours from bottles opened by their excise stamp (track ДК,
      * ДК5): some active variant has `bottle_ml`. Draws «Пляшки» on the till
-     * rail and in the owner's sidebar; read at login and at `/auth/me`.
+     * rail and in the owner's sidebar; read at login and at `/me`.
      */
     bottles: boolean;
+    /**
+     * The store cooks for a linked cafe (track РК, TechDocs/POS_REMOTE_KITCHEN.md):
+     * some live link names it as the kitchen. The desktop asks the remote
+     * kitchen's printer queue only then, so a till in any other store does not
+     * poll it every five seconds; read at login and at `/me`.
+     */
+    remote_kitchen: boolean;
     /**
      * What this COPY tells every user of the POS when it runs without a valid
      * licence key and has served more client launches than its threshold
@@ -136,6 +143,15 @@ export interface AuthResponse {
 async function storeHasBottles(storeId: number): Promise<boolean> {
   const result = await pool.query(
     `SELECT 1 FROM pos_variants WHERE store_id = $1 AND bottle_ml IS NOT NULL AND is_active LIMIT 1`,
+    [storeId]
+  );
+  return result.rows.length > 0;
+}
+
+/** Is this store the kitchen of a live link (РК)? One indexed probe, at login only. */
+async function storeIsRemoteKitchen(storeId: number): Promise<boolean> {
+  const result = await pool.query(
+    `SELECT 1 FROM pos_kitchen_links WHERE kitchen_store_id = $1 AND status <> 'revoked' LIMIT 1`,
     [storeId]
   );
   return result.rows.length > 0;
@@ -159,7 +175,7 @@ async function createSession(storeId: number, staffId: number): Promise<AuthResp
   return toAuthResponse(
     auth,
     expiresAt,
-    await storeHasBottles(storeId),
+    { bottles: await storeHasBottles(storeId), remoteKitchen: await storeIsRemoteKitchen(storeId) },
     await moduleRemotesForTill(auth.moduleRemotes),
     // A sign-in is a client launch: counted while the copy has no valid key.
     await noteClientLaunch()
@@ -174,7 +190,7 @@ async function createSession(storeId: number, staffId: number): Promise<AuthResp
 function toAuthResponse(
   auth: PosAuthContext,
   expiresAt: Date,
-  bottles: boolean,
+  facts: { bottles: boolean; remoteKitchen: boolean },
   moduleRemotes: AuthResponse['store']['module_remotes'],
   licenseNotice: LicenseNotice | null
 ): AuthResponse {
@@ -205,7 +221,8 @@ function toAuthResponse(
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: moduleRemotes,
       nav_overrides: auth.navOverrides,
-      bottles,
+      bottles: facts.bottles,
+      remote_kitchen: facts.remoteKitchen,
       license_notice: licenseNotice,
     },
   };
@@ -345,7 +362,7 @@ export async function me(auth: PosAuthContext): Promise<AuthResponse> {
   return toAuthResponse(
     auth,
     expiresAt,
-    await storeHasBottles(auth.storeId),
+    { bottles: await storeHasBottles(auth.storeId), remoteKitchen: await storeIsRemoteKitchen(auth.storeId) },
     await moduleRemotesForTill(auth.moduleRemotes),
     // The app restoring its session when it opens is a client launch too.
     await noteClientLaunch()

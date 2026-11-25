@@ -114,7 +114,9 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const side = (request.query as { side?: unknown }).side;
     if (side !== 'cafe' && side !== 'kitchen') return reply.code(400).send({ error: 'side: cafe або kitchen' });
-    return { orders: await rk.listOrders(auth.storeId, side) };
+    // `now`: the kitchen's strip counts down to the cafe's deadline on the
+    // server's clock, not the tablet's.
+    return { orders: await rk.listOrders(auth.storeId, side), now: new Date().toISOString() };
   });
 
   fastify.get('/remote-kitchen/orders/:id', async (request, reply) => {

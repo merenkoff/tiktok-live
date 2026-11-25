@@ -75,7 +75,7 @@ export function missingHostApi(): string[] {
  * network to explain it.
  */
 export function posRequest<T>(
-  method: 'get' | 'post' | 'put' | 'patch' | 'delete',
+  method: 'get' | 'post' | 'patch' | 'delete',
   path: string,
   body?: unknown
 ): Promise<T> {
@@ -97,26 +97,4 @@ export function posRequest<T>(
 export async function refreshCatalog(): Promise<void> {
   const fn = member('cashierApi.refreshCatalog');
   if (hasFn(fn)) await (fn as () => Promise<void>)();
-}
-
-/** The two cart members the remote-kitchen block writes (platform 25). */
-export interface RemoteCartControls {
-  setCheckoutHold: (reason: string | null) => void;
-  setRemoteOrderId: (id: number | null) => void;
-}
-
-/**
- * The cart's remote-kitchen setters, or null on a host older than platform
- * 25. Not part of `REQUIRED_HOST_API`: without them the till sells as it did
- * before the remote kitchen — the «З кухні» block simply does not draw — and
- * the rest of this module (the menu, the board) has no reason to fall back.
- */
-export function remoteCartControls(): RemoteCartControls | null {
-  const store = member('useCartStore') as { getState?: () => Record<string, unknown> } | undefined;
-  const state = typeof store?.getState === 'function' ? store.getState() : null;
-  if (!state || !hasFn(state.setCheckoutHold) || !hasFn(state.setRemoteOrderId)) return null;
-  return {
-    setCheckoutHold: (reason) => (store!.getState!().setCheckoutHold as (r: string | null) => void)(reason),
-    setRemoteOrderId: (id) => (store!.getState!().setRemoteOrderId as (i: number | null) => void)(id),
-  };
 }

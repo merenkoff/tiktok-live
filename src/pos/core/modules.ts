@@ -280,6 +280,10 @@ export class ModuleDependencyError extends ModuleRemoteConflictError {
  */
 export const MODULE_REQUIRES: Readonly<Record<string, readonly string[]>> = {
   pass: ['tables'],
+  // «Віддалена кухня» (TechDocs/POS_REMOTE_KITCHEN.md): the cafe's menu and
+  // the kitchen's board are the café vertical's — without it the kitchen has
+  // no board to cook from and the cafe no café till to ask from.
+  'remote-kitchen': ['vertical-cafe'],
 };
 
 /** Refuse a `module_remotes` map in which a module comes without what it needs. */

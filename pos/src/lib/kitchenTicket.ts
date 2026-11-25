@@ -120,7 +120,11 @@ export function buildKitchenTickets(
   sale: SaleDetail,
   opts: { catalog: Array<Pick<CatalogItem, 'variant_id' | 'tag_ids'>>; tags: PosTag[]; formatTime?: (iso: string) => string }
 ): KitchenTicketRoute[] {
-  if (sale.items.length === 0) return [];
+  // A dish a remote kitchen cooks (track РК) is that kitchen's to make, and its
+  // ticket comes out of THAT kitchen's printer (`remoteTicketOf`); on this
+  // store's printer it would send the hot-dog cook to bake a pizza.
+  const items = sale.items.filter((item) => item.remote_order_item_id == null);
+  if (items.length === 0) return [];
   const formatTime = opts.formatTime ?? formatTicketTime;
   const head = {
     order_label: orderLabelOf(sale),
@@ -133,11 +137,11 @@ export function buildKitchenTickets(
   };
   const stations = stationByTag(opts.tags);
   if (stations.size === 0) {
-    return [{ station: null, ticket: { ...head, station: null, items: sale.items.map(ticketItem) } }];
+    return [{ station: null, ticket: { ...head, station: null, items: items.map(ticketItem) } }];
   }
   const byVariant = new Map(opts.catalog.map((c) => [c.variant_id, c]));
   const perStation = new Map<Station, KitchenTicketItem[]>();
-  for (const item of sale.items) {
+  for (const item of items) {
     for (const station of stationsOf(item.variant_id, byVariant, stations)) {
       const list = perStation.get(station) ?? [];
       list.push(ticketItem(item));

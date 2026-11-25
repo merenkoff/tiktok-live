@@ -217,6 +217,12 @@ export interface StoreConfig {
    * API → no screen.
    */
   bottles?: boolean;
+  /**
+   * The store cooks for a linked cafe (track РК, TechDocs/POS_REMOTE_KITCHEN.md):
+   * the desktop then drains the remote kitchen's printer queue too. Absent
+   * from an older API → never asked.
+   */
+  remote_kitchen?: boolean;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
   enabled_modules: string[];
   /**
@@ -325,6 +331,8 @@ export interface AuthResponse {
     feedback_url?: string | null;
     /** Pours from stamped bottles (ДК5): draws «Пляшки». Absent on older cached auth → no screen. */
     bottles?: boolean;
+    /** Cooks for a linked cafe (РК): the desktop prints its tickets. Absent on older cached auth → none. */
+    remote_kitchen?: boolean;
     /**
      * What this COPY tells every user when it runs without a valid licence key
      * and has served more client launches than its threshold (phase 2G): the
@@ -1008,11 +1016,6 @@ export interface PosTag {
 export type TagStation = 'kitchen' | 'bar';
 
 /**
- * One station's ticket of a table's round, from the server's print queue
- * (`GET /kitchen/print-queue`, TechDocs/POS_TABLES.md §11). No prices: it is
- * not a receipt.
- */
-/**
  * A cafe's paid order on the remote kitchen's printer (РК3,
  * TechDocs/POS_REMOTE_KITCHEN.md §7.2): one ticket per order, no prices.
  */
@@ -1032,6 +1035,11 @@ export interface RemotePrintJob {
   items: RoundPrintJob['items'];
 }
 
+/**
+ * One station's ticket of a table's round, from the server's print queue
+ * (`GET /kitchen/print-queue`, TechDocs/POS_TABLES.md §11). No prices: it is
+ * not a receipt.
+ */
 export interface RoundPrintJob {
   round_id: number;
   /**
@@ -1482,6 +1490,12 @@ export interface SaleDetail {
      * does not come back into its bottle.
      */
     bottle_labels?: string[];
+    /**
+     * The dish is cooked by a remote kitchen (track РК, migration 117): the
+     * kitchen prints its own ticket, so this store's kitchen ticket leaves the
+     * line out. Absent on every other line.
+     */
+    remote_order_item_id?: number;
     /** The stamps a return already gave back. */
     excise_labels_returned?: string[];
   }>;

@@ -32,6 +32,7 @@ import {
   type TestStore,
 } from './helpers/pos-fixtures.js';
 import * as rk from '../pos/remote-kitchen.service.js';
+import * as modifiers from '../pos/modifiers.service.js';
 import { readStoreClock } from '../pos/core/storeClock.js';
 import { listOpenOrders } from '../pos/kitchen.service.js';
 
@@ -66,6 +67,7 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
   let kitchenRoll = 0;
   let kitchenPizzaProduct = 0;
   let kitchenRollProduct = 0;
+  let cafePizzaProduct = 0;
   let receiptSeq = 0;
 
   beforeAll(async () => {
@@ -76,7 +78,15 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     stranger = await createTestStore('rk_stranger');
     lonely = await createTestStore('rk_lonely');
 
-    ({ variantId: cafePizza } = await seedProduct(cafe.storeId, { name: 'Маргарита', quantity: 5 }));
+    // Both ends cook (`createLink` refuses any other store): a café and a
+    // kitchen of the café vertical.
+    await pool.query(`UPDATE pos_stores SET vertical = 'cafe' WHERE id = ANY($1::bigint[])`, [
+      [cafe.storeId, kitchen.storeId],
+    ]);
+    ({ variantId: cafePizza, productId: cafePizzaProduct } = await seedProduct(cafe.storeId, {
+      name: 'Маргарита',
+      quantity: 5,
+    }));
     ({ variantId: cafeRoll } = await seedProduct(cafe.storeId, { name: 'Філадельфія', quantity: 5 }));
     const kp = await seedProduct(kitchen.storeId, { name: 'Маргарита (кухня)', quantity: 20 });
     const kr = await seedProduct(kitchen.storeId, { name: 'Філадельфія (кухня)', quantity: 20 });
@@ -679,5 +689,170 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
       headers: { ...auth(kitchen.sellerToken), 'x-pos-device-id': 'kitchen-pc' },
     });
     expect(res.json().jobs).toEqual([]);
+  });
+
+  // ── the module's line with everything else (§11) ──────────────────
+
+  it('links only two stores that cook — never a boutique by a mistyped id', async () => {
+    await expect(
+      rk.createLink({
+        cafe_store_id: cafe.storeId,
+        kitchen_store_id: lonely.storeId,
+        kitchen_title: 'Не кухня',
+      })
+    ).rejects.toThrow(/Кухнею може бути лише заклад із кухнею/);
+    await expect(
+      rk.createLink({
+        cafe_store_id: lonely.storeId,
+        kitchen_store_id: kitchen.storeId,
+        kitchen_title: 'Кухня',
+      })
+    ).rejects.toThrow(/Просити кухню може лише заклад із кухнею/);
+  });
+
+  it('the receipt names which line is the kitchen’s, so the cafe’s own kitchen ticket leaves it out', async () => {
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/pos/sales/complete',
+      headers: auth(cafe.sellerToken),
+      payload: {
+        items: [
+          { variant_id: cafePizza, quantity: 1 },
+          { variant_id: cafeRoll, quantity: 1 },
+        ],
+        payments: [{ method: 'cash', amount_cents: 20000 }],
+        remote_order_id: order.id,
+      },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const sale = await app.inject({ method: 'GET', url: `/api/pos/sales/${res.json().id}`, headers: auth(cafe.sellerToken) });
+    const items = sale.json().items as Array<{ variant_id: number; remote_order_item_id?: number }>;
+    expect(items.find((i) => i.variant_id === cafePizza)?.remote_order_item_id).toEqual(expect.any(Number));
+    expect(items.find((i) => i.variant_id === cafeRoll)).not.toHaveProperty('remote_order_item_id');
+  });
+
+  it('the board taps a cafe’s order through the KITCHEN’s own route, never the module’s', async () => {
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    expect((await checkout([{ variant_id: cafePizza, quantity: 1 }], order.id)).statusCode).toBe(201);
+    const tap = (token: string, prep_status: string, id = order.id) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/api/pos/kitchen/remote-orders/${id}/prep`,
+        headers: auth(token),
+        payload: { prep_status },
+      });
+
+    expect((await tap(kitchen.sellerToken, 'cooked')).statusCode).toBe(400);
+    // The cafe is the other side; a third store does not see it at all.
+    expect((await tap(cafe.sellerToken, 'ready')).statusCode).toBe(409);
+    expect((await tap(stranger.sellerToken, 'ready')).statusCode).toBe(404);
+
+    const ready = await tap(kitchen.sellerToken, 'ready');
+    expect(ready.statusCode, ready.body).toBe(200);
+    expect(ready.json()).toMatchObject({ id: order.id, prep_status: 'ready' });
+    // A slow tablet repeating the tap gets the same answer.
+    expect((await tap(kitchen.sellerToken, 'ready')).json().prep_status).toBe('ready');
+
+    const handed = await tap(kitchen.sellerToken, 'served');
+    expect(handed.statusCode, handed.body).toBe(200);
+    expect(handed.json()).toMatchObject({ prep_status: 'served', served_at: expect.any(String) });
+    expect((await orderView(order.id)).status).toBe('dispatched');
+  });
+
+  it('the login says which store is a kitchen, so only its desktop drains the kitchen’s printer queue', async () => {
+    const me = (token: string) => app.inject({ method: 'GET', url: '/api/pos/me', headers: auth(token) });
+    expect((await me(kitchen.sellerToken)).json().store.remote_kitchen).toBe(true);
+    expect((await me(cafe.sellerToken)).json().store.remote_kitchen).toBe(false);
+    expect((await me(lonely.sellerToken)).json().store.remote_kitchen).toBe(false);
+  });
+
+  it('never lets the module into a store without the café vertical’s module', async () => {
+    const entry = (id: string, path: string) => ({
+      url: `https://cdn.example.com/${id}/remote-entry.js`,
+      title: id,
+      routePath: path,
+      nav: [{ label: id, location: 'cashier-primary', order: 1 }],
+    });
+    const alone = await app.inject({
+      method: 'PATCH',
+      url: '/api/pos/store',
+      headers: auth(lonely.ownerToken),
+      payload: { module_remotes: { 'remote-kitchen': entry('remote-kitchen', '/remote-kitchen') } },
+    });
+    expect(alone.statusCode).toBe(400);
+    expect(alone.json().error).toMatch(/"remote-kitchen" needs "vertical-cafe"/);
+  });
+
+  it('closes «Віддалена кухня» for a cashier the owner kept off it — the receipt stays open', async () => {
+    await pool.query(`UPDATE pos_staff SET blocked_sections = ARRAY['remote-kitchen'] WHERE id = $1`, [cafe.sellerId]);
+    try {
+      const res = await ask([{ variant_id: cafePizza, quantity: 1 }]);
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code ?? res.json().error).toMatch(/section_closed|закрив/);
+      // Setup draws nothing by itself and stays readable.
+      const setup = await app.inject({ method: 'GET', url: '/api/pos/remote-kitchen/setup', headers: auth(cafe.sellerToken) });
+      expect(setup.statusCode).toBe(200);
+    } finally {
+      await pool.query(`UPDATE pos_staff SET blocked_sections = '{}' WHERE id = $1`, [cafe.sellerId]);
+    }
+  });
+
+  // Last: it hangs a question on the cafe's pizza.
+  it('a pizza with other answers than the kitchen was asked about does not pay the order', async () => {
+    let group = await modifiers.createGroup(cafe.storeId, { name: 'Борти', min_select: 0, max_select: 1 });
+    group = await modifiers.createModifier(cafe.storeId, group.id, { name: 'сирні', price_delta_cents: 2000 });
+    const cheese = group.modifiers[0];
+    await modifiers.setProductGroups(cafe.storeId, cafePizzaProduct, [group.id]);
+    try {
+      // The till sends the answer as its cart line holds it, the name as typed there.
+      const order = (
+        await app.inject({
+          method: 'POST',
+          url: '/api/pos/remote-kitchen/orders',
+          headers: auth(cafe.sellerToken),
+          payload: {
+            client_uuid: randomUUID(),
+            items: [
+              {
+                variant_id: cafePizza,
+                quantity: 1,
+                modifiers: [{ id: cheese.id, group_name: 'Борти', name: 'як завгодно', price_delta_cents: 0 }],
+              },
+            ],
+          },
+        })
+      ).json();
+      const pay = (lineModifiers: number[], amount: number) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/pos/sales/complete',
+          headers: auth(cafe.sellerToken),
+          payload: {
+            items: [{ variant_id: cafePizza, quantity: 1, modifiers: lineModifiers }],
+            payments: [{ method: 'cash', amount_cents: amount }],
+            remote_order_id: order.id,
+          },
+        });
+
+      // The plain pizza is not the one with cheese crust: refused, nothing paid.
+      const plain = await pay([], 10000);
+      expect(plain.statusCode).toBe(409);
+      expect(plain.json().error).toBe('remote_order_conflict');
+      expect((await orderView(order.id)).status).toBe('quoted');
+
+      const right = await pay([cheese.id], 12000);
+      expect(right.statusCode, right.body).toBe(201);
+      // The kitchen cooks from the RECEIPT's answers, not the text the till sent.
+      const stored = await pool.query(
+        `SELECT modifiers FROM pos_remote_order_items WHERE remote_order_id = $1`,
+        [order.id]
+      );
+      expect(stored.rows[0].modifiers).toEqual([
+        expect.objectContaining({ modifier_id: cheese.id, group_name: 'Борти', name: 'сирні', price_delta_cents: 2000 }),
+      ]);
+    } finally {
+      await modifiers.setProductGroups(cafe.storeId, cafePizzaProduct, []);
+    }
   });
 });

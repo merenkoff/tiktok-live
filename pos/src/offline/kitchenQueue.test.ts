@@ -31,6 +31,7 @@ vi.mock('../services/api', () => ({
     markRoundPrinted: vi.fn(async () => undefined),
     remotePrintQueue: vi.fn(async () => ({ jobs: [] })),
     markRemotePrinted: vi.fn(async () => undefined),
+    loadAuth: vi.fn(() => ({ store: { remote_kitchen: true } })),
   },
 }));
 
@@ -152,6 +153,17 @@ describe('drainKitchenQueue — a cafe’s paid orders (remote kitchen, РК3)',
     vi.mocked(api.roundPrintQueue).mockResolvedValue({ jobs: [] });
     await drainKitchenQueue(() => 2_000);
     expect(api.remotePrintQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('never asks the remote queue in a store that is no kitchen', async () => {
+    meta.set(KITCHEN_PRINTER_META_KEY, 'Kitchen');
+    vi.mocked(api.roundPrintQueue).mockResolvedValue({ jobs: [] });
+    for (const store of [{ remote_kitchen: false }, {}]) {
+      vi.mocked(api.loadAuth).mockReturnValueOnce({ store } as never);
+      expect(await drainKitchenQueue()).toEqual({ printed: 0 });
+    }
+    expect(api.roundPrintQueue).toHaveBeenCalledTimes(2);
+    expect(api.remotePrintQueue).not.toHaveBeenCalled();
   });
 
   it('does not confirm a ticket the printer refused', async () => {

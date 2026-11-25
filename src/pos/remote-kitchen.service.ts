@@ -33,6 +33,8 @@ import { pool } from '../db.js';
 import { consumeStockForLine, returnStockForLine } from './composites.service.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import { storeClock } from './core/storeClock.js';
+import { verticalOrDefault } from './verticals/index.js';
+import type { LineModifierSnapshot } from './modifiers.service.js';
 import { queueRemoteCancelTx, queueRemoteFireTx } from './remote-kitchen-print.service.js';
 
 type DbClient = { query: typeof pool.query };
@@ -303,8 +305,20 @@ export async function createLink(input: CreateLinkInput): Promise<KitchenLink> {
   if (!Number.isInteger(transit) || transit < 0 || transit > 240) {
     throw new RemoteKitchenError('Дорога: від 0 до 240 хвилин');
   }
-  const stores = await pool.query(`SELECT id FROM pos_stores WHERE id = ANY($1::bigint[])`, [[cafe, kitchen]]);
+  const stores = await pool.query(`SELECT id, vertical FROM pos_stores WHERE id = ANY($1::bigint[])`, [[cafe, kitchen]]);
   if (stores.rowCount !== 2) throw new RemoteKitchenNotFound('Магазин не знайдено');
+  // Both ends cook: the kitchen needs a board and tech cards, the cafe a
+  // café till with modifiers. A boutique linked by a mistyped id would
+  // otherwise accept orders it has no screen to answer.
+  for (const row of stores.rows) {
+    if (!verticalOrDefault(row.vertical as string | undefined).kitchen) {
+      throw new RemoteKitchenError(
+        Number(row.id) === kitchen
+          ? 'Кухнею може бути лише заклад із кухнею (кафе, ресторан)'
+          : 'Просити кухню може лише заклад із кухнею (кафе, ресторан)'
+      );
+    }
+  }
   const existing = await findLinkForCafe(cafe);
   if (existing && existing.kitchen_store_id !== kitchen) {
     throw new RemoteKitchenConflict('У цього кафе вже є кухня');
@@ -1124,11 +1138,44 @@ export async function markPaidTx(
  * hands back its lines, so checkout can match its own lines to them and skip
  * the CAFE's stock for those — the dishes come off the kitchen's shelf instead.
  */
+export interface RemoteSaleLine {
+  id: number;
+  cafeVariantId: number;
+  quantity: number;
+  /** The answers the kitchen was asked to cook, as sorted modifier ids. */
+  modifierIds: number[];
+}
+
+/** Sorted modifier ids of a stored answer list — the till's `{ id }` or a sale snapshot's `{ modifier_id }`. */
+export function modifierIdsOf(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  const ids: number[] = [];
+  for (const entry of raw) {
+    const row = (entry ?? {}) as { id?: unknown; modifier_id?: unknown };
+    const id = Number(row.modifier_id ?? row.id);
+    if (Number.isInteger(id) && id > 0) ids.push(id);
+  }
+  return ids.sort((a, b) => a - b);
+}
+
+/** Whether a receipt line is the very dish the kitchen was asked for: dish, count and answers. */
+export function sameRemoteDish(
+  remote: RemoteSaleLine,
+  line: { variantId: number; quantity: number; modifierIds: readonly number[] }
+): boolean {
+  return (
+    remote.cafeVariantId === line.variantId &&
+    remote.quantity === line.quantity &&
+    remote.modifierIds.length === line.modifierIds.length &&
+    remote.modifierIds.every((id, i) => id === line.modifierIds[i])
+  );
+}
+
 export async function remoteLinesForSaleTx(
   client: DbClient,
   cafeStoreId: number,
   orderId: number
-): Promise<Array<{ id: number; cafeVariantId: number; quantity: number }>> {
+): Promise<RemoteSaleLine[]> {
   const order = await lockOrder(client, cafeStoreId, orderId, 'cafe');
   if (order.status !== 'quoted') {
     throw new RemoteKitchenConflict(
@@ -1138,14 +1185,35 @@ export async function remoteLinesForSaleTx(
     );
   }
   const rows = await client.query(
-    `SELECT id, cafe_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
+    `SELECT id, cafe_variant_id, quantity, modifiers
+       FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
     [orderId]
   );
   return rows.rows.map((row) => ({
     id: Number(row.id),
     cafeVariantId: Number(row.cafe_variant_id),
     quantity: Number(row.quantity),
+    modifierIds: modifierIdsOf(row.modifiers),
   }));
+}
+
+/**
+ * The receipt line that pays a kitchen dish (РК2): the line points at the
+ * kitchen's line, and the kitchen's line takes the RECEIPT's answers — names
+ * the server resolved and the cafe was paid for, not the text the till sent
+ * with its request.
+ */
+export async function claimRemoteLineTx(
+  client: DbClient,
+  saleItemId: number,
+  remoteItemId: number,
+  modifiers: readonly LineModifierSnapshot[]
+): Promise<void> {
+  await client.query(`UPDATE pos_sale_items SET remote_order_item_id = $1 WHERE id = $2`, [remoteItemId, saleItemId]);
+  await client.query(`UPDATE pos_remote_order_items SET modifiers = $2::jsonb WHERE id = $1`, [
+    remoteItemId,
+    JSON.stringify(modifiers),
+  ]);
 }
 
 /** The cafe's two taps at the end: the courier came, the guest got it. */

@@ -65,8 +65,10 @@ export async function drainKitchenQueue(now: () => number = Date.now): Promise<K
     }
 
     // A cafe's paid orders, when this store is a remote kitchen (РК3): the
-    // kitchen's printer, one ticket per order.
-    if (now() >= remoteSkipUntil) {
+    // kitchen's printer, one ticket per order. Asked only where the login says
+    // the store IS a kitchen — every other desktop with a kitchen printer, in
+    // every store, would otherwise ask an empty queue every five seconds.
+    if (api.loadAuth()?.store.remote_kitchen === true && now() >= remoteSkipUntil) {
       let remote: Awaited<ReturnType<typeof api.remotePrintQueue>>['jobs'] = [];
       try {
         remote = (await api.remotePrintQueue()).jobs;
