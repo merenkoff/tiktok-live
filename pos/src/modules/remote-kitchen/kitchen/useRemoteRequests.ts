@@ -2,9 +2,13 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// The cafes' requests waiting for this kitchen's time (РК3), polled every
-// three seconds — the cafe gives the kitchen a minute to answer, so five would
-// eat a tenth of it.
+// The cafes' requests waiting for this kitchen's time (РК3). Long-polled (РК4,
+// §8): each read hands back a cursor and the next one waits on the server
+// until a cafe asks, changes or pays, so a request shows in well under a
+// second and an idle kitchen asks about five times a minute. A server without
+// the long-poll sends no cursor, and the strip polls every three seconds as
+// before — the cafe gives the kitchen a minute to answer, so five would eat a
+// tenth of it.
 //
 // The strip is drawn over EVERY till screen of a store that has this module
 // (`till.Banner`), so it first asks once whether this store is a kitchen at
@@ -82,10 +86,10 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
     };
   }, [kitchen, api]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (since?: string): Promise<string | undefined> => {
     try {
-      const read = await api.listKitchenSide();
-      if (!mountedRef.current) return;
+      const read = await api.listKitchenSide(since);
+      if (!mountedRef.current) return undefined;
       const pending = pendingRequests(read.orders);
       // The first read is what was already there when the screen opened: no chime.
       if (seenRef.current && newIds(seenRef.current, pending).length > 0) onNewRef.current?.();
@@ -94,18 +98,46 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
       setOffset(offsetNow);
       setRequests(pending);
       setConfirmed(autoConfirmed(read.orders, offsetNow));
+      return read.cursor;
     } catch {
       // A blip, or a server without the remote kitchen: the strip stays as it was.
+      return undefined;
     }
   }, [api]);
 
   useEffect(() => {
     if (!kitchen) return;
-    void refresh();
-    const id = setInterval(() => {
-      if (visible()) void refresh();
-    }, REMOTE_POLL_MS);
-    return () => clearInterval(id);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const pause = (ms: number) =>
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+      });
+    void (async () => {
+      let cursor: string | undefined;
+      while (!stopped) {
+        // A tablet whose tab is hidden is not looking: no read, and the next
+        // one starts fresh, without a cursor.
+        if (!visible()) {
+          cursor = undefined;
+          await pause(REMOTE_POLL_MS);
+          continue;
+        }
+        const started = Date.now();
+        const sent = cursor;
+        cursor = await refresh(sent);
+        if (stopped) break;
+        // No cursor (an older server, a failed read) is the plain poll. The
+        // same cursor straight back is a server, or a proxy, that would not
+        // hold the read: poll too, rather than ask in a tight loop.
+        const held = cursor !== undefined && (cursor !== sent || Date.now() - started >= 1000);
+        if (!held) await pause(REMOTE_POLL_MS);
+      }
+    })();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [kitchen, refresh]);
 
   const send = useCallback(

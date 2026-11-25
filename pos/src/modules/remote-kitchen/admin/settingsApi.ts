@@ -51,6 +51,9 @@ export interface KitchenDish {
   name: string;
   label: string;
   prep_minutes: number | null;
+  /** The 14-day median «оплачено → Готово» once five orders carried the dish; absent from an older server. */
+  measured_minutes?: number | null;
+  measured_orders?: number;
 }
 
 export interface KitchenCafe {

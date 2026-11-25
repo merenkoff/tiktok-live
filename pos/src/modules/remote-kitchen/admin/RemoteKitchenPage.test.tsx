@@ -135,7 +135,10 @@ describe('RemoteKitchenPage', () => {
           cafe_name: 'Пульчинелла Парк',
           status: 'active',
           transit_minutes: 10,
-          dishes: [{ variant_id: 11, name: 'Маргарита', label: '32 см', prep_minutes: 15 }],
+          dishes: [
+            { variant_id: 11, name: 'Маргарита', label: '32 см', prep_minutes: 15 },
+            { variant_id: 12, name: 'Тірамісу', label: '', prep_minutes: 10, measured_minutes: 14, measured_orders: 9 },
+          ],
         },
       ],
     });
@@ -144,6 +147,8 @@ describe('RemoteKitchenPage', () => {
 
     expect(await screen.findByTestId('rk-cafes')).toHaveTextContent('Пульчинелла Парк');
     expect(screen.getByTestId('rk-cafes')).toHaveTextContent('Маргарита (32 см) ≈15 хв');
+    // A dish the kitchen's own orders measured shows that time — the one the suggestion uses.
+    expect(screen.getByTestId('rk-cafes')).toHaveTextContent('Тірамісу ≈14 хв за 9 замовлень');
     await user.click(screen.getByRole('button', { name: 'Пауза 30 хв' }));
     expect(api.saveStatus).toHaveBeenCalledWith({ accepting: false, pause_minutes: 30 });
     expect(await screen.findByRole('button', { name: 'Відновити прийом' })).toBeInTheDocument();

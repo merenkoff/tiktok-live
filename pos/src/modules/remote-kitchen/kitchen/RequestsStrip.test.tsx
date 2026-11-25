@@ -76,6 +76,35 @@ describe('RequestsStrip', () => {
     expect(api.listKitchenSide).not.toHaveBeenCalled();
   });
 
+  it('long-polls with the server’s cursor: the next read waits on the server, not on a timer', async () => {
+    const api = fakeApi(true, []);
+    let release: (v: { orders: RemoteRequest[]; now: string; cursor: string }) => void = () => undefined;
+    api.listKitchenSide
+      .mockImplementationOnce(async () => ({ orders: [], now: new Date().toISOString(), cursor: '3.10' }) as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve as never;
+          }) as never
+      )
+      .mockImplementationOnce(() => new Promise(() => undefined) as never);
+    render(stripWith(api));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS * 3);
+    });
+    // The second read went out at once with the cursor, and nothing else since: it is held.
+    expect(api.listKitchenSide).toHaveBeenCalledTimes(2);
+    expect(api.listKitchenSide).toHaveBeenLastCalledWith('3.10');
+
+    // A cafe asks: the held read answers and the strip shows it, then waits again.
+    await act(async () => {
+      release({ orders: [request()], now: new Date().toISOString(), cursor: '4.11' });
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.getByTestId('remote-requests')).toHaveTextContent('Pulcinella Park');
+    expect(api.listKitchenSide).toHaveBeenLastCalledWith('4.11');
+  });
+
   it('in a kitchen with nothing waiting, polls and draws nothing', async () => {
     const api = fakeApi(true, []);
     const { container } = render(stripWith(api));

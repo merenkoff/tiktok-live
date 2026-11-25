@@ -893,6 +893,96 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
   });
 
   // РК4-мінімум: the module switched on without a hand-written API call.
+  it('a dish’s time is measured from five paid orders, and the suggestion and «Точки» use it', async () => {
+    // Orders the kitchen already handed over, written straight in: paid an hour
+    // ago, «Готово» after `minutes`. One sub-minute tap and one forgotten order
+    // are noise, not cooking.
+    const handed = async (minutes: number, daysAgo = 0) => {
+      const row = await pool.query(
+        `INSERT INTO pos_remote_orders
+           (link_id, cafe_store_id, kitchen_store_id, client_uuid, status, paid_at, ready_at)
+         VALUES ($1, $2, $3, $4, 'handed_over',
+                 NOW() - make_interval(days => $5) - INTERVAL '4 hours',
+                 NOW() - make_interval(days => $5) - INTERVAL '4 hours' + make_interval(secs => $6))
+         RETURNING id`,
+        [linkId, cafe.storeId, kitchen.storeId, randomUUID(), daysAgo, minutes * 60]
+      );
+      await pool.query(
+        `INSERT INTO pos_remote_order_items (remote_order_id, cafe_variant_id, kitchen_variant_id, quantity)
+         VALUES ($1, $2, $3, 1)`,
+        [row.rows[0].id, cafeRoll, kitchenRoll]
+      );
+      return Number(row.rows[0].id);
+    };
+    const ids: number[] = [];
+    for (const m of [22, 25, 28, 30]) ids.push(await handed(m));
+    ids.push(await handed(0.2), await handed(200), await handed(10, 20));
+
+    const points = async () =>
+      (await app.inject({ method: 'GET', url: '/api/pos/remote-kitchen/kitchen/cafes', headers: auth(kitchen.ownerToken) }))
+        .json()
+        .cafes[0].dishes.find((d: { variant_id: number }) => d.variant_id === kitchenRoll);
+    // Four real orders are not enough: the set 40 stands.
+    expect(await points()).toMatchObject({ prep_minutes: 40, measured_minutes: null, measured_orders: 0 });
+
+    ids.push(await handed(26.5));
+    expect(await points()).toMatchObject({ prep_minutes: 40, measured_minutes: 27, measured_orders: 5 });
+    const roll = await rk.measuredPrep(pool, kitchen.storeId, [kitchenRoll]);
+    expect(roll.get(kitchenRoll)).toEqual({ minutes: 27, orders: 5 });
+
+    // The next request suggests from what the kitchen measured, not the set 40.
+    const asked = await ask([{ variant_id: cafeRoll, quantity: 1 }]);
+    expect(asked.statusCode, asked.body).toBe(201);
+    expect(asked.json().suggested_minutes).toBe(40); // 27 + queue 0 + road 10 → 40
+    await step(cafe.sellerToken, asked.json().id, 'guest-declined');
+
+    // Out of the window again, so the rest of the file sees the set time.
+    await pool.query(`DELETE FROM pos_remote_orders WHERE id = ANY($1::bigint[])`, [ids]);
+  });
+
+  it('the kitchen’s strip long-polls: held while nothing changes, answered as soon as a cafe asks', async () => {
+    const read = (query = '') =>
+      app.inject({
+        method: 'GET',
+        url: `/api/pos/remote-kitchen/orders?side=kitchen${query}`,
+        headers: auth(kitchen.sellerToken),
+      });
+    const first = await read();
+    expect(first.statusCode, first.body).toBe(200);
+    const cursor = first.json().cursor as string;
+    expect(cursor).toMatch(/^\d+\.\d+$/);
+
+    // Nothing changes: held about the wait, then the same cursor.
+    let t = Date.now();
+    const idle = await read(`&since=${cursor}&wait=1`);
+    expect(Date.now() - t).toBeGreaterThanOrEqual(900);
+    expect(idle.json().cursor).toBe(cursor);
+
+    // A stale cursor answers at once.
+    t = Date.now();
+    expect((await read('&since=0.0&wait=10')).statusCode).toBe(200);
+    expect(Date.now() - t).toBeLessThan(900);
+
+    // Held, and a cafe asks: the answer carries the request well before the wait is out.
+    t = Date.now();
+    const held = read(`&since=${cursor}&wait=10`);
+    await new Promise((r) => setTimeout(r, 100));
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    const woke = await held;
+    expect(Date.now() - t).toBeLessThan(3000);
+    expect(woke.json().cursor).not.toBe(cursor);
+    expect(woke.json().orders.some((o: { id: number }) => o.id === order.id)).toBe(true);
+    await step(cafe.sellerToken, order.id, 'guest-declined');
+
+    // The cafe's side reads as before, with no cursor and no wait.
+    const cafeSide = await app.inject({
+      method: 'GET',
+      url: '/api/pos/remote-kitchen/orders?side=cafe&since=x&wait=10',
+      headers: auth(cafe.sellerToken),
+    });
+    expect(cafeSide.json()).not.toHaveProperty('cursor');
+  });
+
   describe('setting it up from the screens', () => {
     const PASSWORD = 'rk4-super-password';
     let saved: string | undefined;

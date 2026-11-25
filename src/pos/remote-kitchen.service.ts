@@ -240,11 +240,83 @@ async function logEvent(
   kind: string,
   payload: Record<string, unknown> = {}
 ): Promise<void> {
-  await client.query(
-    `INSERT INTO pos_remote_order_events (remote_order_id, actor_store_id, actor_staff_id, kind, payload)
-     VALUES ($1, $2, $3, $4, $5::jsonb)`,
+  const sides = await client.query(
+    `WITH e AS (
+       INSERT INTO pos_remote_order_events (remote_order_id, actor_store_id, actor_staff_id, kind, payload)
+       VALUES ($1, $2, $3, $4, $5::jsonb)
+     )
+     SELECT cafe_store_id, kitchen_store_id FROM pos_remote_orders WHERE id = $1`,
     [orderId, actor.storeId, actor.staffId, kind, JSON.stringify(payload)]
   );
+  const row = sides.rows[0];
+  if (row) nudge([Number(row.cafe_store_id), Number(row.kitchen_store_id)]);
+}
+
+// ── long-poll (§8, РК4) ─────────────────────────────────────────────
+//
+// Every event wakes the screens of both stores that wait on a change. The
+// wake is only a hint — it may come before the change commits, from another
+// transaction than ours (the cafe's receipt), or not at all on another
+// instance — so a waiting screen re-reads `kitchenCursor` on each wake and
+// once a second anyway, and returns as soon as it differs.
+
+const changeWaiters = new Map<number, Set<() => void>>();
+
+function nudge(storeIds: number[]): void {
+  for (const id of storeIds) {
+    const set = changeWaiters.get(id);
+    if (!set) continue;
+    changeWaiters.delete(id);
+    for (const wake of set) wake();
+  }
+}
+
+/** The longest a kitchen's screen is held: under the till's 15 s request timeout. */
+export const LONG_POLL_MAX_S = 12;
+const LONG_POLL_RECHECK_MS = 1000;
+
+/**
+ * What the kitchen's list is made of right now, as one string: how many
+ * events its orders have and the newest. Any committed change moves it — a
+ * count, not only a maximum, so an older transaction committing late counts.
+ */
+export async function kitchenCursor(kitchenStoreId: number): Promise<string> {
+  const row = await pool.query(
+    `SELECT COUNT(e.id)::bigint AS n, COALESCE(MAX(e.id), 0)::bigint AS top
+       FROM pos_remote_orders o
+       JOIN pos_remote_order_events e ON e.remote_order_id = o.id
+      WHERE o.kitchen_store_id = $1
+        AND (o.status = ANY($2::text[]) OR o.updated_at > NOW() - INTERVAL '3 hours')`,
+    [kitchenStoreId, LIVE_STATUSES as unknown as string[]]
+  );
+  return `${row.rows[0]?.n ?? 0}.${row.rows[0]?.top ?? 0}`;
+}
+
+/**
+ * Hold a kitchen's read until its list changes from `since`, `seconds` pass,
+ * or the screen hangs up. Holds no database connection while it waits.
+ */
+export async function waitForKitchenChange(
+  kitchenStoreId: number,
+  since: string,
+  seconds: number,
+  gone: () => boolean = () => false
+): Promise<void> {
+  const deadline = Date.now() + Math.min(Math.max(seconds, 0), LONG_POLL_MAX_S) * 1000;
+  while (Date.now() < deadline && !gone()) {
+    if ((await kitchenCursor(kitchenStoreId)) !== since) return;
+    await new Promise<void>((resolve) => {
+      const wake = () => {
+        clearTimeout(timer);
+        changeWaiters.get(kitchenStoreId)?.delete(wake);
+        resolve();
+      };
+      const timer = setTimeout(wake, Math.min(LONG_POLL_RECHECK_MS, Math.max(0, deadline - Date.now())));
+      const set = changeWaiters.get(kitchenStoreId) ?? new Set<() => void>();
+      set.add(wake);
+      changeWaiters.set(kitchenStoreId, set);
+    });
+  }
 }
 
 async function inTransaction<T>(work: (client: pg.PoolClient) => Promise<T>): Promise<T> {
@@ -317,7 +389,15 @@ export interface KitchenCafeView {
   status: KitchenLink['status'];
   transit_minutes: number;
   /** The kitchen's own dishes this cafe sells — never the cafe's prices or names. */
-  dishes: Array<{ variant_id: number; name: string; label: string; prep_minutes: number | null }>;
+  dishes: Array<{
+    variant_id: number;
+    name: string;
+    label: string;
+    prep_minutes: number | null;
+    /** The median over 14 days (§7.1), once five orders carried the dish; the suggestion uses it. */
+    measured_minutes: number | null;
+    measured_orders: number;
+  }>;
 }
 
 /** The kitchen's «Точки»: who may ask it, and which of its dishes each one sells. */
@@ -339,6 +419,11 @@ export async function listCafesForKitchen(kitchenStoreId: number): Promise<Kitch
       ORDER BY kp.name, kv.label`,
     [links.rows.map((r) => Number(r.id))]
   );
+  const measured = await measuredPrep(
+    pool,
+    kitchenStoreId,
+    dishes.rows.map((d) => Number(d.variant_id))
+  );
   return links.rows.map((link) => ({
     link_id: Number(link.id),
     cafe_name: String(link.cafe_name),
@@ -351,6 +436,8 @@ export async function listCafesForKitchen(kitchenStoreId: number): Promise<Kitch
         name: String(d.name),
         label: String(d.label ?? ''),
         prep_minutes: numOrNull(d.prep_minutes),
+        measured_minutes: measured.get(Number(d.variant_id))?.minutes ?? null,
+        measured_orders: measured.get(Number(d.variant_id))?.orders ?? 0,
       })),
   }));
 }
@@ -993,6 +1080,11 @@ async function resolveLines(client: DbClient, link: KitchenLink, lines: ParsedLi
   const byCafe = new Map<number, Record<string, unknown>>();
   for (const row of rows.rows) byCafe.set(Number(row.cafe_variant_id), row);
   const kitchenToday = (await storeClock(client, link.kitchen_store_id)).today;
+  const measured = await measuredPrep(
+    client,
+    link.kitchen_store_id,
+    rows.rows.map((row) => Number(row.kitchen_variant_id))
+  );
 
   return lines.map((line) => {
     const row = byCafe.get(line.cafeVariantId);
@@ -1011,9 +1103,59 @@ async function resolveLines(client: DbClient, link: KitchenLink, lines: ParsedLi
       kitchenVariantId: Number(row.kitchen_variant_id),
       productName: name,
       variantLabel: String(row.cafe_label ?? ''),
-      prepMinutes: numOrNull(row.prep_minutes),
+      // The measured time once there is one (§7.1, РК4); the set time until then.
+      prepMinutes: measured.get(Number(row.kitchen_variant_id))?.minutes ?? numOrNull(row.prep_minutes),
     };
   });
+}
+
+/** A dish's time is measured over this many days … */
+export const MEASURE_DAYS = 14;
+/** … once at least this many paid orders carried it; until then the set time stands. */
+export const MEASURE_MIN_ORDERS = 5;
+/** An order «ready» later than this after payment was forgotten, not cooked: left out. */
+const MEASURE_MAX_MINUTES = 180;
+
+export interface MeasuredPrep {
+  minutes: number;
+  orders: number;
+}
+
+/**
+ * What the kitchen actually takes (§7.1, РК4): per kitchen dish, the median of
+ * «оплачено → Готово» over the cafe orders of the last 14 days that carried
+ * it, rounded up to a minute. An order's time is its longest dish's plus the
+ * queue it met, so this is the dish as the cafe will see it, not as a recipe
+ * says. Fewer than five orders measure nothing.
+ */
+export async function measuredPrep(
+  client: Pick<DbClient, 'query'>,
+  kitchenStoreId: number,
+  kitchenVariantIds: number[]
+): Promise<Map<number, MeasuredPrep>> {
+  const out = new Map<number, MeasuredPrep>();
+  if (kitchenVariantIds.length === 0) return out;
+  const rows = await client.query(
+    `SELECT t.variant_id,
+            CEIL(percentile_cont(0.5) WITHIN GROUP (ORDER BY t.minutes))::int AS minutes,
+            COUNT(*)::int AS orders
+       FROM (SELECT DISTINCT o.id, i.kitchen_variant_id AS variant_id,
+                    EXTRACT(EPOCH FROM (o.ready_at - o.paid_at)) / 60.0 AS minutes
+               FROM pos_remote_orders o
+               JOIN pos_remote_order_items i ON i.remote_order_id = o.id
+              WHERE o.kitchen_store_id = $1
+                AND i.kitchen_variant_id = ANY($2::bigint[])
+                AND o.paid_at > NOW() - make_interval(days => $3)
+                AND o.ready_at > o.paid_at + INTERVAL '1 minute'
+                AND o.ready_at < o.paid_at + make_interval(mins => $4)) t
+      GROUP BY t.variant_id
+     HAVING COUNT(*) >= $5`,
+    [kitchenStoreId, kitchenVariantIds, MEASURE_DAYS, MEASURE_MAX_MINUTES, MEASURE_MIN_ORDERS]
+  );
+  for (const row of rows.rows) {
+    out.set(Number(row.variant_id), { minutes: Math.max(1, Number(row.minutes)), orders: Number(row.orders) });
+  }
+  return out;
 }
 
 interface Estimate {

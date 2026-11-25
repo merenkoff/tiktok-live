@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { SectionHead } from '@pos/platform/ui';
 import { serverMessage } from '../lib/hostPlatform';
-import { listCafes, saveStatus, type KitchenCafe, type KitchenStatus } from './settingsApi';
+import { listCafes, saveStatus, type KitchenCafe, type KitchenDish, type KitchenStatus } from './settingsApi';
 
 const PAUSES = [15, 30, 60] as const;
 
@@ -172,9 +172,7 @@ export function KitchenPointsSection(): JSX.Element {
                 <p className="text-[13px] text-sq-secondary">Точка ще не обрала жодної страви кухні.</p>
               ) : (
                 <p className="text-[13px] text-sq-secondary">
-                  {cafe.dishes
-                    .map((d) => `${d.label ? `${d.name} (${d.label})` : d.name}${d.prep_minutes != null ? ` ≈${d.prep_minutes} хв` : ''}`)
-                    .join(', ')}
+                  {cafe.dishes.map((d) => `${d.label ? `${d.name} (${d.label})` : d.name}${dishTime(d)}`).join(', ')}
                 </p>
               )}
             </li>
@@ -183,4 +181,13 @@ export function KitchenPointsSection(): JSX.Element {
       </div>
     </section>
   );
+}
+
+/**
+ * « ≈27 хв за 5 замовлень» once the kitchen's own orders measured the dish —
+ * the time the suggestion uses — else the time set on its card.
+ */
+function dishTime(d: Pick<KitchenDish, 'prep_minutes' | 'measured_minutes' | 'measured_orders'>): string {
+  if (d.measured_minutes != null) return ` ≈${d.measured_minutes} хв за ${d.measured_orders ?? 0} замовлень`;
+  return d.prep_minutes != null ? ` ≈${d.prep_minutes} хв` : '';
 }

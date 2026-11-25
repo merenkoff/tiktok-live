@@ -113,11 +113,29 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
   fastify.get('/remote-kitchen/orders', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
-    const side = (request.query as { side?: unknown }).side;
+    const query = request.query as { side?: unknown; since?: unknown; wait?: unknown };
+    const side = query.side;
     if (side !== 'cafe' && side !== 'kitchen') return reply.code(400).send({ error: 'side: cafe або kitchen' });
-    // `now`: the kitchen's strip counts down to the cafe's deadline on the
-    // server's clock, not the tablet's.
-    return { orders: await rk.listOrders(auth.storeId, side), now: new Date().toISOString() };
+    if (side === 'cafe') {
+      // `now`: a screen counts down on the server's clock, not the tablet's.
+      return { orders: await rk.listOrders(auth.storeId, side), now: new Date().toISOString() };
+    }
+    // The kitchen's strip long-polls (§8, РК4): with the `cursor` of its last
+    // read as `since`, the answer waits up to `wait` seconds for a change. The
+    // cursor is read BEFORE the list, so a change between the two only makes
+    // the next read return at once.
+    if (typeof query.since === 'string' && query.since !== '') {
+      const wait = Number(query.wait);
+      // The response's `close`, not the request's: a GET's request closes as
+      // soon as it has been read. A tablet that hung up stops the wait.
+      let gone = false;
+      reply.raw.once('close', () => {
+        gone = true;
+      });
+      await rk.waitForKitchenChange(auth.storeId, query.since, Number.isFinite(wait) ? wait : 0, () => gone);
+    }
+    const cursor = await rk.kitchenCursor(auth.storeId);
+    return { orders: await rk.listOrders(auth.storeId, side), now: new Date().toISOString(), cursor };
   });
 
   fastify.get('/remote-kitchen/orders/:id', async (request, reply) => {
