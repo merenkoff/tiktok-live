@@ -239,6 +239,9 @@ export const POS_MIGRATIONS = [
   // rebuilds on every boot from now on (TechDocs/POS_VERTICALS.md §7u).
   '116_pos_recipe_yield.sql',
   '117_pos_remote_kitchen.sql',
+  // The cafe's tracker: which side cancelled a paid kitchen order, and when the
+  // cafe saw a kitchen's cancel (TechDocs/POS_REMOTE_KITCHEN.md §8, РК5).
+  '118_pos_remote_kitchen_tracker.sql',
 ] as const;
 
 export function readMigration(file: string): string {
