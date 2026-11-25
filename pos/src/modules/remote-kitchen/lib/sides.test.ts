@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const posRequest = vi.fn();
-vi.mock('./hostPlatform', () => ({ posRequest: (...a: unknown[]) => posRequest(...a) }));
+vi.mock('./hostPlatform', () => ({ posRequest: (...a: unknown[]) => posRequest(...a), currentStoreId: () => 7 }));
 
 const { SIDES_FRESH_MS, forgetSides, readSides } = await import('./sides');
 
@@ -32,5 +32,23 @@ describe('readSides', () => {
     posRequest.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ as_cafe: null, as_kitchen: {} });
     await expect(readSides(1000)).rejects.toThrow('offline');
     expect(await readSides(1001)).toEqual({ cafe: false, kitchen: true });
+  });
+
+  it('never hands one store’s answer to another store signed in on the same till', async () => {
+    posRequest.mockResolvedValueOnce({ as_cafe: { link: {} }, as_kitchen: null });
+    posRequest.mockResolvedValueOnce({ as_cafe: null, as_kitchen: {} });
+    expect(await readSides(1000, 7)).toEqual({ cafe: true, kitchen: false });
+    expect(await readSides(1001, 8)).toEqual({ cafe: false, kitchen: true });
+    expect(posRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a cafe whose link was revoked following the orders it still has', async () => {
+    posRequest.mockResolvedValue({ as_cafe: null, as_kitchen: null, cafe_orders: true });
+    expect(await readSides(1000)).toEqual({ cafe: true, kitchen: false });
+  });
+
+  it('reads an older server without `cafe_orders` by the link alone', async () => {
+    posRequest.mockResolvedValue({ as_cafe: null, as_kitchen: null });
+    expect(await readSides(1000)).toEqual({ cafe: false, kitchen: false });
   });
 });

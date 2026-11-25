@@ -97,6 +97,31 @@ describe('RequestsStrip', () => {
     expect(api.answerWithTime).toHaveBeenCalledWith(expect.objectContaining({ id: 7, revision: 1 }), 20);
   });
 
+  it('drops a read that started before an answer, so the answered request does not come back', async () => {
+    const api = fakeApi(true, [request()]);
+    render(stripWith(api));
+    await screen.findByTestId('remote-request-7');
+    let releaseStale: (v: { orders: RemoteRequest[]; now: string }) => void = () => undefined;
+    api.listKitchenSide.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        releaseStale = resolve;
+      })
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS);
+    });
+    api.listKitchenSide.mockResolvedValue({ orders: [], now: new Date().toISOString() });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByTestId('remote-answer-7'));
+    expect(screen.queryByTestId('remote-request-7')).toBeNull();
+
+    await act(async () => {
+      releaseStale({ orders: [request()], now: new Date().toISOString() });
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.queryByTestId('remote-request-7')).toBeNull();
+  });
+
   it('keeps the screen as it was when a read fails', async () => {
     const api = fakeApi(true, [request()]);
     render(stripWith(api));

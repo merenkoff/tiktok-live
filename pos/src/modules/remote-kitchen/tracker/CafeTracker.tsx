@@ -22,6 +22,7 @@ import {
   minutesLate,
   nextStep,
   numberOf,
+  receiptOf,
   stageOf,
   waitingTooLong,
 } from './lib';
@@ -137,6 +138,12 @@ function title(order: TrackedOrder): string {
   return [numberOf(order), order.guest_label].filter(Boolean).join(' · ');
 }
 
+/** «П-12 · Стіл 3 · чек R-000123 — » — what the cashier finds the receipt by in «Чеки». */
+function cancelHead(order: TrackedOrder): string {
+  const head = [title(order), receiptOf(order)].filter(Boolean).join(' · ');
+  return head ? `${head} — ` : '';
+}
+
 function CancelRow({ order, busy, onSeen }: { order: TrackedOrder; busy: boolean; onSeen: () => void }) {
   return (
     <li
@@ -145,7 +152,7 @@ function CancelRow({ order, busy, onSeen }: { order: TrackedOrder; busy: boolean
     >
       <div className="flex-1 min-w-[12rem]">
         <p className="text-[15px] font-bold text-red-700">
-          {title(order) ? `${title(order)} — ` : ''}скасовано кухнею — поверніть гостю
+          {cancelHead(order)}скасовано кухнею — поверніть гостю
         </p>
         <p className="text-sm text-sq-secondary">
           {itemsLine(order)}
@@ -180,8 +187,11 @@ function OrderRow({
 }) {
   const stage = stageOf(order.status);
   const late = minutesLate(order, now);
-  const step = nextStep(order.status);
+  const step = nextStep(order, now);
   const delayed = order.delayed_minutes ?? 0;
+  // A step the kitchen never marked asks first, inline: `window.confirm` does
+  // nothing in the desktop webview.
+  const [asking, setAsking] = useState(false);
 
   return (
     <li className="rounded-xl bg-sq-empty px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1" data-testid={`remote-tracker-${order.id}`}>
@@ -220,6 +230,11 @@ function OrderRow({
             <span className="font-semibold text-sq-warning">Привезли о {clockOf(order.arrived_at)} — гість ще не забрав</span>
           )}
         </p>
+        {asking && step?.confirm && (
+          <p className="text-[13px] font-semibold text-sq-warning" data-testid={`remote-tracker-confirm-${order.id}`}>
+            {step.confirm}
+          </p>
+        )}
       </div>
       {onTicket && (
         <button
@@ -231,17 +246,39 @@ function OrderRow({
           Талон
         </button>
       )}
-      {step && (
+      {step && asking && step.confirm ? (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="min-h-11 px-3 rounded-xl bg-sq-blue hover:bg-sq-blue-press text-[15px] font-semibold text-white disabled:opacity-60"
+            onClick={() => {
+              setAsking(false);
+              onStep(step.action);
+            }}
+            disabled={busy}
+            data-testid={`remote-tracker-confirm-yes-${order.id}`}
+          >
+            Так, привезли
+          </button>
+          <button
+            type="button"
+            className="min-h-11 px-3 rounded-xl bg-white text-[15px] font-semibold text-sq-heading shadow-card"
+            onClick={() => setAsking(false)}
+          >
+            Ні
+          </button>
+        </div>
+      ) : step ? (
         <button
           type="button"
           className="min-h-11 px-3 rounded-xl bg-sq-blue hover:bg-sq-blue-press text-[15px] font-semibold text-white disabled:opacity-60"
-          onClick={() => onStep(step.action)}
+          onClick={() => (step.confirm ? setAsking(true) : onStep(step.action))}
           disabled={busy}
           data-testid={`remote-tracker-step-${order.id}`}
         >
           {step.label}
         </button>
-      )}
+      ) : null}
     </li>
   );
 }

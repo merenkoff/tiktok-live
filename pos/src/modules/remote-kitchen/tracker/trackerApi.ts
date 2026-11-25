@@ -29,6 +29,8 @@ export interface TrackedOrder {
   paid_at: string | null;
   arrived_at: string | null;
   decline_reason: string | null;
+  /** The cafe's receipt that paid it; absent on an older server. */
+  cafe_receipt_number?: string | null;
   /** Absent on a server before migration 118: no kitchen's cancel is told then. */
   cancelled_by?: 'cafe' | 'kitchen' | null;
   cancel_seen_at?: string | null;
