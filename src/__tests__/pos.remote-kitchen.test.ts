@@ -1087,6 +1087,203 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     }
   });
 
+  it('«Віддано на точки»: what each cafe got, by dish and size, at what cost, and the promises kept', async () => {
+    type Row = {
+      store_id: number;
+      store_name: string;
+      orders: number;
+      cancelled: number;
+      cancelled_kitchen: number;
+      on_time: number;
+      on_time_moved: number;
+      delayed: number;
+      cost_cents: number;
+      unpriced_lines: number;
+      dishes: Array<{ name: string; label: string; quantity: number }>;
+    };
+    const report = (token: string, side: string, days: string | number = 7) =>
+      app.inject({ method: 'GET', url: `/api/pos/remote-kitchen/report?side=${side}&days=${days}`, headers: auth(token) });
+    const rowOf = async (token: string, side: string, otherId: number, days: number = 7): Promise<Row> => {
+      const res = await report(token, side, days);
+      expect(res.statusCode, res.body).toBe(200);
+      return (
+        (res.json().rows as Row[]).find((r) => r.store_id === otherId) ?? {
+          store_id: otherId,
+          store_name: '',
+          orders: 0,
+          cancelled: 0,
+          cancelled_kitchen: 0,
+          on_time: 0,
+          on_time_moved: 0,
+          delayed: 0,
+          cost_cents: 0,
+          unpriced_lines: 0,
+          dishes: [],
+        }
+      );
+    };
+    const dishQty = (row: Row, name: string, label: string) =>
+      row.dishes.find((d) => d.name === name && d.label === label)?.quantity ?? 0;
+
+    // A pizza costs the kitchen 50 ₴; the roll has no purchase price at all.
+    const costs = await pool.query(`SELECT id, cost_milli FROM pos_variants WHERE id = ANY($1::bigint[])`, [
+      [kitchenPizza, kitchenRoll],
+    ]);
+    await pool.query(`UPDATE pos_variants SET cost_milli = 5000000 WHERE id = $1`, [kitchenPizza]);
+    await pool.query(`UPDATE pos_variants SET cost_milli = 0 WHERE id = $1`, [kitchenRoll]);
+
+    const ids: number[] = [];
+    try {
+      const before = await rowOf(kitchen.ownerToken, 'kitchen', cafe.storeId);
+      const beforeCafe = await rowOf(cafe.ownerToken, 'cafe', kitchen.storeId);
+
+      // Written straight in, so every number is the test's own. `P` is the
+      // promise as it stands now; `at` the minutes after P the cafe got it.
+      const order = async (o: {
+        at?: number | null; // null = never reached the cafe
+        dispatched?: boolean; // the kitchen tapped «Видано»
+        delayedBy?: number; // «+N хв» the kitchen gave (P already includes it)
+        cancelledBy?: 'kitchen' | 'cafe';
+        lines: Array<{ name: string; label: string; qty: number; roll?: boolean }>;
+        paid?: 'now' | 'yesterday';
+      }) => {
+        const reached = o.at !== null && o.at !== undefined;
+        const row = await pool.query(
+          `INSERT INTO pos_remote_orders
+             (link_id, cafe_store_id, kitchen_store_id, client_uuid, status, transit_minutes,
+              paid_at, promised_at, dispatched_at, arrived_at, handed_at, cancelled_by)
+           SELECT $1, $2, $3, $4, $5, 10,
+                  CASE WHEN $9 = 'yesterday'
+                       THEN ((date_trunc('day', NOW() AT TIME ZONE st.timezone) - INTERVAL '12 hours') AT TIME ZONE st.timezone)
+                       ELSE NOW() - INTERVAL '1 hour' END,
+                  NOW() - INTERVAL '20 minutes',
+                  CASE WHEN $6 THEN NOW() - INTERVAL '40 minutes' END,
+                  CASE WHEN $7 THEN NOW() - INTERVAL '20 minutes' + make_interval(mins => $8) END,
+                  CASE WHEN $7 THEN NOW() - INTERVAL '20 minutes' + make_interval(mins => $8) END,
+                  $10
+             FROM pos_stores st WHERE st.id = $3
+           RETURNING id`,
+          [
+            linkId,
+            cafe.storeId,
+            kitchen.storeId,
+            randomUUID(),
+            o.cancelledBy ? 'cancelled' : 'handed_over',
+            o.dispatched === true,
+            reached,
+            o.at ?? 0,
+            o.paid ?? 'now',
+            o.cancelledBy ?? null,
+          ]
+        );
+        const id = Number(row.rows[0].id);
+        ids.push(id);
+        for (const line of o.lines) {
+          await pool.query(
+            `INSERT INTO pos_remote_order_items
+               (remote_order_id, cafe_variant_id, kitchen_variant_id, quantity, product_name, variant_label)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [id, line.roll ? cafeRoll : cafePizza, line.roll ? kitchenRoll : kitchenPizza, line.qty, line.name, line.label]
+          );
+        }
+        if (o.delayedBy) {
+          await pool.query(
+            `INSERT INTO pos_remote_order_events (remote_order_id, kind, payload) VALUES ($1, 'delayed', $2::jsonb)`,
+            [id, JSON.stringify({ minutes: o.delayedBy })]
+          );
+        }
+      };
+      const small = (qty = 1) => ({ name: 'Маргарита-звіт', label: '30 см', qty });
+      const large = (qty = 1) => ({ name: 'Маргарита-звіт', label: '50 см', qty });
+
+      // On time, the kitchen tapped «Видано».
+      await order({ at: -5, dispatched: true, lines: [small(2)] });
+      // On time, but the cook tapped only «Готово»: the cafe's «Привезли» is what says it came.
+      await order({ at: -5, lines: [large()] });
+      // «+10 хв», then in by the moved promise but 5 minutes past the one the guest was told.
+      await order({ at: -5, dispatched: true, delayedBy: 10, lines: [small()] });
+      // Seven minutes late.
+      await order({ at: 7, dispatched: true, lines: [small()] });
+      // A roll with no purchase price: counted, its cost unknown, never 0.
+      await order({ at: -5, dispatched: true, lines: [{ name: 'Філадельфія-звіт', label: '', qty: 1, roll: true }] });
+      // Cancelled — once by the kitchen, once by the cafe's void.
+      await order({ at: null, cancelledBy: 'kitchen', lines: [small()] });
+      await order({ at: null, cancelledBy: 'cafe', lines: [small()] });
+      // Paid yesterday on the store's calendar.
+      await order({ at: -5, dispatched: true, paid: 'yesterday', lines: [{ name: 'Вчорашня-звіт', label: '', qty: 1 }] });
+
+      const after = await rowOf(kitchen.ownerToken, 'kitchen', cafe.storeId);
+      expect({
+        orders: after.orders - before.orders,
+        cancelled: after.cancelled - before.cancelled,
+        cancelled_kitchen: after.cancelled_kitchen - before.cancelled_kitchen,
+        on_time: after.on_time - before.on_time,
+        on_time_moved: after.on_time_moved - before.on_time_moved,
+        delayed: after.delayed - before.delayed,
+        cost_cents: after.cost_cents - before.cost_cents,
+        unpriced_lines: after.unpriced_lines - before.unpriced_lines,
+      }).toEqual({
+        orders: 6,
+        cancelled: 2,
+        cancelled_kitchen: 1,
+        on_time: 4,
+        on_time_moved: 5,
+        delayed: 1,
+        // Six pizzas reached the cafe (2 + 1 + 1 + 1 + yesterday's 1) at 50 ₴; the roll is unpriced.
+        cost_cents: 6 * 5000,
+        unpriced_lines: 1,
+      });
+      // Sizes apart; the cancelled pizzas never reached the cafe.
+      expect(dishQty(after, 'Маргарита-звіт', '30 см')).toBe(4);
+      expect(dishQty(after, 'Маргарита-звіт', '50 см')).toBe(1);
+      expect(dishQty(after, 'Філадельфія-звіт', '')).toBe(1);
+
+      // «Сьогодні» is the store's day: yesterday's order is not in it, two days are.
+      expect(dishQty(await rowOf(kitchen.ownerToken, 'kitchen', cafe.storeId, 1), 'Вчорашня-звіт', '')).toBe(0);
+      expect(dishQty(await rowOf(kitchen.ownerToken, 'kitchen', cafe.storeId, 2), 'Вчорашня-звіт', '')).toBe(1);
+
+      // The cafe reads the same orders from its side, under the kitchen's title from the link.
+      const title = String(
+        (await pool.query(`SELECT kitchen_title FROM pos_kitchen_links WHERE id = $1`, [linkId])).rows[0].kitchen_title
+      );
+      const afterCafe = await rowOf(cafe.ownerToken, 'cafe', kitchen.storeId);
+      expect(afterCafe.store_name).toBe(title);
+      expect(afterCafe.orders - beforeCafe.orders).toBe(6);
+      expect(afterCafe.store_id).toBe(kitchen.storeId);
+
+      // Owner only, a side and whole days from 1 to 90; a store with no link has nothing.
+      expect((await report(kitchen.sellerToken, 'kitchen')).statusCode).toBe(403);
+      expect((await report(kitchen.ownerToken, 'both')).statusCode).toBe(400);
+      for (const bad of ['0', '-1', '0.5', 'abc', '91']) {
+        expect((await report(kitchen.ownerToken, 'kitchen', bad)).statusCode, bad).toBe(400);
+      }
+      expect((await report(stranger.ownerToken, 'kitchen')).json().rows).toEqual([]);
+    } finally {
+      await pool.query(`DELETE FROM pos_remote_orders WHERE id = ANY($1::bigint[])`, [ids]);
+      for (const row of costs.rows) {
+        await pool.query(`UPDATE pos_variants SET cost_milli = $2 WHERE id = $1`, [row.id, row.cost_milli]);
+      }
+    }
+  });
+
+  it('keeps the report for both owners after the link is revoked', async () => {
+    const sides = async (token: string) =>
+      (await app.inject({ method: 'GET', url: '/api/pos/remote-kitchen/report/sides', headers: auth(token) })).json()
+        .sides;
+    await rk.updateLink(linkId, { status: 'revoked' }, { allowRevoke: true });
+    try {
+      expect(await sides(kitchen.ownerToken)).toEqual(['kitchen']);
+      expect(await sides(cafe.ownerToken)).toEqual(['cafe']);
+      expect(await sides(stranger.ownerToken)).toEqual([]);
+      expect(
+        (await app.inject({ method: 'GET', url: '/api/pos/remote-kitchen/report/sides', headers: auth(kitchen.sellerToken) }))
+          .statusCode
+      ).toBe(403);
+    } finally {
+      await rk.updateLink(linkId, { status: 'active' }, { allowRevoke: true });
+    }
+  });
+
   // РК4-мінімум: the module switched on without a hand-written API call.
   describe('setting it up from the screens', () => {
     const PASSWORD = 'rk4-super-password';
