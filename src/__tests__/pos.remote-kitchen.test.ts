@@ -855,4 +855,123 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
       await modifiers.setProductGroups(cafe.storeId, cafePizzaProduct, []);
     }
   });
+
+  // РК4-мінімум: the module switched on without a hand-written API call.
+  describe('setting it up from the screens', () => {
+    const PASSWORD = 'rk4-super-password';
+    let saved: string | undefined;
+    let superToken = '';
+
+    beforeAll(async () => {
+      saved = process.env.POS_SUPER_PASSWORD;
+      process.env.POS_SUPER_PASSWORD = PASSWORD;
+      const login = await app.inject({ method: 'POST', url: '/api/pos/super/login', payload: { password: PASSWORD } });
+      superToken = login.json().token;
+    });
+
+    afterAll(() => {
+      if (saved === undefined) delete process.env.POS_SUPER_PASSWORD;
+      else process.env.POS_SUPER_PASSWORD = saved;
+    });
+
+    it('the super-admin sees both ends of a store’s links, named', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/pos/super/remote-kitchen/links?store_id=${kitchen.storeId}`,
+        headers: { 'x-pos-super-token': superToken },
+      });
+      expect(res.statusCode).toBe(200);
+      const links = res.json().links as Array<Record<string, unknown>>;
+      const ours = links.find((l) => l.id === linkId);
+      expect(ours).toMatchObject({ cafe_store_id: cafe.storeId, kitchen_store_id: kitchen.storeId });
+      expect(typeof ours?.cafe_name).toBe('string');
+      expect(typeof ours?.kitchen_name).toBe('string');
+
+      const none = await app.inject({
+        method: 'GET',
+        url: `/api/pos/super/remote-kitchen/links?store_id=${lonely.storeId}`,
+        headers: { 'x-pos-super-token': superToken },
+      });
+      expect(none.json()).toEqual({ links: [] });
+      const anon = await app.inject({
+        method: 'GET',
+        url: `/api/pos/super/remote-kitchen/links?store_id=${kitchen.storeId}`,
+        headers: auth(cafe.ownerToken),
+      });
+      expect(anon.statusCode).toBe(401);
+    });
+
+    it('imports the kitchen’s dishes as the cafe’s cards at the cafe’s price, once', async () => {
+      const extra = await seedProduct(kitchen.storeId, { name: 'Карбонара', quantity: 20 });
+      const imp = (dishes: unknown, token = cafe.ownerToken) =>
+        app.inject({
+          method: 'POST',
+          url: '/api/pos/remote-kitchen/link/import',
+          headers: auth(token),
+          payload: { dishes },
+        });
+
+      // A seller does not shape the catalogue; a price is the cafe's to name.
+      expect((await imp([{ kitchen_variant_id: extra.variantId, price_cents: 23000 }], cafe.sellerToken)).statusCode).toBe(403);
+      expect((await imp([{ kitchen_variant_id: extra.variantId }])).statusCode).toBe(400);
+      // Another store's dish is not this kitchen's.
+      const foreign = await seedProduct(stranger.storeId, { name: 'Чужа', quantity: 1 });
+      expect((await imp([{ kitchen_variant_id: foreign.variantId, price_cents: 100 }])).statusCode).toBe(404);
+
+      const first = await imp([{ kitchen_variant_id: extra.variantId, price_cents: 23000 }]);
+      expect(first.statusCode, first.body).toBe(200);
+      expect(first.json()).toMatchObject({ created: 1, linked: 1, skipped: 0 });
+      const card = await pool.query(
+        `SELECT v.id, v.price_cents, s.quantity
+           FROM pos_variants v JOIN pos_products p ON p.id = v.product_id
+           LEFT JOIN pos_stock s ON s.variant_id = v.id
+          WHERE p.store_id = $1 AND p.name LIKE 'Карбонара%'`,
+        [cafe.storeId]
+      );
+      // Named after the dish and its size, as the cashier reads it.
+      expect(card.rows).toHaveLength(1);
+      expect(Number(card.rows[0].price_cents)).toBe(23000);
+      expect(Number(card.rows[0].quantity)).toBe(rk.KITCHEN_DISH_STOCK);
+      const items = first.json().items as Array<{ cafe_variant_id: number; kitchen_variant_id: number }>;
+      expect(items).toContainEqual(
+        expect.objectContaining({ cafe_variant_id: Number(card.rows[0].id), kitchen_variant_id: extra.variantId })
+      );
+
+      // Twice changes nothing.
+      const again = await imp([{ kitchen_variant_id: extra.variantId, price_cents: 99900 }]);
+      expect(again.json()).toMatchObject({ created: 0, linked: 0, skipped: 1 });
+      const count = await pool.query(`SELECT COUNT(*)::int AS n FROM pos_products WHERE store_id = $1 AND name LIKE 'Карбонара%'`, [
+        cafe.storeId,
+      ]);
+      expect(count.rows[0].n).toBe(1);
+
+      // The kitchen's «Точки» lists the dish under this cafe, with no cafe price in sight.
+      const points = await app.inject({
+        method: 'GET',
+        url: '/api/pos/remote-kitchen/kitchen/cafes',
+        headers: auth(kitchen.sellerToken),
+      });
+      expect(points.statusCode).toBe(200);
+      const body = points.json();
+      expect(body.status).toHaveProperty('accepting');
+      const ours = (body.cafes as Array<{ link_id: number; dishes: Array<{ variant_id: number }> }>).find(
+        (c) => c.link_id === linkId
+      );
+      expect(ours?.dishes.map((d) => d.variant_id)).toContain(extra.variantId);
+      expect(JSON.stringify(body)).not.toContain('price');
+
+      // A store that is no kitchen has no «Точки».
+      const notKitchen = await app.inject({
+        method: 'GET',
+        url: '/api/pos/remote-kitchen/kitchen/cafes',
+        headers: auth(lonely.sellerToken),
+      });
+      expect(notKitchen.statusCode).toBe(404);
+
+      await pool.query(`DELETE FROM pos_kitchen_link_items WHERE link_id = $1 AND kitchen_variant_id = $2`, [
+        linkId,
+        extra.variantId,
+      ]);
+    });
+  });
 });

@@ -237,6 +237,15 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     return { ok: true };
   });
 
+  // The kitchen's «Точки»: its cafes and which of its own dishes each sells.
+  fastify.get('/remote-kitchen/kitchen/cafes', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const cafes = await rk.listCafesForKitchen(auth.storeId);
+    if (cafes.length === 0) return reply.code(404).send({ error: 'Цей магазин не є кухнею для кафе' });
+    return { cafes, status: await rk.getKitchenStatus(auth.storeId) };
+  });
+
   // ── the cafe owner's settings (§11 «Налаштування зв'язки») ────────
 
   fastify.patch('/remote-kitchen/link', async (request, reply) => {
@@ -289,6 +298,21 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // «Імпорт меню кухні»: the picked dishes become the cafe's cards, each at
+  // the cafe's own price, and are marked at once.
+  fastify.post('/remote-kitchen/link/import', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    const link = await rk.findLinkForCafe(auth.storeId);
+    if (!link) return reply.code(404).send({ error: 'У цього магазину немає віддаленої кухні' });
+    try {
+      const result = await rk.importKitchenDishes(link, ((request.body ?? {}) as Body).dishes);
+      return { ...result, items: await rk.listLinkItems(link.id) };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   fastify.delete('/remote-kitchen/link/items/:variantId', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
@@ -310,6 +334,14 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     } catch (error) {
       return sendError(reply, error);
     }
+  });
+
+  // Both ends of every link a store has, for its card in the super-admin.
+  fastify.get('/super/remote-kitchen/links', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const storeId = idOf((request.query as { store_id?: string }).store_id);
+    if (storeId == null) return reply.code(400).send({ error: 'Вкажіть магазин' });
+    return { links: await rk.listLinksForStore(storeId) };
   });
 
   fastify.patch('/super/remote-kitchen/links/:id', async (request, reply) => {

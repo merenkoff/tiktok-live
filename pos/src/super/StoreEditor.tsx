@@ -10,6 +10,7 @@ import { validateRemoteEntryInput } from '../lib/moduleRemoteForm';
 import { superApi, superErrorText, type SuperStoreRow } from './superApi';
 import { ProbeNote } from './ProbeNote';
 import { ChoiceQrImport } from './ChoiceQrImport';
+import { RemoteKitchenLinks } from './RemoteKitchenLinks';
 import { probeRemoteUrl, useProbe, type ProbeState } from './probe';
 
 type Remotes = Record<string, string | ModuleRemoteEntry>;
@@ -281,6 +282,8 @@ export function StoreEditor({
         {message && <span className="text-xs text-emerald-700">{message}</span>}
         {error && <span className="text-xs text-rose-600">{error}</span>}
       </div>
+
+      <RemoteKitchenLinks store={store} />
 
       <ChoiceQrImport store={store} />
     </div>

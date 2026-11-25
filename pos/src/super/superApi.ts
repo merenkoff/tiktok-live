@@ -267,6 +267,19 @@ export function setSuperToken(token: string | null): void {
 
 type UnauthorizedListener = () => void;
 
+/** One cafe ↔ kitchen link (TechDocs/POS_REMOTE_KITCHEN.md §5.1), both stores named. */
+export interface SuperKitchenLink {
+  id: number;
+  cafe_store_id: number;
+  kitchen_store_id: number;
+  cafe_name: string;
+  kitchen_name: string;
+  status: 'active' | 'paused' | 'revoked';
+  kitchen_title: string;
+  kitchen_phone: string | null;
+  transit_minutes: number;
+}
+
 export class SuperApi {
   private client: AxiosInstance;
   private listeners = new Set<UnauthorizedListener>();
@@ -352,6 +365,29 @@ export class SuperApi {
       { timeout: 180_000 }
     );
     return data;
+  }
+
+  /** «Віддалена кухня»: every link this store is either end of, revoked ones included. */
+  async remoteKitchenLinks(storeId: number): Promise<SuperKitchenLink[]> {
+    const { data } = await this.client.get<{ links: SuperKitchenLink[] }>('/remote-kitchen/links', {
+      params: { store_id: storeId },
+    });
+    return Array.isArray(data?.links) ? data.links : [];
+  }
+
+  /** A cafe may now ask this kitchen; creating a revoked pair again revives it. */
+  async createRemoteKitchenLink(body: {
+    cafe_store_id: number;
+    kitchen_store_id: number;
+    kitchen_title: string;
+    kitchen_phone?: string | null;
+    transit_minutes?: number;
+  }): Promise<void> {
+    await this.client.post('/remote-kitchen/links', body);
+  }
+
+  async setRemoteKitchenLinkStatus(linkId: number, status: SuperKitchenLink['status']): Promise<void> {
+    await this.client.patch(`/remote-kitchen/links/${linkId}`, { status });
   }
 
   async repoint(body: { module_id: string; url: string; store_ids?: number[] }): Promise<RepointReport> {

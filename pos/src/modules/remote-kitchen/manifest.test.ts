@@ -27,11 +27,16 @@ describe('remote-kitchen manifest', () => {
     expect(remoteKitchenModule.ownerOnly).toBeUndefined();
   });
 
-  it('fills the two host slots — the cafe’s «З кухні» and the kitchen’s strip — and owns no page', () => {
+  it('fills the two host slots — the cafe’s «З кухні» and the kitchen’s strip', () => {
     expect(remoteKitchenModule.checkout?.Action).toBeDefined();
     expect(remoteKitchenModule.till?.Banner).toBeDefined();
-    expect(remoteKitchenModule.routes).toEqual([]);
-    expect(remoteKitchenModule.nav).toEqual([]);
+  });
+
+  it('owns one page, in the owner’s cabinet, and nothing in the till’s frame', () => {
+    expect(remoteKitchenModule.routes.map((r) => [r.path, r.mount])).toEqual([['remote-kitchen/*', 'admin']]);
+    expect(remoteKitchenModule.nav.map((n) => [n.to, n.location, n.icon])).toEqual([
+      ['/admin/remote-kitchen', 'admin-sidebar', 'ChefHat'],
+    ]);
   });
 
   it('keeps no offline queue: the kitchen cooks only on the server’s word', () => {
