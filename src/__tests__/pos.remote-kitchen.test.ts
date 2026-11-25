@@ -744,15 +744,17 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
 
   // ── РК5: sold offline on the kitchen's word by phone ─────────────────
 
+  // From the cafe's desktop: a phone time is only ever written down there (§8).
   const phoneSale = (
     items: Array<{ variant_id: number; quantity: number }>,
     remotePhone: unknown,
-    extra: Record<string, unknown> = {}
+    extra: Record<string, unknown> = {},
+    device: string | null = 'cafe-desktop'
   ) =>
     app.inject({
       method: 'POST',
       url: '/api/pos/sales/complete',
-      headers: auth(cafe.sellerToken),
+      headers: { ...auth(cafe.sellerToken), ...(device ? { 'x-pos-device-id': device } : {}) },
       payload: {
         items,
         payments: [{ method: 'cash', amount_cents: items.reduce((sum, i) => sum + i.quantity * 10000, 0) }],
@@ -855,6 +857,106 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
       Number(live.json().id),
     ]);
     expect(liveRow.rows[0].status).toBe('cooking');
+  });
+
+  it('takes a live phone time only from the cafe’s desktop, and never from a seller kept off «Віддалена кухня»', async () => {
+    const count = async () =>
+      Number(
+        (await pool.query(`SELECT COUNT(*)::int AS n FROM pos_remote_orders WHERE cafe_store_id = $1`, [cafe.storeId]))
+          .rows[0].n
+      );
+    const before = await count();
+    // The web till and the tablet queue nothing offline, so they never write one down.
+    const web = await phoneSale([{ variant_id: cafeRoll, quantity: 1 }], { minutes: 30 }, {}, null);
+    expect(web.statusCode, web.body).toBe(400);
+    // It starts the kitchen's oven without asking it: the owner's closed section holds.
+    await pool.query(`UPDATE pos_staff SET blocked_sections = ARRAY['remote-kitchen'] WHERE id = $1`, [cafe.sellerId]);
+    try {
+      const closed = await phoneSale([{ variant_id: cafeRoll, quantity: 1 }], { minutes: 30 });
+      expect(closed.statusCode, closed.body).toBe(403);
+      expect(closed.json().error).toBe('section_closed');
+      // A receipt the till already sold offline is filed all the same.
+      const replay = await phoneSale([{ variant_id: cafeRoll, quantity: 1 }], { minutes: 30 }, { offline_replay: true });
+      expect(replay.statusCode, replay.body).toBe(201);
+    } finally {
+      await pool.query(`UPDATE pos_staff SET blocked_sections = '{}' WHERE id = $1`, [cafe.sellerId]);
+    }
+    expect(await count()).toBe(before + 1);
+  });
+
+  it('files a phone order synced after its promise as handed over: off the kitchen’s board, counted but not timed', async () => {
+    const kitchenBefore = await stockOf(kitchenPizza);
+    // The call was three hours ago for 30 minutes: the pizza is long eaten.
+    const res = await phoneSale(
+      [{ variant_id: cafePizza, quantity: 1 }],
+      { minutes: 30, agreed_at: new Date(Date.now() - 3 * 3600_000).toISOString() },
+      { offline_replay: true }
+    );
+    expect(res.statusCode, res.body).toBe(201);
+    const row = (
+      await pool.query(
+        `SELECT id, status, order_no, closed_at, handed_at FROM pos_remote_orders WHERE cafe_sale_id = $1`,
+        [Number(res.json().id)]
+      )
+    ).rows[0];
+    expect(row.status).toBe('handed_over');
+    expect(row.order_no).not.toBeNull();
+    expect(row.closed_at).not.toBeNull();
+    expect(row.handed_at).toBeNull();
+    // Still off the kitchen's shelf: it was cooked.
+    expect(await stockOf(kitchenPizza)).toBe(kitchenBefore - 1);
+    // Not among what the kitchen still has to do.
+    const board = await app.inject({
+      method: 'GET',
+      url: '/api/pos/remote-kitchen/orders?side=kitchen',
+      headers: auth(kitchen.sellerToken),
+    });
+    const live = (board.json().orders as Array<{ id: number; status: string }>).find((o) => o.id === Number(row.id));
+    expect(live === undefined || live.status === 'handed_over').toBe(true);
+    // The report counts it as reached, neither on time nor late.
+    const report = await app.inject({
+      method: 'GET',
+      url: '/api/pos/remote-kitchen/report?side=kitchen&days=1',
+      headers: auth(kitchen.ownerToken),
+    });
+    const mine = (report.json().rows as Array<{ store_id: number; untimed: number; orders: number }>).find(
+      (r) => r.store_id === cafe.storeId
+    );
+    expect(mine?.untimed).toBeGreaterThanOrEqual(1);
+    expect(mine!.orders).toBeGreaterThanOrEqual(mine!.untimed);
+  });
+
+  it('keeps the receipt when the kitchen half of a phone order fails, and the order still reaches the kitchen', async () => {
+    // A kitchen dish whose shelf row is gone: writing it off throws.
+    const stock = (
+      await pool.query(`SELECT quantity FROM pos_stock WHERE variant_id = $1 AND store_id = $2`, [
+        kitchenPizza,
+        kitchen.storeId,
+      ])
+    ).rows[0];
+    await pool.query(`DELETE FROM pos_stock WHERE variant_id = $1 AND store_id = $2`, [kitchenPizza, kitchen.storeId]);
+    try {
+      const res = await phoneSale(
+        [{ variant_id: cafePizza, quantity: 1 }],
+        { minutes: 30, agreed_at: new Date().toISOString() },
+        { offline_replay: true }
+      );
+      expect(res.statusCode, res.body).toBe(201);
+      const row = (
+        await pool.query(`SELECT status, order_no, cafe_sale_id FROM pos_remote_orders WHERE cafe_sale_id = $1`, [
+          Number(res.json().id),
+        ])
+      ).rows[0];
+      // Paid by the receipt and cooking, unnumbered: the kitchen still sees it, the cafe can void it.
+      expect(row.status).toBe('cooking');
+      expect(row.order_no).toBeNull();
+    } finally {
+      await pool.query(
+        `INSERT INTO pos_stock (store_id, variant_id, quantity) VALUES ($1, $2, $3)
+         ON CONFLICT DO NOTHING`,
+        [kitchen.storeId, kitchenPizza, Number(stock.quantity)]
+      );
+    }
   });
 
   it('voiding the cafe receipt cancels a kitchen order still cooking, and each shelf gets back its own', async () => {

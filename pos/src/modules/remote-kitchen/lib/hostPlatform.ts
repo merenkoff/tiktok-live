@@ -146,6 +146,26 @@ function runtimeTracksOnline(): boolean {
 }
 
 /**
+ * Whether this till queues a sale it rings without a network — the desktop's
+ * `full` offline mode. Only there can a kitchen time agreed by phone ride with
+ * the receipt (РК5, §8): the web till queues nothing, and the tablet refuses
+ * every write without a network.
+ */
+export function queuesOfflineSales(): boolean {
+  const enabled = member('isOfflinePosEnabled');
+  return typeof enabled === 'function' && (enabled as () => unknown)() === true;
+}
+
+/**
+ * Whether a kitchen dish may be sold offline on the kitchen's word by phone
+ * here: a till that queues offline sales, on a host whose cart carries the
+ * time (`setRemotePhone`, platform 25). Elsewhere, offline, it waits for the network.
+ */
+export function sellsByPhoneOffline(): boolean {
+  return queuesOfflineSales() && remoteCartControls()?.setRemotePhone != null;
+}
+
+/**
  * Is the till online: what its own offline banner says (`useOfflineStatus`)
  * where a runtime keeps that current, the browser's `navigator.onLine`
  * everywhere else. Subscribe with `onOnlineChange`.

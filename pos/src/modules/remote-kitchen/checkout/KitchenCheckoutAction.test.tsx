@@ -5,7 +5,7 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { enableOfflineReads, useCartStore, useOfflineStatus } from '@pos/platform';
+import { enableOfflinePos, enableOfflineReads, useCartStore, useOfflineStatus } from '@pos/platform';
 import type { CartLine } from '@host/hooks/useCart';
 import { KitchenCheckoutAction } from './KitchenCheckoutAction';
 import { createRemoteCheckout } from './store';
@@ -55,8 +55,9 @@ function line(variant_id: number, quantity: number, name: string): CartLine {
 const props = { customer: null, cartDiscount: null, totalCents: 0, onCompleted: () => undefined };
 
 beforeAll(() => {
-  // A till whose offline runtime keeps the store's `online` current (desktop/tablet).
-  enableOfflineReads();
+  // The desktop: its offline runtime keeps the store's `online` current, and it
+  // queues a receipt rung without a network.
+  enableOfflinePos();
 });
 
 afterEach(() => {
@@ -174,6 +175,23 @@ describe('«З кухні» above «Оплатити»', () => {
       expect(screen.getByTestId('remote-checkout-offline')).toBeTruthy();
     } finally {
       useOfflineStatus.setState({ online: true });
+    }
+  });
+  it('offline on the tablet, which queues no sale: no phone time, and «Оплатити» waits for the network', async () => {
+    enableOfflineReads();
+    useOfflineStatus.setState({ online: false });
+    try {
+      const store = createRemoteCheckout(api() as never);
+      render(<KitchenCheckoutAction {...props} lines={[line(10, 1, 'Маргарита')]} store={store} />);
+      await act(async () => undefined);
+      expect(screen.getByTestId('remote-checkout-offline')).toHaveTextContent('страви з кухні продаються лише онлайн');
+      expect(screen.queryByRole('button', { name: /Узгоджено телефоном/ })).toBeNull();
+      expect(useCartStore.getState().checkoutHolds['remote-kitchen']).toMatch(/лише онлайн/);
+      store.phoneAgree(30);
+      expect(useCartStore.getState().remotePhone).toBeNull();
+    } finally {
+      useOfflineStatus.setState({ online: true });
+      enableOfflinePos();
     }
   });
 });

@@ -33,7 +33,8 @@ export function KitchenCheckoutAction({ lines, store = remoteCheckout }: Checkou
   const state = useSyncExternalStore(store.subscribe, store.getState);
   const controls = remoteCartControls();
   const supported = controls != null;
-  const phoneSupported = controls?.setRemotePhone != null;
+  // Only a till that queues an offline sale (the desktop) takes the kitchen's word by phone.
+  const phoneSupported = store.canPhone();
 
   // On- or offline: the hold and the screen follow at once (РК5, §8).
   useEffect(() => onOnlineChange(() => store.connectivityChanged()), [store]);

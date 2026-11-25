@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TICKET_TRIES, createRemoteCheckout } from './store';
+import { SETUP_RETRY_MS, TICKET_TRIES, createRemoteCheckout } from './store';
 import type { CafeOrder, CafeSetup } from './lib';
 import type { TicketOutcome } from '../ticket/guestTicket';
 import { onTicketFailure, type TicketNotice } from '../ticket/notices';
@@ -72,9 +72,16 @@ function harness(opts: { phone?: boolean } = {}) {
           },
         }),
   };
-  const net = { online: true };
+  const net = { online: true, queues: true };
   const printTicket = vi.fn(async (): Promise<TicketOutcome> => ({ kind: 'printed', printer: 'Talon-1' }));
-  const store = createRemoteCheckout(api as never, () => controls, () => NOW, printTicket, () => net.online);
+  const store = createRemoteCheckout(
+    api as never,
+    () => controls,
+    () => NOW,
+    printTicket,
+    () => net.online,
+    () => net.queues
+  );
   return { api, cart, store, net, printTicket };
 }
 
@@ -257,6 +264,106 @@ describe('the remote-kitchen checkout', () => {
       h.store.phoneAgree(30);
       expect(h.store.phase()).toBe('offline');
       expect(h.cart.hold).toMatch(/лише онлайн/);
+    });
+
+    it('on a till that queues no offline sale (web, tablet), kitchen dishes wait for the network', async () => {
+      await ready(h);
+      h.net.queues = false;
+      h.net.online = false;
+      h.store.connectivityChanged();
+      expect(h.store.canPhone()).toBe(false);
+      expect(h.cart.hold).toMatch(/лише онлайн/);
+      h.store.phoneAgree(30);
+      expect(h.store.phase()).toBe('offline');
+      expect(h.cart.phone).toBeNull();
+    });
+
+    it('over a paused link: the hold says so, and no phone time is taken', async () => {
+      h.api.loadSetup.mockResolvedValueOnce({ ...setup, linkActive: false });
+      await ready(h);
+      h.net.online = false;
+      h.store.connectivityChanged();
+      expect(h.cart.hold).toMatch(/призупинено/);
+      h.store.phoneAgree(30);
+      expect(h.cart.phone).toBeNull();
+    });
+
+    it('a request asked before the network went is declined once the phone answered — later, if it cannot be now', async () => {
+      await ready(h);
+      await h.store.ask();
+      expect(h.store.getState().order?.id).toBe(5);
+      h.net.online = false;
+      h.store.connectivityChanged();
+      h.api.guestDeclined.mockRejectedValueOnce(new Error('Network Error'));
+      h.store.phoneAgree(30);
+      expect(h.store.getState().order).toBeNull();
+      expect(h.cart.phone).not.toBeNull();
+      await flush();
+      expect(h.api.guestDeclined).toHaveBeenCalledTimes(1);
+      // Back online: the kitchen is told now.
+      h.net.online = true;
+      h.store.connectivityChanged();
+      await flush();
+      expect(h.api.guestDeclined).toHaveBeenCalledTimes(2);
+      expect(h.api.guestDeclined).toHaveBeenLastCalledWith(expect.objectContaining({ id: 5 }));
+      // And only once.
+      h.store.connectivityChanged();
+      await flush();
+      expect(h.api.guestDeclined).toHaveBeenCalledTimes(2);
+    });
+
+    it('never asks again a decline the kitchen answered no to', async () => {
+      await ready(h);
+      await h.store.ask();
+      h.net.online = false;
+      h.store.connectivityChanged();
+      // The request expired meanwhile: a definite answer, not a missing one.
+      h.api.guestDeclined.mockRejectedValueOnce(Object.assign(new Error('409'), { response: { status: 409 } }));
+      h.store.phoneAgree(30);
+      await flush();
+      h.net.online = true;
+      h.store.connectivityChanged();
+      await flush();
+      expect(h.api.guestDeclined).toHaveBeenCalledTimes(1);
+    });
+
+    it('a first read that failed while the till thought it was online is tried again the moment it goes offline', async () => {
+      h.api.loadSetup.mockRejectedValueOnce(new Error('Network Error'));
+      h.store.sync([pizza]);
+      await flush();
+      expect(h.store.getState().setup).toBeUndefined();
+      // Within the minute a failed read waits — but the till has just found out it is offline.
+      h.api.loadSetup.mockResolvedValueOnce({ ...setup, fromMemory: true });
+      h.net.online = false;
+      h.store.connectivityChanged();
+      await flush();
+      expect(h.api.loadSetup).toHaveBeenCalledTimes(2);
+      expect(h.store.getState().setup?.fromMemory).toBe(true);
+    });
+
+    it('a setup taken from memory while the till says online is read again a minute on, on the next cart change', async () => {
+      const clock = { t: NOW };
+      const api = { ...harness().api };
+      api.loadSetup = vi.fn(async () => ({ ...setup, fromMemory: true as const }));
+      const store = createRemoteCheckout(
+        api as never,
+        () => ({ setCheckoutHold: () => undefined, setRemoteOrderId: () => undefined }),
+        () => clock.t,
+        undefined,
+        () => true,
+        () => true
+      );
+      store.sync([pizza]);
+      await flush();
+      expect(store.getState().setup?.fromMemory).toBe(true);
+      store.sync([pizza, coffee]);
+      expect(api.loadSetup).toHaveBeenCalledTimes(1);
+      clock.t += SETUP_RETRY_MS;
+      api.loadSetup.mockResolvedValueOnce({ ...setup });
+      store.sync([{ ...pizza, quantity: 2 }]);
+      await flush();
+      expect(api.loadSetup).toHaveBeenCalledTimes(2);
+      expect(store.getState().setup?.fromMemory).toBeUndefined();
     });
 
     it('reads the setup again once online when it came from what the till kept', async () => {

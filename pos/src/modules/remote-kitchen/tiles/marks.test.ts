@@ -73,6 +73,12 @@ describe('the words on the cafe’s kitchen-dish tiles', () => {
     ).toEqual({ text: 'дзвінок на кухню', blocked: false });
   });
 
+  it('offline on a till that cannot sell by phone (web, tablet): «потрібна мережа», grey', () => {
+    expect(cafeTileMarks(cafe(), false, false)?.[10]).toEqual({ text: 'потрібна мережа', blocked: true });
+    // Online it makes no difference.
+    expect(cafeTileMarks(cafe(), true, false)?.[10]?.blocked).toBe(false);
+  });
+
   it('marks nothing in a store that asks no kitchen, or marked no dish', () => {
     expect(cafeTileMarks(null, true)).toBeNull();
     expect(cafeTileMarks(cafe({ items: [] }), true)).toBeNull();

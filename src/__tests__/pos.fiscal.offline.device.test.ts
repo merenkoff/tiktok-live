@@ -141,7 +141,7 @@ describe.skipIf(!hasDb)('POS fiscal offline device stamp (case C — the till so
   /** A receipt the till printed while offline, now reaching us through its outbox. */
   const syncStamped = (
     stamp: { code: string; at: Date; seq: number },
-    opts: { device?: string | null; clientUuid?: string; stretch?: string } = {}
+    opts: { device?: string | null; clientUuid?: string; stretch?: string; remotePhone?: unknown } = {}
   ) =>
     app.inject({
       method: 'POST',
@@ -157,6 +157,7 @@ describe.skipIf(!hasDb)('POS fiscal offline device stamp (case C — the till so
           fiscal_code: stamp.code,
           fiscal_date: stamp.at.toISOString(),
         },
+        ...(opts.remotePhone !== undefined ? { remote_phone: opts.remotePhone } : {}),
       },
     });
 
@@ -487,5 +488,17 @@ describe.skipIf(!hasDb)('POS fiscal offline device stamp (case C — the till so
     expect(
       (await session.listReplayableSessions({ storeId: store.storeId })).map((x) => x.id)
     ).toContain(s!.id);
+  });
+
+  it('files a stamped receipt that carries a phone time from the kitchen, whatever the time says (РК5)', async () => {
+    // This store asks no kitchen, and the time is junk: neither may refuse a
+    // receipt the till printed during the outage.
+    const codes = await prepare();
+    const res = await syncStamped(
+      { code: codes[0].fiscal_code, at: minutesAgo(15), seq: 1 },
+      { remotePhone: { minutes: 'soon' } }
+    );
+    expect(res.statusCode, res.body).toBe(201);
+    expect((await sales()).filter((s) => s.status === 'completed')).toHaveLength(1);
   });
 });

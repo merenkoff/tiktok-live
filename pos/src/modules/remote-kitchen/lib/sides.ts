@@ -63,7 +63,7 @@ export function readSetupShared(
   if (cached && cached.store === store && now - cached.at < maxAgeMs) return cached.read;
   const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => {
     // Kept for when the till goes offline (§8): it still knows the kitchen's dishes.
-    rememberSetup(res ?? {});
+    rememberSetup(res ?? {}, store);
     return res ?? {};
   });
   const entry: NonNullable<typeof cached> = { at: now, store, read };

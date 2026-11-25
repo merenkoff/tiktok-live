@@ -12,7 +12,10 @@
 import { currentStoreId } from './hostPlatform';
 import type { RawSetup } from './sides';
 
-const KEY = 'remote-kitchen:setup:v1';
+/** One entry per store, so a till two stores share keeps each one's kitchen. */
+const KEY_PREFIX = 'remote-kitchen:setup:v1:';
+/** What the tiles kept before this file (one per store, the cafe half only): removed on the next write. */
+const LEGACY_TILES_PREFIX = 'remote-kitchen:tiles:';
 export const SETUP_MEMORY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface Kept {
@@ -29,30 +32,39 @@ function storage(): Storage | null {
   }
 }
 
-/** Keep a setup the server just gave. A store with no link keeps that too. */
-export function rememberSetup(setup: RawSetup | null | undefined, now: number = Date.now()): void {
-  const storeId = currentStoreId();
+/**
+ * Keep a setup the server just gave for `storeId` — the store the read was
+ * made for. An answer that lands after someone signed into another store is
+ * dropped: it would put one store's kitchen into another's offline memory.
+ * A store with no link keeps that too.
+ */
+export function rememberSetup(
+  setup: RawSetup | null | undefined,
+  storeId: number | null,
+  now: number = Date.now()
+): void {
   const box = storage();
-  if (storeId == null || !box || !setup || typeof setup !== 'object') return;
+  if (storeId == null || storeId !== currentStoreId() || !box || !setup || typeof setup !== 'object') return;
   try {
     const kept: Kept = {
       store_id: storeId,
       at: now,
       setup: { as_cafe: setup.as_cafe ?? null, as_kitchen: setup.as_kitchen ?? null },
     };
-    box.setItem(KEY, JSON.stringify(kept));
+    box.setItem(KEY_PREFIX + storeId, JSON.stringify(kept));
+    box.removeItem(LEGACY_TILES_PREFIX + storeId);
   } catch {
     // A full or blocked storage: offline the till simply knows less.
   }
 }
 
-/** The last setup of this store, or null — another store's, too old, or none. */
+/** The last setup of the signed-in store, or null — too old, unreadable, or none. */
 export function rememberedSetup(now: number = Date.now()): RawSetup | null {
   const storeId = currentStoreId();
   const box = storage();
   if (storeId == null || !box) return null;
   try {
-    const raw = box.getItem(KEY);
+    const raw = box.getItem(KEY_PREFIX + storeId);
     if (!raw) return null;
     const kept = JSON.parse(raw) as Partial<Kept>;
     if (kept.store_id !== storeId || typeof kept.at !== 'number' || now - kept.at > SETUP_MEMORY_MAX_AGE_MS)

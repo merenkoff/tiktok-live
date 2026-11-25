@@ -39,6 +39,10 @@ import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
 import { RemoteKitchenConflict, RemoteKitchenNotFound, parsePhoneAgreement } from '../remote-kitchen.service.js';
 import { errorMessage, readDeviceId } from './_shared.js';
+import { SECTION_CLOSED_MESSAGE, sectionClosed } from '../core/staffSections.js';
+
+/** The till section «Віддалена кухня» (`SECTION_ROUTES`): a phone time is its write. */
+const REMOTE_KITCHEN_SECTION = 'remote-kitchen';
 
 /** `getSale`'s row, non-null. `completeSale` / `refundSale` return the same shape. */
 type SaleDetail = NonNullable<Awaited<ReturnType<typeof salesService.getSale>>>;
@@ -243,11 +247,26 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     if (remotePhone !== null && remoteOrderId !== null) {
       return reply.code(400).send({ error: 'Або замовлення кухні, або час по телефону — не обидва' });
     }
-    if (remotePhone !== null && registers.size > 1) {
-      return reply.code(409).send({
-        error: 'remote_order_single_receipt',
-        message: 'Страви з кухні — окремим чеком: продайте товари іншого ФОП другим чеком.',
-      });
+    // Everything below judges a LIVE receipt only. A replayed one is already in
+    // the guest's hand: it is filed as it would be without the phone time
+    // (the idempotency check, the device-stamped path, and the same 409 every
+    // two-register replay meets), and its kitchen part is never what refuses it.
+    if (remotePhone !== null && !replay) {
+      // A phone time is the desktop's: only a till that queues offline sales
+      // ever writes one down (§8). And it starts the kitchen's oven without
+      // asking it, so a seller the owner kept off «Віддалена кухня» may not.
+      if (!readDeviceId(request)) {
+        return reply.code(400).send({ error: 'Час по телефону записує лише каса на компʼютері' });
+      }
+      if (sectionClosed(auth.blockedSections, REMOTE_KITCHEN_SECTION)) {
+        return reply.code(403).send({ error: 'section_closed', message: SECTION_CLOSED_MESSAGE });
+      }
+      if (registers.size > 1) {
+        return reply.code(409).send({
+          error: 'remote_order_single_receipt',
+          message: 'Страви з кухні — окремим чеком: продайте товари іншого ФОП другим чеком.',
+        });
+      }
     }
     // A kitchen order is paid by one online receipt: the kitchen needs the
     // answer now, and a split or an offline receipt cannot give it one.

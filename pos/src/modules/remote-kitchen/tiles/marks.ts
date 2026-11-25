@@ -9,9 +9,11 @@
 // «кухня вимкнена» while the link is paused; «немає на кухні» for a dish the
 // kitchen has on today's stop list or retired (`available: false`, the same
 // test the server refuses a request by) — those three grey the tile. Offline
-// the dish still sells, on the kitchen's word by phone (§8): «дзвінок на
-// кухню», and the till's «З кухні» block takes the time the kitchen names; a
-// stop list read before the network went is not trusted over that call.
+// the dish still sells on the desktop, on the kitchen's word by phone (§8):
+// «дзвінок на кухню», and the till's «З кухні» block takes the time the
+// kitchen names; a stop list read before the network went is not trusted over
+// that call. A till that queues no offline sale (the web, the tablet) cannot
+// sell it so: «потрібна мережа», grey, as before.
 
 import type { TileMark } from '../lib/hostPlatform';
 
@@ -28,6 +30,8 @@ function num(value: unknown): number | null {
 
 /** A kitchen dish offline: still sold, after a call (§8). */
 export const OFFLINE_WORD = 'дзвінок на кухню';
+/** A kitchen dish offline on a till that cannot sell it by phone. */
+export const NO_NETWORK_WORD = 'потрібна мережа';
 
 /** The server's `roundUpToFive`: «буде о 19:40», never 19:37. */
 export function roundUpToFive(minutes: number): number {
@@ -43,14 +47,20 @@ export function dishWord(prep: number | null, load: number, transit: number): st
  * Marks by the cafe's variant id, or null when this store asks no kitchen (or
  * the setup says nothing usable) — then nothing is put on any tile.
  */
-export function cafeTileMarks(asCafe: unknown, online: boolean): Record<number, TileMark> | null {
+export function cafeTileMarks(
+  asCafe: unknown,
+  online: boolean,
+  /** Offline, may a kitchen dish be sold here on the kitchen's word by phone (`sellsByPhoneOffline`). */
+  byPhone: boolean = true
+): Record<number, TileMark> | null {
   const half = asCafe as CafeHalf | null | undefined;
   if (!half || typeof half !== 'object' || !half.link) return null;
   const items = Array.isArray(half.items) ? half.items : [];
   if (items.length === 0) return null;
 
   let blockedWord: string | null = null;
-  if (half.link.status !== 'active') blockedWord = 'кухня вимкнена';
+  if (!online && !byPhone) blockedWord = NO_NETWORK_WORD;
+  else if (half.link.status !== 'active') blockedWord = 'кухня вимкнена';
   // Offline the kitchen's pause is not known, and by phone it can still say yes.
   else if (online && half.kitchen?.accepting === false) blockedWord = 'пауза';
 

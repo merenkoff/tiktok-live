@@ -4,7 +4,7 @@
 
 import { act, render } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { enableOfflineReads, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
+import { enableOfflinePos, enableOfflineReads, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
 import { forgetSides } from '../lib/sides';
 
 const posRequest = vi.fn();
@@ -29,8 +29,9 @@ const setup = (accepting: boolean) => ({
 const marks = () => useCartStore.getState().tileMarks['remote-kitchen'];
 
 beforeAll(() => {
-  // A till whose offline runtime keeps the store's `online` current (desktop/tablet).
-  enableOfflineReads();
+  // The desktop: its offline runtime keeps the store's `online` current, and it
+  // queues a sale rung without a network — so a kitchen dish sells by phone.
+  enableOfflinePos();
 });
 
 beforeEach(() => {
@@ -85,6 +86,20 @@ describe('the cafe’s kitchen-dish tiles', () => {
     expect(marks()).toBeUndefined();
     other.unmount();
     useAuthStore.setState({ auth: null } as never);
+  });
+
+  it('on the tablet, which queues no offline sale, greys the kitchen’s dishes «потрібна мережа»', async () => {
+    enableOfflineReads();
+    try {
+      posRequest.mockResolvedValue(setup(true));
+      const view = render(<CafeTileMarks />);
+      await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'кухня ≈30 хв', blocked: false } }));
+      useOfflineStatus.setState({ online: false });
+      await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'потрібна мережа', blocked: true } }));
+      view.unmount();
+    } finally {
+      enableOfflinePos();
+    }
   });
 
   it('says «пауза» while the kitchen takes nothing', async () => {

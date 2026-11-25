@@ -15,7 +15,7 @@
 // overlapping refreshes used to leave two timers, and the loops multiplied.
 
 import { useEffect } from 'react';
-import { currentStoreId, isOnline, onOnlineChange, tileMarkSetter } from '../lib/hostPlatform';
+import { currentStoreId, isOnline, onOnlineChange, sellsByPhoneOffline, tileMarkSetter } from '../lib/hostPlatform';
 import { rememberedSetup } from '../lib/setupMemory';
 import { readSetupShared } from '../lib/sides';
 import { cafeTileMarks } from './marks';
@@ -47,7 +47,7 @@ export function CafeTileMarks(): null {
 
     const publish = () => {
       if (!alive || lastCafe === undefined) return;
-      setMarks(cafeTileMarks(lastCafe, isOnline()));
+      setMarks(cafeTileMarks(lastCafe, isOnline(), sellsByPhoneOffline()));
     };
 
     const schedule = (ms: number) => {
