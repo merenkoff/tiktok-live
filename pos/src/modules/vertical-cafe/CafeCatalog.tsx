@@ -49,6 +49,7 @@ const BarcodeScanner = lazy(() =>
 );
 import { HostTooOldError, missingHostApi } from './lib/hostPlatform';
 import { isStopListed } from './lib/stopList';
+import { tileMarkOf, type TileMarks } from './lib/tileMarks';
 import { stationOf } from './lib/station';
 
 export default function CafeCatalog({ active, stockEpoch }: SalesCatalogProps) {
@@ -70,6 +71,8 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
   const vertical = useVertical();
   const addItem = useCartStore((s) => s.addItem);
   const setBanner = useCartStore((s) => s.setBanner);
+  // Other modules' words on the tiles (platform 25); undefined on an older host.
+  const tileMarks = useCartStore((s) => (s as { tileMarks?: TileMarks }).tileMarks);
   const gridRef = useDragScroll<HTMLDivElement>();
 
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -178,6 +181,9 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
             // the kitchen board. Greyed with its own word, because the dish
             // may well be in the case — «немає» would be a lie.
             const stopped = isStopListed(first);
+            // «≈30 хв» from the remote kitchen, or «пауза» / «потрібна мережа»
+            // while the dish cannot be sold — the module says which.
+            const mark = stopped ? null : tileMarkOf(variants, tileMarks);
             const subtitle =
               variants.length > 1
                 ? variants.map((v) => v.label).filter(Boolean).join(' / ')
@@ -190,8 +196,9 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
                 priceCents={minPrice}
                 imageUrl={first.image_url}
                 stock={stock}
-                disabled={stock <= 0 || stopped}
-                badge={stopped ? 'стоп' : undefined}
+                disabled={stock <= 0 || stopped || mark?.blocked === true}
+                badge={stopped ? 'стоп' : mark?.blocked ? mark.text : undefined}
+                note={mark && !mark.blocked ? mark.text : undefined}
                 onClick={() => ring(variants)}
                 onMore={groups.length > 0 ? () => ring(variants, { ask: true }) : undefined}
               />

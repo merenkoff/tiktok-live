@@ -52,6 +52,7 @@ beforeEach(() => {
   lookupBarcode.mockReset();
   setQuery.mockClear();
   useCartStore.getState().clear();
+  useCartStore.getState().setTileMarks('remote-kitchen', null);
 });
 
 describe('the café catalog and the scanner', () => {
@@ -70,5 +71,23 @@ describe('the café catalog and the scanner', () => {
     expect(setQuery).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /Лате/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Вода/ })).toBeNull();
+  });
+
+  it('draws another module’s word on a tile, and greys a dish that cannot be sold now', async () => {
+    const pizza = makeCatalogItem({ variant_id: 7, product_id: 3, product_name: 'Маргарита', label: '', attributes: {} });
+    rows.splice(0, rows.length, latte, pizza);
+    useCartStore.getState().setTileMarks('remote-kitchen', { 7: { text: '≈30 хв', blocked: false } });
+    const user = userEvent.setup();
+    render(<CafeCatalog active stockEpoch={0} />);
+    const tile = screen.getByRole('button', { name: /Маргарита/ });
+    expect(tile).toHaveTextContent('≈30 хв');
+    expect(tile).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Лате/ })).not.toHaveTextContent('хв');
+
+    useCartStore.getState().setTileMarks('remote-kitchen', { 7: { text: 'пауза', blocked: true } });
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /Маргарита/ })).toBeDisabled());
+    expect(screen.getByRole('button', { name: /Маргарита/ })).toHaveTextContent('пауза');
+    await user.click(screen.getByRole('button', { name: /Маргарита/ }));
+    expect(useCartStore.getState().lines).toHaveLength(0);
   });
 });

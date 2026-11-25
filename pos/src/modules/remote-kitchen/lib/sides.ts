@@ -18,13 +18,27 @@ export interface StoreSides {
 
 export const SIDES_FRESH_MS = 30_000;
 
-let cached: { at: number; read: Promise<StoreSides> } | null = null;
+/** `GET /remote-kitchen/setup` as it came: the tile marks read the cafe's half of it too. */
+export interface RawSetup {
+  as_cafe?: unknown;
+  as_kitchen?: unknown;
+}
+
+let cached: { at: number; read: Promise<RawSetup>; sides?: Promise<StoreSides> } | null = null;
 
 export function readSides(now: number = Date.now()): Promise<StoreSides> {
+  const read = readSetupShared(now);
+  const entry = cached;
+  if (entry && entry.read === read && entry.sides) return entry.sides;
+  const sides = read.then((res) => ({ cafe: res?.as_cafe != null, kitchen: res?.as_kitchen != null }));
+  if (entry && entry.read === read) entry.sides = sides;
+  return sides;
+}
+
+/** The same read, whole — shared with `readSides`, fresh for half a minute. */
+export function readSetupShared(now: number = Date.now()): Promise<RawSetup> {
   if (cached && now - cached.at < SIDES_FRESH_MS) return cached.read;
-  const read = posRequest<{ as_cafe?: unknown; as_kitchen?: unknown }>('get', '/remote-kitchen/setup').then(
-    (res) => ({ cafe: res?.as_cafe != null, kitchen: res?.as_kitchen != null })
-  );
+  const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => res ?? {});
   const entry = { at: now, read };
   cached = entry;
   // A failed read is not remembered: the next ask goes to the server again.

@@ -43,3 +43,30 @@ describe('useCartStore — checkout holds', () => {
     expect(useCartStore.getState().remoteOrderId).toBeNull();
   });
 });
+
+describe('useCartStore — tile marks', () => {
+  beforeEach(() => useCartStore.getState().setTileMarks('remote-kitchen', null));
+
+  it('keeps each module’s marks apart, survives a new cart, and comes off on null', () => {
+    const { setTileMarks } = useCartStore.getState();
+    setTileMarks('remote-kitchen', { 10: { text: '≈30 хв', blocked: false } });
+    setTileMarks('another', { 11: { text: 'інше', blocked: true } });
+    useCartStore.getState().clear();
+    expect(useCartStore.getState().tileMarks).toEqual({
+      'remote-kitchen': { 10: { text: '≈30 хв', blocked: false } },
+      another: { 11: { text: 'інше', blocked: true } },
+    });
+    setTileMarks('another', null);
+    expect(Object.keys(useCartStore.getState().tileMarks)).toEqual(['remote-kitchen']);
+  });
+
+  it('does not touch the state when a module publishes the same marks again', () => {
+    useCartStore.getState().setTileMarks('remote-kitchen', { 10: { text: '≈30 хв', blocked: false } });
+    const before = useCartStore.getState().tileMarks;
+    useCartStore.getState().setTileMarks('remote-kitchen', { 10: { text: '≈30 хв', blocked: false } });
+    useCartStore.getState().setTileMarks('nobody', {});
+    expect(useCartStore.getState().tileMarks).toBe(before);
+    useCartStore.getState().setTileMarks('remote-kitchen', { 10: { text: 'пауза', blocked: true } });
+    expect(useCartStore.getState().tileMarks).not.toBe(before);
+  });
+});

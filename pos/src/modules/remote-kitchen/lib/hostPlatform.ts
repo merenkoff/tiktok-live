@@ -91,6 +91,52 @@ export function remoteCartControls(): RemoteCartControls | null {
   };
 }
 
+/** One word on a catalog tile — the host's `TileMark` (platform 25), mirrored. */
+export interface TileMark {
+  text: string;
+  blocked: boolean;
+}
+
+/**
+ * Puts this module's words on the store's catalog tiles by variant id, or
+ * null on a host older than platform 25 (it has no marks, and the tiles stay
+ * as they were). Null marks take them all off.
+ */
+export function tileMarkSetter(): ((marks: Readonly<Record<number, TileMark>> | null) => void) | null {
+  const store = member('useCartStore') as { getState?: () => Record<string, unknown> } | undefined;
+  const state = typeof store?.getState === 'function' ? store.getState() : null;
+  if (!state || !hasFn(state.setTileMarks)) return null;
+  return (marks) =>
+    (store!.getState!().setTileMarks as (moduleId: string, m: Readonly<Record<number, TileMark>> | null) => void)(
+      REMOTE_KITCHEN_MODULE_ID,
+      marks
+    );
+}
+
+/**
+ * Is the till online, as its own offline banner says (`useOfflineStatus`), read
+ * once; `navigator.onLine` on a host without it. Subscribe with `onOnlineChange`.
+ */
+export function isOnline(): boolean {
+  const store = member('useOfflineStatus') as { getState?: () => { online?: unknown } } | undefined;
+  const online = typeof store?.getState === 'function' ? store.getState().online : undefined;
+  if (typeof online === 'boolean') return online;
+  return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+/** Calls `listener` whenever the till goes on- or offline; returns the unsubscribe. */
+export function onOnlineChange(listener: () => void): () => void {
+  const store = member('useOfflineStatus') as { subscribe?: (l: () => void) => () => void } | undefined;
+  if (typeof store?.subscribe === 'function') return store.subscribe(listener);
+  if (typeof window === 'undefined') return () => undefined;
+  window.addEventListener('online', listener);
+  window.addEventListener('offline', listener);
+  return () => {
+    window.removeEventListener('online', listener);
+    window.removeEventListener('offline', listener);
+  };
+}
+
 /**
  * Whether the login says this store cooks for a linked cafe (`store.remote_kitchen`,
  * read at login and `/me`). Draws the kitchen's «Прийом запитів» on the till;
