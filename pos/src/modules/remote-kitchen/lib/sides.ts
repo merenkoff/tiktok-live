@@ -23,15 +23,45 @@ export interface StoreSides {
 
 export const SIDES_FRESH_MS = 30_000;
 
-let cached: { at: number; store: number | null; read: Promise<StoreSides> } | null = null;
+/** `GET /remote-kitchen/setup` as it came: the tile marks read the cafe's half of it too. */
+export interface RawSetup {
+  as_cafe?: unknown;
+  as_kitchen?: unknown;
+  cafe_orders?: unknown;
+}
+
+let cached: {
+  at: number;
+  store: number | null;
+  read: Promise<RawSetup>;
+  sides?: Promise<StoreSides>;
+} | null = null;
 
 export function readSides(now: number = Date.now(), store: number | null = currentStoreId()): Promise<StoreSides> {
-  if (cached && cached.store === store && now - cached.at < SIDES_FRESH_MS) return cached.read;
-  const read = posRequest<{ as_cafe?: unknown; as_kitchen?: unknown; cafe_orders?: unknown }>(
-    'get',
-    '/remote-kitchen/setup'
-  ).then((res) => ({ cafe: res?.as_cafe != null || res?.cafe_orders === true, kitchen: res?.as_kitchen != null }));
-  const entry = { at: now, store, read };
+  const read = readSetupShared(now, store);
+  const entry = cached;
+  if (entry && entry.read === read && entry.sides) return entry.sides;
+  const sides = read.then((res) => ({
+    cafe: res?.as_cafe != null || res?.cafe_orders === true,
+    kitchen: res?.as_kitchen != null,
+  }));
+  if (entry && entry.read === read) entry.sides = sides;
+  return sides;
+}
+
+/**
+ * The same read, whole — shared with `readSides`, for the same store only.
+ * Reused while younger than `maxAgeMs` (half a minute); the tiles ask for a
+ * fresher one, so a pause reaches them within one of their refreshes.
+ */
+export function readSetupShared(
+  now: number = Date.now(),
+  store: number | null = currentStoreId(),
+  maxAgeMs: number = SIDES_FRESH_MS
+): Promise<RawSetup> {
+  if (cached && cached.store === store && now - cached.at < maxAgeMs) return cached.read;
+  const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => res ?? {});
+  const entry: NonNullable<typeof cached> = { at: now, store, read };
   cached = entry;
   // A failed read is not remembered: the next ask goes to the server again.
   read.catch(() => {
