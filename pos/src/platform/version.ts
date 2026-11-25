@@ -183,7 +183,11 @@ export const POS_API_CLIENT_VERSION = 2;
 //     hold never lifts another's). The till's frame draws a new feature slot,
 //     `till.Banner` (TechDocs/POS_MODULE_SLOTS.md): a module's strip over every
 //     till screen. A module built against 25 calling the setters on 24 would
-//     hit undefined; a 24 host simply draws no banner.
+//     hit undefined; a 24 host simply draws no banner. Also in 25, still
+//     unshipped: `useCartStore.tileMarks` / `setTileMarks(moduleId, marks)` —
+//     a word a module puts on catalog tiles by variant id («≈30 хв», «пауза»),
+//     drawn by the store's catalog through `ProductTile`'s new `note`, so the
+//     remote kitchen marks the cafe's dishes without touching `vertical-cafe`.
 export const PLATFORM_VERSION = 25;
 
 /**
