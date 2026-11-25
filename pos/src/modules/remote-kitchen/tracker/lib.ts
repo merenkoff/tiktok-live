@@ -15,6 +15,13 @@ export const STAGES = ['Готується', 'Їде', 'Привезли', 'Ви
 /** An «arrived» order no one handed over for this long gets a reminder. */
 export const UNHANDED_MS = 2 * 60 * 60_000;
 
+/**
+ * How far past its promise an order the kitchen never marked may be said to
+ * have come — the server's `LATE_ARRIVAL_MINUTES` (remote-kitchen.service.ts),
+ * which refuses it any earlier.
+ */
+export const LATE_ARRIVAL_MINUTES = 20;
+
 export function isKitchenCancel(order: TrackedOrder): boolean {
   return order.status === 'cancelled' && order.cancelled_by === 'kitchen' && !order.cancel_seen_at;
 }
@@ -55,15 +62,44 @@ export function stageOf(status: string): number {
   }
 }
 
-/** The cafe's next tap, if any: the courier came, then the guest got it. */
-export function nextStep(status: string): { action: 'arrived' | 'handed'; label: string } | null {
+export interface CafeStep {
+  action: 'arrived' | 'handed';
+  label: string;
+  /** Asked before the tap is sent: the kitchen never said the order left. */
+  confirm?: string;
+}
+
+/**
+ * The cafe's next tap, if any: the courier came, then the guest got it.
+ * While the kitchen cooks there is none — a mistaken tap would take the card
+ * off the kitchen's board with the pizza still in the oven — until the order
+ * is `LATE_ARRIVAL_MINUTES` past its promise: then the kitchen most likely
+ * forgot to tap, and the cafe may close what it can see, after one question.
+ */
+export function nextStep(order: Pick<TrackedOrder, 'status' | 'promised_at'>, nowMs: number): CafeStep | null {
+  const { status } = order;
   if (status === 'ready' || status === 'dispatched') return { action: 'arrived', label: 'Привезли' };
   if (status === 'arrived') return { action: 'handed', label: 'Видали гостю' };
+  if ((status === 'paid' || status === 'cooking') && order.promised_at) {
+    const late = nowMs - Date.parse(order.promised_at);
+    if (Number.isFinite(late) && late >= LATE_ARRIVAL_MINUTES * 60_000) {
+      return {
+        action: 'arrived',
+        label: 'Вже привезли',
+        confirm: 'Кухня не відмітила, що віддала замовлення. Його справді привезли?',
+      };
+    }
+  }
   return null;
 }
 
+/** «чек R-000123» — the cafe's receipt a kitchen's cancel is refunded from; nothing on an older server. */
+export function receiptOf(order: Pick<TrackedOrder, 'cafe_receipt_number'>): string {
+  return order.cafe_receipt_number ? `чек ${order.cafe_receipt_number}` : '';
+}
+
 /** Whole minutes past the promise, for an order not yet at the cafe; 0 when on time. */
-export function minutesLate(order: TrackedOrder, nowMs: number): number {
+export function minutesLate(order: Pick<TrackedOrder, 'status' | 'promised_at'>, nowMs: number): number {
   if (order.status === 'arrived' || !order.promised_at) return 0;
   const late = nowMs - Date.parse(order.promised_at);
   return Number.isFinite(late) && late > 0 ? Math.ceil(late / 60_000) : 0;
@@ -76,12 +112,12 @@ export function waitingTooLong(order: TrackedOrder, nowMs: number): boolean {
 }
 
 /** «П-12», or nothing before the kitchen numbered it. */
-export function numberOf(order: TrackedOrder): string {
+export function numberOf(order: Pick<TrackedOrder, 'order_no'>): string {
   return order.order_no != null ? `П-${order.order_no}` : '';
 }
 
 /** «2× Маргарита 32 см, Карбонара». */
-export function itemsLine(order: TrackedOrder): string {
+export function itemsLine(order: Pick<TrackedOrder, 'items'>): string {
   return order.items
     .map((i) => `${i.quantity > 1 ? `${i.quantity}× ` : ''}${i.product_name}${i.variant_label ? ` ${i.variant_label}` : ''}`)
     .join(', ');
