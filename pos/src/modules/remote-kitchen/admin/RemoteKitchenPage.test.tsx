@@ -148,4 +148,67 @@ describe('RemoteKitchenPage', () => {
     expect(api.saveStatus).toHaveBeenCalledWith({ accepting: false, pause_minutes: 30 });
     expect(await screen.findByRole('button', { name: 'Відновити прийом' })).toBeInTheDocument();
   });
+
+  it('says which reused cafe cards kept their own price', async () => {
+    const user = userEvent.setup();
+    api.readSetup.mockResolvedValue({ as_cafe: { link: LINK, kitchen: OPEN }, as_kitchen: null });
+    api.listItems.mockResolvedValue([]);
+    api.listDishes.mockResolvedValue([{ variant_id: 12, name: 'Карбонара', label: '', prep_minutes: 12 }]);
+    api.importDishes.mockResolvedValue({
+      created: 0,
+      linked: 1,
+      skipped: 0,
+      kept_prices: [{ name: 'Карбонара', price_cents: 18000 }],
+      items: [],
+    });
+    render(<RemoteKitchenPage />);
+    await user.type(await screen.findByRole('textbox', { name: 'Ціна кафе: Карбонара' }), '230');
+    await user.click(screen.getByRole('button', { name: /Додати в меню кафе/ }));
+    expect(await screen.findByText(/Ціну не змінено — у картці лишилась своя: Карбонара — 180,00/)).toBeInTheDocument();
+  });
+
+  it('reads the marked dishes again when an import is refused', async () => {
+    const user = userEvent.setup();
+    api.readSetup.mockResolvedValue({ as_cafe: { link: LINK, kitchen: OPEN }, as_kitchen: null });
+    api.listItems.mockResolvedValue([]);
+    api.listDishes.mockResolvedValue([{ variant_id: 12, name: 'Карбонара', label: '', prep_minutes: 12 }]);
+    api.importDishes.mockRejectedValue({ response: { data: { error: '«Карбонара»: не вдалося' } } });
+    render(<RemoteKitchenPage />);
+    await user.type(await screen.findByRole('textbox', { name: 'Ціна кафе: Карбонара' }), '230');
+    await user.click(screen.getByRole('button', { name: /Додати в меню кафе/ }));
+    expect(await screen.findByText('«Карбонара»: не вдалося')).toBeInTheDocument();
+    await waitFor(() => expect(api.listItems).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps a quote time in seconds, so a save does not round it to minutes', async () => {
+    const user = userEvent.setup();
+    api.readSetup.mockResolvedValue({ as_cafe: { link: { ...LINK, quote_ttl_seconds: 90 }, kitchen: OPEN }, as_kitchen: null });
+    api.listItems.mockResolvedValue([]);
+    api.listDishes.mockResolvedValue([]);
+    api.saveLink.mockImplementation(async (b) => ({ ...LINK, ...b }) as Api.CafeLink);
+    render(<RemoteKitchenPage />);
+    const phone = await screen.findByRole('textbox', { name: 'Телефон кухні' });
+    await user.clear(phone);
+    await user.type(phone, '+380671112233');
+    await user.click(screen.getByRole('button', { name: 'Зберегти' }));
+    expect(api.saveLink).toHaveBeenCalledWith(expect.objectContaining({ quote_ttl_seconds: 90 }));
+  });
+
+  it('reads the kitchen again the moment a timed pause runs out', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const until = new Date(Date.now() + 5_000).toISOString();
+      api.readSetup.mockResolvedValue({ as_cafe: null, as_kitchen: { status: OPEN } });
+      api.listCafes
+        .mockResolvedValueOnce({ status: { accepting: false, paused_until: until, load_minutes: 0 }, cafes: [] })
+        .mockResolvedValue({ status: OPEN, cafes: [] });
+      render(<RemoteKitchenPage />);
+      expect(await screen.findByRole('button', { name: 'Відновити прийом' })).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(7_000);
+      expect(await screen.findByRole('button', { name: 'Пауза 30 хв' })).toBeInTheDocument();
+      expect(api.listCafes).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

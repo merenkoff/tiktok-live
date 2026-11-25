@@ -24,6 +24,7 @@ import { ensureSuper } from '../core/superAuth.js';
 import * as rk from '../remote-kitchen.service.js';
 import * as rkPrint from '../remote-kitchen-print.service.js';
 import { readDeviceId } from './_shared.js';
+import { invalidatePublicMenu } from '../public-menu/menu.service.js';
 
 function idOf(value: unknown): number | null {
   const id = Number(value);
@@ -307,6 +308,8 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     if (!link) return reply.code(404).send({ error: 'У цього магазину немає віддаленої кухні' });
     try {
       const result = await rk.importKitchenDishes(link, ((request.body ?? {}) as Body).dishes);
+      // New cards are on the cafe's guest menu now — as `POST /products` does.
+      invalidatePublicMenu(auth.storeId);
       return { ...result, items: await rk.listLinkItems(link.id) };
     } catch (error) {
       return sendError(reply, error);

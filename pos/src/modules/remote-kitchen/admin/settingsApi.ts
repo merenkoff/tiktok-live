@@ -88,6 +88,8 @@ export interface ImportResult {
   created: number;
   linked: number;
   skipped: number;
+  /** Cafe cards reused by name whose own price stayed — the owner is told. Absent on an older server. */
+  kept_prices?: Array<{ name: string; price_cents: number }>;
   items: LinkItem[];
 }
 

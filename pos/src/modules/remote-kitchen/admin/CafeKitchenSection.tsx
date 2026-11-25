@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { SectionHead } from '@pos/platform/ui';
-import { uahInputToCents } from '@pos/platform';
+import { formatUah, uahInputToCents } from '@pos/platform';
 import { serverMessage } from '../lib/hostPlatform';
 import {
   importDishes,
@@ -40,7 +40,9 @@ export function CafeKitchenSection({ link, kitchen }: { link: CafeLink; kitchen:
   const [phone, setPhone] = useState(link.kitchen_phone ?? '');
   const [transit, setTransit] = useState(String(link.transit_minutes));
   const [answer, setAnswer] = useState(String(link.answer_seconds));
-  const [ttl, setTtl] = useState(String(Math.round(link.quote_ttl_seconds / 60)));
+  // In seconds, as stored: a value the super-admin set (90 s) is not rounded
+  // to whole minutes by a save that only changed the phone.
+  const [ttl, setTtl] = useState(String(link.quote_ttl_seconds));
   const [autoOn, setAutoOn] = useState(link.auto_confirm_max_min != null);
   const [autoMax, setAutoMax] = useState(String(link.auto_confirm_max_min ?? DEFAULT_AUTO_CONFIRM));
   const [settingsNote, setSettingsNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -78,7 +80,7 @@ export function CafeKitchenSection({ link, kitchen }: { link: CafeLink; kitchen:
       kitchen_phone: phone.trim() || null,
       transit_minutes: intOrNull(transit),
       answer_seconds: intOrNull(answer),
-      quote_ttl_seconds: intOrNull(ttl) == null ? null : (intOrNull(ttl) as number) * 60,
+      quote_ttl_seconds: intOrNull(ttl),
       auto_confirm_max_min: autoOn ? intOrNull(autoMax) : null,
     };
     if (!body.kitchen_title) return setSettingsNote({ ok: false, text: 'Вкажіть назву кухні' });
@@ -124,12 +126,21 @@ export function CafeKitchenSection({ link, kitchen }: { link: CafeLink; kitchen:
       const res = await importDishes(body);
       setItems(res.items);
       setPicked(new Set());
+      const kept = res.kept_prices ?? [];
       setMenuNote({
         ok: true,
-        text: `Додано в меню кафе: ${res.linked}${res.created < res.linked ? ` (з них ${res.linked - res.created} — уже були картки з такою назвою)` : ''}`,
+        text:
+          `Додано в меню кафе: ${res.linked}${res.created < res.linked ? ` (з них ${res.linked - res.created} — уже були картки з такою назвою)` : ''}` +
+          (kept.length > 0
+            ? `. Ціну не змінено — у картці лишилась своя: ${kept.map((k) => `${k.name} — ${formatUah(k.price_cents)}`).join(', ')}`
+            : ''),
       });
     } catch (e) {
       setMenuNote({ ok: false, text: serverMessage(e, 'Не вдалося додати страви') });
+      // The list may have changed under the page (another tab, another owner).
+      listItems()
+        .then(setItems)
+        .catch(() => undefined);
     } finally {
       setBusyMenu(false);
     }
@@ -182,9 +193,9 @@ export function CafeKitchenSection({ link, kitchen }: { link: CafeLink; kitchen:
             <input className="sq-input mt-1 w-full" inputMode="numeric" value={transit} onChange={(e) => setTransit(e.target.value)} />
           </label>
           <label className="block text-[13px] text-sq-secondary">
-            Скільки діє названий час, хв
+            Скільки діє названий час, с
             <input className="sq-input mt-1 w-full" inputMode="numeric" value={ttl} onChange={(e) => setTtl(e.target.value)} />
-            <span className="mt-0.5 block text-sq-muted">Поки гість вирішує. 1–30.</span>
+            <span className="mt-0.5 block text-sq-muted">Поки гість вирішує. 30–1800 (180 — три хвилини).</span>
           </label>
           <div className="text-[13px] text-sq-secondary">
             <label className="flex items-center gap-2">

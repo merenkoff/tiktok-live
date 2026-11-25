@@ -15,12 +15,14 @@
 // without `vertical-cafe` (`MODULE_REQUIRES`): the kitchen's board is the café
 // vertical's page.
 //
-// Two host slots and one page:
+// Two host slots and two pages:
 //   - `checkout.Action` — «З кухні» above «Оплатити» on the cafe's till: ask
 //     the kitchen, tell the guest, and hold «Оплатити» (`setCheckoutHold`)
 //     until the guest agreed to a time the kitchen still stands by;
 //   - `till.Banner` — «Запити з точок» over every screen of the kitchen's
 //     till, the board above all, without the board knowing it exists;
+//   - «Прийом запитів» on the kitchen's till (`/remote-kitchen`, РК4): the
+//     pause and the queue for the cook, in a kitchen store only;
 //   - «Віддалена кухня» in the owner's cabinet (`/admin/remote-kitchen`, РК4):
 //     the cafe's «Кухня» — timers and which dishes the kitchen cooks, with the
 //     kitchen's menu imported at the cafe's prices — and the kitchen's
@@ -34,10 +36,12 @@
 // registry (and every manifest alongside it) into the remote chunk.
 import type { RemoteModuleDescriptor } from '@host/modules/registry';
 import { lazyWithRetry } from '@host/modules/lazyWithRetry';
+import { isKitchenStore } from './lib/hostPlatform';
 
 const KitchenCheckoutAction = lazyWithRetry(() => import('./checkout/KitchenCheckoutAction'));
 const RemoteKitchenBanner = lazyWithRetry(() => import('./kitchen/RequestsStrip'));
 const RemoteKitchenPage = lazyWithRetry(() => import('./admin/RemoteKitchenPage'));
+const KitchenTillPage = lazyWithRetry(() => import('./kitchen/KitchenTillPage'));
 
 export const REMOTE_KITCHEN_ID = 'remote-kitchen';
 
@@ -48,12 +52,25 @@ export const remoteKitchenModule: RemoteModuleDescriptor = {
   alwaysEnabled: true,
   checkout: { Action: KitchenCheckoutAction },
   till: { Banner: RemoteKitchenBanner },
-  // The owner's page only: the till's screens are the two slots above. The
-  // store's `module_remotes` entry still names a `routePath` and a nav entry,
-  // which only shape the desktop's placeholder until the bundle is downloaded.
-  routes: [{ path: 'remote-kitchen/*', mount: 'admin', element: RemoteKitchenPage }],
+  // The owner's page, and the kitchen's «Прийом запитів» on the till — the
+  // pause and the queue where the cook works, shown only in a kitchen store.
+  // The store's `module_remotes` entry names `/remote-kitchen`, which is that
+  // till page, as the desktop's placeholder until the bundle is downloaded.
+  routes: [
+    { path: 'remote-kitchen/*', mount: 'admin', element: RemoteKitchenPage },
+    { path: '/remote-kitchen/*', element: KitchenTillPage },
+  ],
   nav: [
     // `ChefHat` is in the host's `NAV_ICONS` allowlist (platform 24).
     { to: '/admin/remote-kitchen', label: 'Віддалена кухня', icon: 'ChefHat', location: 'admin-sidebar', order: 44 },
+    {
+      to: '/remote-kitchen',
+      label: 'Прийом запитів',
+      icon: 'ChefHat',
+      location: 'cashier-primary',
+      order: 62,
+      match: '/remote-kitchen',
+      visible: isKitchenStore,
+    },
   ],
 };

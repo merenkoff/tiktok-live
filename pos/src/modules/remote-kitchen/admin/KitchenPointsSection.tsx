@@ -30,6 +30,9 @@ export function KitchenPointsSection(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Read on open — and again the moment a timed pause runs out, when the
+  // server already counts the kitchen as accepting (it lifts the pause on read).
+  const [readAt, setReadAt] = useState(0);
   useEffect(() => {
     let live = true;
     listCafes()
@@ -45,7 +48,16 @@ export function KitchenPointsSection(): JSX.Element {
     return () => {
       live = false;
     };
-  }, []);
+  }, [readAt]);
+
+  const pausedUntil = status && !status.accepting ? status.paused_until : null;
+  useEffect(() => {
+    if (!pausedUntil) return;
+    const left = new Date(pausedUntil).getTime() - Date.now();
+    if (Number.isNaN(left)) return;
+    const id = setTimeout(() => setReadAt((n) => n + 1), Math.max(0, left) + 1000);
+    return () => clearTimeout(id);
+  }, [pausedUntil]);
 
   async function change(body: Parameters<typeof saveStatus>[0], done: string) {
     setBusy(true);
