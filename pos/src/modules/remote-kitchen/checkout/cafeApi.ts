@@ -5,11 +5,36 @@
 // The cafe's calls to «Віддалена кухня» (TechDocs/POS_REMOTE_KITCHEN.md §6–§8).
 // Mirrored wire shapes: this bundle shares only `@pos/platform` with the host.
 
-import { posRequest } from '../lib/hostPlatform';
+import { currentStoreId, isOnline, posRequest } from '../lib/hostPlatform';
+import { rememberSetup, rememberedSetup } from '../lib/setupMemory';
+import type { RawSetup } from '../lib/sides';
 import { orderItems, readSetup, type CafeOrder, type CafeSetup, type KitchenCartLine } from './lib';
 
+/** No answer at all — no network, a timeout — as against an answer that said no. */
+function noAnswer(error: unknown): boolean {
+  return !(error && typeof error === 'object' && (error as { response?: unknown }).response);
+}
+
+/**
+ * This till's side of the link. Offline (РК5, §8) the last answer this till
+ * kept stands in, marked `fromMemory`, so the block still knows which dishes
+ * are the kitchen's and whom to call. So does a read that got no answer at all
+ * while the till still thinks it is online — a router with no internet at
+ * opening — since that is offline in all but name; an answer that said no
+ * (a 403, a 500) is not.
+ */
 export async function loadSetup(): Promise<CafeSetup | null> {
-  return readSetup(await posRequest<unknown>('get', '/remote-kitchen/setup'));
+  const store = currentStoreId();
+  try {
+    const raw = await posRequest<RawSetup>('get', '/remote-kitchen/setup');
+    rememberSetup(raw ?? {}, store);
+    return readSetup(raw);
+  } catch (error) {
+    const kept = !isOnline() || noAnswer(error) ? rememberedSetup() : null;
+    if (!kept) throw error;
+    const setup = readSetup(kept);
+    return setup ? { ...setup, fromMemory: true } : null;
+  }
 }
 
 /** A new request. A fresh uuid per request: a retry of the same tap reuses it. */

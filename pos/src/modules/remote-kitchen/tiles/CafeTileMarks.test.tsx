@@ -4,7 +4,7 @@
 
 import { act, render } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { enableOfflineReads, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
+import { enableOfflinePos, enableOfflineReads, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
 import { forgetSides } from '../lib/sides';
 
 const posRequest = vi.fn();
@@ -29,8 +29,9 @@ const setup = (accepting: boolean) => ({
 const marks = () => useCartStore.getState().tileMarks['remote-kitchen'];
 
 beforeAll(() => {
-  // A till whose offline runtime keeps the store's `online` current (desktop/tablet).
-  enableOfflineReads();
+  // The desktop: its offline runtime keeps the store's `online` current, and it
+  // queues a sale rung without a network — so a kitchen dish sells by phone.
+  enableOfflinePos();
 });
 
 beforeEach(() => {
@@ -47,7 +48,7 @@ afterEach(() => {
 });
 
 describe('the cafe’s kitchen-dish tiles', () => {
-  it('puts the time on, greys them offline without asking the server, and takes them off when gone', async () => {
+  it('puts the time on, says «дзвінок на кухню» offline without asking the server, and takes them off when gone', async () => {
     posRequest.mockResolvedValue(setup(true));
     const view = render(<CafeTileMarks />);
     await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'кухня ≈30 хв', blocked: false } }));
@@ -55,11 +56,50 @@ describe('the cafe’s kitchen-dish tiles', () => {
 
     posRequest.mockClear();
     useOfflineStatus.setState({ online: false });
-    await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'потрібна мережа', blocked: true } }));
+    await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'дзвінок на кухню', blocked: false } }));
     expect(posRequest).not.toHaveBeenCalled();
 
     view.unmount();
     expect(marks()).toBeUndefined();
+  });
+
+  it('a till that starts offline marks the dishes from the setup it kept, its own store’s only', async () => {
+    localStorage.clear();
+    useAuthStore.setState({ auth: { store: { id: 7 } } } as never);
+    posRequest.mockResolvedValue(setup(true));
+    const first = render(<CafeTileMarks />);
+    await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'кухня ≈30 хв', blocked: false } }));
+    first.unmount();
+
+    forgetSides();
+    posRequest.mockReset();
+    posRequest.mockRejectedValue(new Error('Network Error'));
+    useOfflineStatus.setState({ online: false });
+    const offline = render(<CafeTileMarks />);
+    await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'дзвінок на кухню', blocked: false } }));
+    offline.unmount();
+
+    // Signed in to another store: nothing kept is that store's.
+    useAuthStore.setState({ auth: { store: { id: 8 } } } as never);
+    const other = render(<CafeTileMarks />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(marks()).toBeUndefined();
+    other.unmount();
+    useAuthStore.setState({ auth: null } as never);
+  });
+
+  it('on the tablet, which queues no offline sale, greys the kitchen’s dishes «потрібна мережа»', async () => {
+    enableOfflineReads();
+    try {
+      posRequest.mockResolvedValue(setup(true));
+      const view = render(<CafeTileMarks />);
+      await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'кухня ≈30 хв', blocked: false } }));
+      useOfflineStatus.setState({ online: false });
+      await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'потрібна мережа', blocked: true } }));
+      view.unmount();
+    } finally {
+      enableOfflinePos();
+    }
   });
 
   it('says «пауза» while the kitchen takes nothing', async () => {
@@ -140,23 +180,6 @@ describe('the cafe’s kitchen-dish tiles', () => {
       await vi.advanceTimersByTimeAsync(TILE_MARKS_NOT_CAFE_MS);
     });
     expect(posRequest).toHaveBeenCalledTimes(2);
-    view.unmount();
-  });
-
-  it('greys the kitchen’s dishes on a till that starts offline, from what the last session kept', async () => {
-    // Yesterday, online: the setup is read and kept on this device.
-    posRequest.mockResolvedValue(setup(true));
-    const first = render(<CafeTileMarks />);
-    await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'кухня ≈30 хв', blocked: false } }));
-    first.unmount();
-
-    // This morning, before the internet is up.
-    forgetSides();
-    posRequest.mockReset();
-    useOfflineStatus.setState({ online: false });
-    const view = render(<CafeTileMarks />);
-    await vi.waitFor(() => expect(marks()).toEqual({ 10: { text: 'потрібна мережа', blocked: true } }));
-    expect(posRequest).not.toHaveBeenCalled();
     view.unmount();
   });
 });

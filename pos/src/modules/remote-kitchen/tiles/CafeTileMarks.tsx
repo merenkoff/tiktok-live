@@ -15,10 +15,10 @@
 // overlapping refreshes used to leave two timers, and the loops multiplied.
 
 import { useEffect } from 'react';
-import { currentStoreId, isOnline, onOnlineChange, tileMarkSetter } from '../lib/hostPlatform';
+import { currentStoreId, isOnline, onOnlineChange, sellsByPhoneOffline, tileMarkSetter } from '../lib/hostPlatform';
+import { rememberedSetup } from '../lib/setupMemory';
 import { readSetupShared } from '../lib/sides';
 import { cafeTileMarks } from './marks';
-import { rememberCafe, rememberedCafe } from './remembered';
 
 export const TILE_MARKS_REFRESH_MS = 30_000;
 /** A store that is no cafe of any kitchen asks again this rarely — as the banner's strips do. */
@@ -39,13 +39,15 @@ export function CafeTileMarks(): null {
     let running = false;
     let again = false;
     // The last cafe half the server gave — before the first answer, the one
-    // this device kept from its last session, so a till that starts offline
-    // still greys the kitchen's dishes. Undefined = nothing known yet.
-    let lastCafe: unknown = rememberedCafe(store);
+    // this device kept (`lib/setupMemory.ts`, per store), so a till that starts
+    // offline still knows the kitchen's dishes and says «дзвінок на кухню» on
+    // them (§8). Undefined = nothing known yet.
+    const kept = rememberedSetup();
+    let lastCafe: unknown = kept ? (kept.as_cafe ?? null) : undefined;
 
     const publish = () => {
       if (!alive || lastCafe === undefined) return;
-      setMarks(cafeTileMarks(lastCafe, isOnline()));
+      setMarks(cafeTileMarks(lastCafe, isOnline(), sellsByPhoneOffline()));
     };
 
     const schedule = (ms: number) => {
@@ -66,8 +68,8 @@ export function CafeTileMarks(): null {
           if (visible && isOnline()) {
             try {
               const setup = await readSetupShared(Date.now(), store, TILE_MARKS_MAX_AGE_MS);
+              // `readSetupShared` keeps it on this device for the next offline start.
               lastCafe = setup.as_cafe ?? null;
-              rememberCafe(store, lastCafe);
             } catch {
               // A failed read keeps the last words: the till's offline banner says the rest.
             }

@@ -129,7 +129,9 @@ describe('PrinterEncodingPicker', () => {
     fireEvent.change(screen.getByLabelText('Номери до'), { target: { value: '999' } });
     fireEvent.click(screen.getByRole('button', { name: 'Надрукувати номери' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Номери мають бути цілими від 0 до 255.');
-    expect(invoke).not.toHaveBeenCalled();
+    // Nothing went to the printer. Loading the profile may still ask the OS for the
+    // printers' drivers (`list_printers`) — on a slow runner after the click.
+    expect(invoke).not.toHaveBeenCalledWith('print_encoding_test', expect.anything());
   });
 
   it('says why when the printer refuses the sheet, and lets the person try again', async () => {

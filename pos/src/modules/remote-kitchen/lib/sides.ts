@@ -15,6 +15,7 @@
 // on its way and a kitchen's unanswered cancel stay on the cafe's till.
 
 import { currentStoreId, posRequest } from './hostPlatform';
+import { rememberSetup } from './setupMemory';
 
 export interface StoreSides {
   cafe: boolean;
@@ -60,7 +61,11 @@ export function readSetupShared(
   maxAgeMs: number = SIDES_FRESH_MS
 ): Promise<RawSetup> {
   if (cached && cached.store === store && now - cached.at < maxAgeMs) return cached.read;
-  const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => res ?? {});
+  const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => {
+    // Kept for when the till goes offline (§8): it still knows the kitchen's dishes.
+    rememberSetup(res ?? {}, store);
+    return res ?? {};
+  });
   const entry: NonNullable<typeof cached> = { at: now, store, read };
   cached = entry;
   // A failed read is not remembered: the next ask goes to the server again.
