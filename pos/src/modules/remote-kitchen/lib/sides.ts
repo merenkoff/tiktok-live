@@ -10,6 +10,7 @@
 // is reused for half a minute.
 
 import { posRequest } from './hostPlatform';
+import { rememberSetup } from './setupMemory';
 
 export interface StoreSides {
   cafe: boolean;
@@ -38,7 +39,11 @@ export function readSides(now: number = Date.now()): Promise<StoreSides> {
 /** The same read, whole — shared with `readSides`, fresh for half a minute. */
 export function readSetupShared(now: number = Date.now()): Promise<RawSetup> {
   if (cached && now - cached.at < SIDES_FRESH_MS) return cached.read;
-  const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => res ?? {});
+  const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => {
+    // Kept for when the till goes offline (§8): it still knows the kitchen's dishes.
+    rememberSetup(res ?? {});
+    return res ?? {};
+  });
   const entry = { at: now, read };
   cached = entry;
   // A failed read is not remembered: the next ask goes to the server again.

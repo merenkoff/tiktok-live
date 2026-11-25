@@ -111,6 +111,8 @@ async function syncSale(row: OutboxRow): Promise<void> {
     ...(payload.open_bottles?.length ? { open_bottles: payload.open_bottles } : {}),
     // The cashier's «так» to «Покупцю є 18 років?» (migration 102).
     ...(payload.age_confirmed ? { age_confirmed: true } : {}),
+    // Kitchen dishes the kitchen agreed to by phone (РК5): its order is filed now.
+    ...(payload.remote_phone ? { remote_phone: payload.remote_phone } : {}),
   });
   // Record client_uuid -> server id so the receipts screen can address this
   // sale on the server once it exists there.

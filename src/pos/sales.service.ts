@@ -338,6 +338,15 @@ export interface CompleteSaleParams {
    */
   remote_order_id?: number | null;
   /**
+   * Kitchen dishes sold on the kitchen's word by phone while the till had no
+   * network (РК5, POS_REMOTE_KITCHEN.md §8): the receipt's lines the kitchen
+   * cooks become a paid kitchen order here, in this transaction, and move no
+   * cafe stock. Never refuses the sale — a receipt already handed over must
+   * file whatever happened to the kitchen's record. Ignored beside
+   * `remote_order_id`.
+   */
+  remote_phone?: remoteKitchen.PhoneAgreement | null;
+  /**
    * A repayment of goods taken «під запис» (migration 073, grocery Г3).
    *
    * The same locked branch as `bill_part`, for the same reason: the price and
@@ -1111,9 +1120,31 @@ export async function completeSaleTx(
   // the receipt's plain lines one by one — same dish, same quantity — and the
   // matched ones skip the cafe's shelf below. Locked here, so two tills
   // cannot both pay the same order.
-  const remoteUnclaimed = params.remote_order_id
+  let remoteUnclaimed = params.remote_order_id
     ? await remoteKitchen.remoteLinesForSaleTx(client, params.storeId, params.remote_order_id)
     : [];
+  // Agreed by phone offline (РК5, §8): the kitchen's part becomes its order
+  // now, and its lines are matched below exactly like a paid order's.
+  let phoneOrderId: number | null = null;
+  if (!params.remote_order_id && params.remote_phone) {
+    const phone = await remoteKitchen.phoneOrderForSaleTx(
+      client,
+      { storeId: params.storeId, staffId: params.staffId },
+      params.remote_phone,
+      lineItems
+        .filter((line) => !line.bill_item_id && !line.debt_item_id && !line.components)
+        .map((line) => ({
+          variantId: line.variant_id,
+          quantity: line.quantity,
+          modifiers: line.modifiers ?? [],
+          note: line.note,
+        }))
+    );
+    if (phone) {
+      phoneOrderId = phone.orderId;
+      remoteUnclaimed = phone.lines;
+    }
+  }
 
   for (const line of lineItems) {
     const itemResult = await client.query(
@@ -1256,6 +1287,15 @@ export async function completeSaleTx(
       { storeId: params.storeId, staffId: params.staffId },
       params.remote_order_id,
       saleId
+    );
+  }
+  if (phoneOrderId != null && params.remote_phone) {
+    await remoteKitchen.markPhonePaidTx(
+      client,
+      { storeId: params.storeId, staffId: params.staffId },
+      phoneOrderId,
+      saleId,
+      params.remote_phone
     );
   }
 

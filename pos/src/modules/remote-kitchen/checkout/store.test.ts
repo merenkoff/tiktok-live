@@ -41,7 +41,7 @@ const pizza = { variant_id: 10, quantity: 1, product_name: 'Маргарита' 
 const coffee = { variant_id: 20, quantity: 1, product_name: 'Капучино' };
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
-function harness() {
+function harness(opts: { phone?: boolean } = {}) {
   const api = {
     loadSetup: vi.fn(async () => setup),
     createOrder: vi.fn(async () => view()),
@@ -50,7 +50,11 @@ function harness() {
     phoneQuote: vi.fn(async () => view({ status: 'quoted', quote_source: 'phone', quoted_minutes: 40, quote_expires_at: at(300) })),
     guestDeclined: vi.fn(async () => view({ status: 'guest_declined' })),
   };
-  const cart = { hold: null as string | null, remoteOrderId: null as number | null };
+  const cart = {
+    hold: null as string | null,
+    remoteOrderId: null as number | null,
+    phone: null as { minutes: number; agreed_at: string } | null,
+  };
   const controls = {
     setCheckoutHold: (r: string | null) => {
       cart.hold = r;
@@ -58,9 +62,17 @@ function harness() {
     setRemoteOrderId: (id: number | null) => {
       cart.remoteOrderId = id;
     },
+    ...(opts.phone === false
+      ? {}
+      : {
+          setRemotePhone: (a: { minutes: number; agreed_at: string } | null) => {
+            cart.phone = a;
+          },
+        }),
   };
-  const store = createRemoteCheckout(api as never, () => controls, () => NOW);
-  return { api, cart, store };
+  const net = { online: true };
+  const store = createRemoteCheckout(api as never, () => controls, () => NOW, () => net.online);
+  return { api, cart, store, net };
 }
 
 async function ready(h: ReturnType<typeof harness>, lines = [pizza, coffee]) {
@@ -190,5 +202,70 @@ describe('the remote-kitchen checkout', () => {
     expect(h.api.guestDeclined).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }));
     expect(h.store.phase()).toBe('idle');
     expect(h.cart.hold).toMatch(/спершу запитайте кухню/);
+  });
+
+  describe('offline, agreed with the kitchen by phone (РК5)', () => {
+    it('holds «Оплатити» until the cashier writes the kitchen’s time down, then the receipt carries it', async () => {
+      await ready(h);
+      h.net.online = false;
+      h.store.connectivityChanged();
+      expect(h.store.phase()).toBe('offline');
+      expect(h.cart.hold).toMatch(/без мережі подзвоніть на кухню/);
+
+      h.store.phoneAgree(43);
+      expect(h.store.phase()).toBe('phone_agreed');
+      expect(h.cart.hold).toBeNull();
+      expect(h.cart.remoteOrderId).toBeNull();
+      expect(h.cart.phone).toEqual({ minutes: 45, agreed_at: new Date(NOW).toISOString() });
+      expect(h.api.createOrder).not.toHaveBeenCalled();
+
+      // The network is back before «Оплатити»: the guest was told this time, it stands.
+      h.net.online = true;
+      h.store.connectivityChanged();
+      expect(h.store.phase()).toBe('phone_agreed');
+      expect(h.cart.phone).not.toBeNull();
+    });
+
+    it('a time agreed for these dishes is void for others, and gone with the receipt', async () => {
+      await ready(h);
+      h.net.online = false;
+      h.store.connectivityChanged();
+      h.store.phoneAgree(30);
+      h.store.sync([{ ...pizza, quantity: 2 }, coffee]);
+      expect(h.store.phase()).toBe('offline');
+      expect(h.cart.phone).toBeNull();
+      expect(h.cart.hold).toMatch(/без мережі/);
+
+      h.store.phoneAgree(30);
+      expect(h.cart.phone).not.toBeNull();
+      h.store.sync([]);
+      expect(h.cart.phone).toBeNull();
+      expect(h.cart.hold).toBeNull();
+      // Offline, a cart that changes asks the kitchen nothing.
+      expect(h.api.reviseOrder).not.toHaveBeenCalled();
+    });
+
+    it('on a host that cannot queue the time, kitchen dishes wait for the network', async () => {
+      h = harness({ phone: false });
+      await ready(h);
+      h.net.online = false;
+      h.store.connectivityChanged();
+      expect(h.cart.hold).toMatch(/лише онлайн/);
+      h.store.phoneAgree(30);
+      expect(h.store.phase()).toBe('offline');
+      expect(h.cart.hold).toMatch(/лише онлайн/);
+    });
+
+    it('reads the setup again once online when it came from what the till kept', async () => {
+      h.api.loadSetup.mockResolvedValueOnce({ ...setup, fromMemory: true });
+      h.net.online = false;
+      await ready(h);
+      expect(h.store.getState().setup?.fromMemory).toBe(true);
+      h.net.online = true;
+      h.store.connectivityChanged();
+      await flush();
+      expect(h.api.loadSetup).toHaveBeenCalledTimes(2);
+      expect(h.store.getState().setup?.fromMemory).toBeUndefined();
+    });
   });
 });

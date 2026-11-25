@@ -30,7 +30,7 @@ describe('the words on the cafe’s kitchen-dish tiles', () => {
     });
   });
 
-  it('greys every kitchen dish on a pause, a paused link, and offline — offline first', () => {
+  it('greys every kitchen dish on a pause or a paused link', () => {
     expect(cafeTileMarks(cafe({ kitchen: { accepting: false, load_minutes: 0 } }), true)?.[10]).toEqual({
       text: 'пауза',
       blocked: true,
@@ -39,8 +39,16 @@ describe('the words on the cafe’s kitchen-dish tiles', () => {
       text: 'кухня вимкнена',
       blocked: true,
     });
+  });
+
+  it('offline still sells the dish, after a call — but not over a paused link', () => {
+    // The kitchen's pause is not known offline, and on the phone it can say yes.
     expect(cafeTileMarks(cafe({ kitchen: { accepting: false } }), false)?.[10]).toEqual({
-      text: 'потрібна мережа',
+      text: 'дзвінок на кухню',
+      blocked: false,
+    });
+    expect(cafeTileMarks(cafe({ link: { status: 'paused' } }), false)?.[10]).toEqual({
+      text: 'кухня вимкнена',
       blocked: true,
     });
   });

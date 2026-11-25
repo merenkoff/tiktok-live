@@ -37,7 +37,7 @@ import { ExciseError } from '../excise.js';
 import * as printQueue from '../receipt-print.service.js';
 import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
-import { RemoteKitchenConflict, RemoteKitchenNotFound } from '../remote-kitchen.service.js';
+import { RemoteKitchenConflict, RemoteKitchenNotFound, parsePhoneAgreement } from '../remote-kitchen.service.js';
 import { errorMessage, readDeviceId } from './_shared.js';
 
 /** `getSale`'s row, non-null. `completeSale` / `refundSale` return the same shape. */
@@ -208,6 +208,12 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        * the kitchen starts cooking in the same transaction.
        */
       remote_order_id?: unknown;
+      /**
+       * Kitchen dishes agreed with the kitchen by phone while the till was
+       * offline (РК5, §8): `{ minutes, agreed_at }`. The sale goes as usual;
+       * the server writes the kitchen's order, already cooking, beside it.
+       */
+      remote_phone?: unknown;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -226,6 +232,22 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     const remoteOrderId = positiveIdOrNull(body.remote_order_id);
     if (body.remote_order_id != null && remoteOrderId === null) {
       return reply.code(400).send({ error: 'Невірне замовлення кухні' });
+    }
+    // A replayed receipt files whatever it carries; a live one is told when
+    // its phone agreement is unreadable rather than losing the kitchen's part.
+    const replay = body.offline_replay === true || (body.fiscal_offline !== undefined && body.fiscal_offline !== null);
+    const remotePhone = parsePhoneAgreement(body.remote_phone);
+    if (body.remote_phone != null && remotePhone === null && !replay) {
+      return reply.code(400).send({ error: 'Невірний час від кухні' });
+    }
+    if (remotePhone !== null && remoteOrderId !== null) {
+      return reply.code(400).send({ error: 'Або замовлення кухні, або час по телефону — не обидва' });
+    }
+    if (remotePhone !== null && registers.size > 1) {
+      return reply.code(409).send({
+        error: 'remote_order_single_receipt',
+        message: 'Страви з кухні — окремим чеком: продайте товари іншого ФОП другим чеком.',
+      });
     }
     // A kitchen order is paid by one online receipt: the kitchen needs the
     // answer now, and a split or an offline receipt cannot give it one.
@@ -337,6 +359,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         fiscal_register: registerNo,
         age_confirmed: body.age_confirmed,
         remote_order_id: remoteOrderId,
+        remote_phone: remotePhone,
       });
     } catch (error) {
       logger.error('Complete sale failed', { error: errorMessage(error) });
@@ -965,6 +988,8 @@ async function completeDeviceStampedSale(
     open_bottles?: unknown;
     /** «Покупцю є 18» answered for this receipt (migration 102). */
     age_confirmed?: unknown;
+    /** Kitchen dishes agreed by phone (РК5, §8). */
+    remote_phone?: unknown;
   },
   clientUuid: string | null
 ) {
@@ -1008,6 +1033,8 @@ async function completeDeviceStampedSale(
       cash_rounding: body.cash_rounding,
       open_bottles: body.open_bottles,
       age_confirmed: body.age_confirmed,
+      // Agreed with the kitchen by phone (РК5, §8): its order is filed now.
+      remote_phone: parsePhoneAgreement(body.remote_phone),
     });
   } catch (error) {
     logger.error('Complete offline-stamped sale failed', { error: errorMessage(error) });

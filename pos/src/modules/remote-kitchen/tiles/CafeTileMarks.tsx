@@ -11,6 +11,7 @@
 import { useEffect } from 'react';
 import { isOnline, onOnlineChange, tileMarkSetter } from '../lib/hostPlatform';
 import { readSetupShared, SIDES_FRESH_MS } from '../lib/sides';
+import { rememberedSetup } from '../lib/setupMemory';
 import { cafeTileMarks } from './marks';
 
 export const TILE_MARKS_REFRESH_MS = SIDES_FRESH_MS;
@@ -41,6 +42,11 @@ export function CafeTileMarks(): null {
         } catch {
           // A failed read keeps the last words: the till's offline banner says the rest.
         }
+      }
+      // Offline from the start: the last setup this till kept still names the dishes (§8).
+      if (lastCafe === undefined) {
+        const kept = rememberedSetup();
+        if (kept) lastCafe = kept.as_cafe ?? null;
       }
       publish();
       if (alive) timer = setTimeout(() => void refresh(), TILE_MARKS_REFRESH_MS);

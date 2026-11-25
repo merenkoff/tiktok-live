@@ -11,6 +11,7 @@
 import * as defaultApi from './cafeApi';
 import {
   REVISABLE,
+  clampPhoneMinutes,
   holdReason,
   kitchenLines,
   phaseOf,
@@ -21,7 +22,7 @@ import {
   type KitchenCartLine,
   type Phase,
 } from './lib';
-import { remoteCartControls, type RemoteCartControls } from '../lib/hostPlatform';
+import { isOnline, remoteCartControls, type RemoteCartControls } from '../lib/hostPlatform';
 
 export const ASK_POLL_MS = 3000;
 export const QUOTE_POLL_MS = 10000;
@@ -41,6 +42,11 @@ export interface RemoteCheckoutState {
   signature: string;
   busy: boolean;
   error: string | null;
+  /**
+   * Agreed with the kitchen by phone while offline (РК5, §8), for the cart it
+   * was agreed for: another dish, and it is void.
+   */
+  phone: { minutes: number; agreedAt: string; signature: string } | null;
 }
 
 type Api = typeof defaultApi;
@@ -54,12 +60,14 @@ const initial = (): RemoteCheckoutState => ({
   signature: '',
   busy: false,
   error: null,
+  phone: null,
 });
 
 export function createRemoteCheckout(
   api: Api = defaultApi,
   cart: () => RemoteCartControls | null = remoteCartControls,
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  online: () => boolean = isOnline
 ) {
   let state = initial();
   const listeners = new Set<() => void>();
@@ -76,7 +84,13 @@ export function createRemoteCheckout(
     for (const l of listeners) l();
   };
 
-  const phase = (): Phase => phaseOf(state.order, state.agreed, now());
+  const phoneHolds = () => state.phone != null && state.phone.signature === state.signature;
+
+  const phase = (): Phase => {
+    if (phoneHolds()) return 'phone_agreed';
+    if (!online()) return 'offline';
+    return phaseOf(state.order, state.agreed, now());
+  };
 
   /** The host cart follows the store: the hold, and the order the sale pays. */
   function applyToCart() {
@@ -84,6 +98,21 @@ export function createRemoteCheckout(
     if (!controls) return;
     const hasLines = state.setup != null && state.lines.length > 0;
     const p = phase();
+    // Agreed by phone (§8): nothing holds the receipt, and it carries the time.
+    if (hasLines && p === 'phone_agreed' && controls.setRemotePhone) {
+      controls.setCheckoutHold(null);
+      controls.setRemoteOrderId(null);
+      controls.setRemotePhone({ minutes: state.phone!.minutes, agreed_at: state.phone!.agreedAt });
+      return;
+    }
+    controls.setRemotePhone?.(null);
+    if (hasLines && p === 'offline') {
+      controls.setRemoteOrderId(null);
+      controls.setCheckoutHold(
+        controls.setRemotePhone ? holdReason('offline', true) : 'Страви з кухні продаються лише онлайн — перевірте звʼязок.'
+      );
+      return;
+    }
     const fresh = state.order != null && state.askedSignature === state.signature;
     const payable = hasLines && fresh && p === 'agreed';
     controls.setCheckoutHold(hasLines ? (payable ? null : holdReason(fresh ? p : 'idle', true)) : null);
@@ -148,13 +177,19 @@ export function createRemoteCheckout(
         void api.guestDeclined(order).catch(() => undefined);
       }
       pendingUuid = null;
-      set({ lines, signature, order: null, askedSignature: null, agreed: false, error: null });
+      set({ lines, signature, order: null, askedSignature: null, agreed: false, error: null, phone: null });
       return;
     }
-    set({ lines, signature, agreed: state.askedSignature === signature ? state.agreed : false });
+    set({
+      lines,
+      signature,
+      agreed: state.askedSignature === signature ? state.agreed : false,
+      // A time the kitchen named on the phone was for those dishes, not these.
+      phone: state.phone?.signature === signature ? state.phone : null,
+    });
     // An open request follows the cart: the kitchen sees the new dishes at once.
     const order = state.order;
-    if (order && state.askedSignature !== signature && (order.status === 'requested' || order.status === 'quoted')) {
+    if (online() && order && state.askedSignature !== signature && (order.status === 'requested' || order.status === 'quoted')) {
       void revise();
     }
   }
@@ -220,6 +255,51 @@ export function createRemoteCheckout(
     set({ agreed: false });
   }
 
+  /**
+   * «Узгоджено телефоном» (РК5, §8): offline, the cashier called the kitchen,
+   * it named a time and the guest agreed. The receipt may go; it carries the
+   * time, and the server files the kitchen's order when the receipt arrives.
+   */
+  function phoneAgree(minutes: number) {
+    if (!state.setup || state.lines.length === 0 || !cart()?.setRemotePhone) return;
+    set({
+      phone: { minutes: clampPhoneMinutes(minutes), agreedAt: new Date(now()).toISOString(), signature: state.signature },
+      error: null,
+    });
+  }
+
+  /** «Змінити» after a phone agreement: back to the call. */
+  function phoneUndo() {
+    set({ phone: null });
+  }
+
+  /**
+   * The till went on- or offline: the hold and the screen follow, and a setup
+   * that came from what the till kept is read again once there is a network.
+   */
+  function connectivityChanged() {
+    if (online() && state.setup?.fromMemory) {
+      setupFailedAt = 0;
+      void reloadSetup();
+    }
+    set({});
+  }
+
+  async function reloadSetup() {
+    if (setupLoading) return;
+    setupLoading = true;
+    try {
+      const setup = await api.loadSetup();
+      if (setup?.fromMemory) return;
+      // The block's effect reads the cart again against the fresh list of dishes.
+      set({ setup: setup && setup.variantIds.size > 0 ? setup : null });
+    } catch {
+      // Still nothing: what the till kept stands.
+    } finally {
+      setupLoading = false;
+    }
+  }
+
   /** «Гість відмовився»: the kitchen stops holding the time; the dishes stay for the cashier to remove. */
   async function decline() {
     const order = state.order;
@@ -252,6 +332,9 @@ export function createRemoteCheckout(
     phoneQuote,
     agree,
     unagree,
+    phoneAgree,
+    phoneUndo,
+    connectivityChanged,
     decline,
     refresh,
     /** Tests only. */

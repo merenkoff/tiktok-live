@@ -598,6 +598,121 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     expect(board.orders.some((o) => o.kind === 'sale' && o.id === saleId)).toBe(false);
   });
 
+  // ── РК5: sold offline on the kitchen's word by phone ─────────────────
+
+  const phoneSale = (
+    items: Array<{ variant_id: number; quantity: number }>,
+    remotePhone: unknown,
+    extra: Record<string, unknown> = {}
+  ) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/pos/sales/complete',
+      headers: auth(cafe.sellerToken),
+      payload: {
+        items,
+        payments: [{ method: 'cash', amount_cents: items.reduce((sum, i) => sum + i.quantity * 10000, 0) }],
+        client_uuid: randomUUID(),
+        remote_phone: remotePhone,
+        ...extra,
+      },
+    });
+
+  it('a receipt agreed with the kitchen by phone offline becomes the kitchen’s order, already cooking', async () => {
+    const { variantId: lemonade } = await seedProduct(cafe.storeId, { name: 'Лимонад', quantity: 5 });
+    await pool.query(`DELETE FROM pos_remote_order_prints WHERE store_id = $1`, [kitchen.storeId]);
+    // The kitchen paused its link meanwhile: the phone said yes, so it still goes.
+    await pool.query(`UPDATE pos_kitchen_links SET status = 'paused' WHERE id = $1`, [linkId]);
+    const kitchenBefore = await stockOf(kitchenPizza);
+    const pizzaBefore = await stockOf(cafePizza);
+    const lemonadeBefore = await stockOf(lemonade);
+    const agreedAt = new Date(Date.now() - 20 * 60_000);
+
+    try {
+      const res = await phoneSale(
+        [
+          { variant_id: cafePizza, quantity: 2 },
+          { variant_id: lemonade, quantity: 1 },
+        ],
+        { minutes: 43, agreed_at: agreedAt.toISOString() },
+        { offline_replay: true }
+      );
+      expect(res.statusCode, res.body).toBe(201);
+      const saleId = Number(res.json().id);
+
+      // The kitchen's shelf pays for the pizza, the cafe's for the lemonade only.
+      expect(await stockOf(kitchenPizza)).toBe(kitchenBefore - 2);
+      expect(await stockOf(cafePizza)).toBe(pizzaBefore);
+      expect(await stockOf(lemonade)).toBe(lemonadeBefore - 1);
+
+      const row = (
+        await pool.query(
+          `SELECT id, status, quote_source, quoted_minutes, order_no, promised_at
+             FROM pos_remote_orders WHERE cafe_sale_id = $1`,
+          [saleId]
+        )
+      ).rows[0];
+      expect(row).toMatchObject({ status: 'cooking', quote_source: 'phone', quoted_minutes: 45 });
+      expect(Number(row.order_no)).toBeGreaterThanOrEqual(1);
+      // The promise counts from the call, not from when the till got back online.
+      const promised = new Date(row.promised_at).getTime();
+      expect(Math.abs(promised - (agreedAt.getTime() + 45 * 60_000))).toBeLessThan(2000);
+
+      const items = await pool.query(
+        `SELECT kitchen_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1`,
+        [row.id]
+      );
+      expect(items.rows.map((r) => [Number(r.kitchen_variant_id), Number(r.quantity)])).toEqual([[kitchenPizza, 2]]);
+      // The receipt line points at the kitchen's line, as a paid order's does.
+      const lines = await pool.query(
+        `SELECT variant_id, remote_order_item_id FROM pos_sale_items WHERE sale_id = $1 ORDER BY id`,
+        [saleId]
+      );
+      expect(lines.rows.map((r) => r.remote_order_item_id != null)).toEqual([true, false]);
+      // No second paper: the kitchen wrote it down on the phone.
+      const prints = await pool.query(`SELECT 1 FROM pos_remote_order_prints WHERE remote_order_id = $1`, [row.id]);
+      expect(prints.rows).toHaveLength(0);
+    } finally {
+      await pool.query(`UPDATE pos_kitchen_links SET status = 'active' WHERE id = $1`, [linkId]);
+    }
+  });
+
+  it('a phone agreement never fails a replayed receipt, and a live one is told what is wrong', async () => {
+    // A till clock a week behind: the promise counts from no earlier than a day back.
+    const old = await phoneSale(
+      [{ variant_id: cafeRoll, quantity: 1 }],
+      { minutes: 30, agreed_at: new Date(Date.now() - 7 * 86_400_000).toISOString() },
+      { offline_replay: true }
+    );
+    expect(old.statusCode, old.body).toBe(201);
+    const promised = (
+      await pool.query(`SELECT promised_at FROM pos_remote_orders WHERE cafe_sale_id = $1`, [Number(old.json().id)])
+    ).rows[0].promised_at;
+    expect(new Date(promised).getTime()).toBeGreaterThan(Date.now() - 86_400_000);
+
+    // Unreadable on a replay: the receipt is filed as an ordinary one.
+    const rollBefore = await stockOf(cafeRoll);
+    const junk = await phoneSale([{ variant_id: cafeRoll, quantity: 1 }], { minutes: 'soon' }, { offline_replay: true });
+    expect(junk.statusCode, junk.body).toBe(201);
+    expect(await stockOf(cafeRoll)).toBe(rollBefore - 1);
+    const none = await pool.query(`SELECT 1 FROM pos_remote_orders WHERE cafe_sale_id = $1`, [Number(junk.json().id)]);
+    expect(none.rows).toHaveLength(0);
+
+    // Live: a bad time, or a phone time beside a kitchen order, is a 400.
+    expect((await phoneSale([{ variant_id: cafeRoll, quantity: 1 }], { minutes: 0 })).statusCode).toBe(400);
+    expect(
+      (await phoneSale([{ variant_id: cafeRoll, quantity: 1 }], { minutes: 30 }, { remote_order_id: 1 })).statusCode
+    ).toBe(400);
+
+    // Online with a phone time is fine too: the network came back before «Оплатити».
+    const live = await phoneSale([{ variant_id: cafeRoll, quantity: 1 }], { minutes: 30 });
+    expect(live.statusCode, live.body).toBe(201);
+    const liveRow = await pool.query(`SELECT status FROM pos_remote_orders WHERE cafe_sale_id = $1`, [
+      Number(live.json().id),
+    ]);
+    expect(liveRow.rows[0].status).toBe('cooking');
+  });
+
   it('voiding the cafe receipt cancels a kitchen order still cooking, and each shelf gets back its own', async () => {
     const order = (await ask([{ variant_id: cafePizza, quantity: 2 }])).json();
     const kitchenBefore = await stockOf(kitchenPizza);

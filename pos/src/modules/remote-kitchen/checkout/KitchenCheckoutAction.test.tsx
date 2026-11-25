@@ -5,7 +5,7 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useCartStore } from '@pos/platform';
+import { useCartStore, useOfflineStatus } from '@pos/platform';
 import type { CartLine } from '@host/hooks/useCart';
 import { KitchenCheckoutAction } from './KitchenCheckoutAction';
 import { createRemoteCheckout } from './store';
@@ -142,5 +142,33 @@ describe('«З кухні» above «Оплатити»', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Плюс 5 хвилин' }));
     await userEvent.click(screen.getByRole('button', { name: 'Записати 40 хв' }));
     expect(calls.phoneQuote).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }), 40);
+  });
+
+  it('offline: the kitchen’s phone, the time it says, and a receipt that carries it (РК5)', async () => {
+    useOfflineStatus.setState({ online: false });
+    try {
+      const calls = api();
+      const store = createRemoteCheckout(calls as never);
+      render(<KitchenCheckoutAction {...props} lines={[line(10, 1, 'Маргарита')]} store={store} />);
+      await act(async () => undefined);
+
+      const offline = screen.getByTestId('remote-checkout-offline');
+      expect(offline.querySelector('a[href="tel:+380671112233"]')).toBeTruthy();
+      expect(useCartStore.getState().checkoutHolds['remote-kitchen']).toMatch(/без мережі/);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Мінус 5 хвилин' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Узгоджено телефоном · 35 хв' }));
+      expect(screen.getByTestId('remote-checkout-phone-agreed').textContent).toContain('Узгоджено телефоном: 35 хв');
+      expect(useCartStore.getState().checkoutHolds['remote-kitchen']).toBeUndefined();
+      expect(useCartStore.getState().remotePhone?.minutes).toBe(35);
+      expect(useCartStore.getState().remoteOrderId).toBeNull();
+      expect(calls.createOrder).not.toHaveBeenCalled();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Змінити' }));
+      expect(useCartStore.getState().remotePhone).toBeNull();
+      expect(screen.getByTestId('remote-checkout-offline')).toBeTruthy();
+    } finally {
+      useOfflineStatus.setState({ online: true });
+    }
   });
 });

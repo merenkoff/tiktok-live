@@ -5,11 +5,27 @@
 // The cafe's calls to «Віддалена кухня» (TechDocs/POS_REMOTE_KITCHEN.md §6–§8).
 // Mirrored wire shapes: this bundle shares only `@pos/platform` with the host.
 
-import { posRequest } from '../lib/hostPlatform';
+import { isOnline, posRequest } from '../lib/hostPlatform';
+import { rememberSetup, rememberedSetup } from '../lib/setupMemory';
+import type { RawSetup } from '../lib/sides';
 import { orderItems, readSetup, type CafeOrder, type CafeSetup, type KitchenCartLine } from './lib';
 
+/**
+ * This till's side of the link. Offline (РК5, §8) the last answer this till
+ * kept stands in, marked `fromMemory`, so the block still knows which dishes
+ * are the kitchen's and whom to call.
+ */
 export async function loadSetup(): Promise<CafeSetup | null> {
-  return readSetup(await posRequest<unknown>('get', '/remote-kitchen/setup'));
+  try {
+    const raw = await posRequest<RawSetup>('get', '/remote-kitchen/setup');
+    rememberSetup(raw ?? {});
+    return readSetup(raw);
+  } catch (error) {
+    const kept = isOnline() ? null : rememberedSetup();
+    if (!kept) throw error;
+    const setup = readSetup(kept);
+    return setup ? { ...setup, fromMemory: true } : null;
+  }
 }
 
 /** A new request. A fresh uuid per request: a retry of the same tap reuses it. */

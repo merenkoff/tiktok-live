@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { create } from 'zustand';
-import type { CatalogItem, ExchangeDraft, PosCustomer } from '../types';
+import type { CatalogItem, ExchangeDraft, PosCustomer, RemotePhoneAgreement } from '../types';
 import { discountAfterCustomerChange } from '../lib/customerDiscount';
 import { lineAmountCents } from '../lib/lineMoney';
 import { ageRestricted } from '../lib/ageCheck';
@@ -139,6 +139,14 @@ interface CartStore {
    * transaction — or refuses if the cart's kitchen lines no longer match.
    */
   remoteOrderId: number | null;
+  /**
+   * Agreed with the remote kitchen by phone, offline (§8, platform 25): the
+   * sale carries it as `remote_order_id` would be carried online — queued with
+   * the receipt — and the server files the kitchen's order when it arrives.
+   * Never set together with `remoteOrderId`.
+   */
+  remotePhone: RemotePhoneAgreement | null;
+  setRemotePhone: (agreement: RemotePhoneAgreement | null) => void;
   /**
    * Why the cart cannot be paid yet, per module that says so (a dish from the
    * remote kitchen with no agreed time). Keyed by the module's id, so one
@@ -287,6 +295,8 @@ export function computeCartDiscountCents(
   return Math.min(Math.max(0, cartDiscount.value), eligibleSum);
 }
 
+export type { RemotePhoneAgreement } from '../types';
+
 /** What a module says on a catalog tile (`CartStore.tileMarks`). */
 export interface TileMark {
   /** A word or two: «≈30 хв», «пауза», «потрібна мережа». */
@@ -318,6 +328,16 @@ export const useCartStore = create<CartStore>((set, get) => ({
   remoteOrderId: null,
   checkoutHolds: {},
   setRemoteOrderId: (id) => set({ remoteOrderId: id }),
+  remotePhone: null,
+  setRemotePhone: (agreement) =>
+    set((state) => {
+      const was = state.remotePhone;
+      if (was === agreement) return state;
+      if (was && agreement && was.minutes === agreement.minutes && was.agreed_at === agreement.agreed_at) {
+        return state;
+      }
+      return { remotePhone: agreement };
+    }),
   setCheckoutHold: (moduleId, reason) =>
     set((state) => {
       if ((state.checkoutHolds[moduleId] ?? null) === reason) return state;
@@ -478,6 +498,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       customer: customer ?? null,
       preorderId: preorderId ?? null,
       remoteOrderId: null,
+      remotePhone: null,
       checkoutHolds: {},
       banner: null,
     });
@@ -558,6 +579,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       preorderId: null,
       exchange: null,
       remoteOrderId: null,
+      remotePhone: null,
       checkoutHolds: {},
     }),
 

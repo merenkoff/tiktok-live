@@ -6,8 +6,9 @@
 // (РК5, TechDocs/POS_REMOTE_KITCHEN.md §8): «кухня ≈30 хв» — the promise the
 // kitchen's own numbers suggest for that dish alone, road included, rounded
 // up to five as the server rounds it; «пауза» while the kitchen takes nothing;
-// «кухня вимкнена» while the link is paused; «потрібна мережа» offline, since a
-// request the kitchen never gets is no request. The last three grey the tile.
+// «кухня вимкнена» while the link is paused — those two grey the tile. Offline
+// the dish still sells, on the kitchen's word by phone (§8): «дзвінок на
+// кухню», and the till's «З кухні» block takes the time the kitchen names.
 
 import type { TileMark } from '../lib/hostPlatform';
 
@@ -21,6 +22,9 @@ function num(value: unknown): number | null {
   const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
   return Number.isFinite(n) ? n : null;
 }
+
+/** A kitchen dish offline: still sold, after a call (§8). */
+export const OFFLINE_WORD = 'дзвінок на кухню';
 
 /** The server's `roundUpToFive`: «буде о 19:40», never 19:37. */
 export function roundUpToFive(minutes: number): number {
@@ -43,9 +47,9 @@ export function cafeTileMarks(asCafe: unknown, online: boolean): Record<number, 
   if (items.length === 0) return null;
 
   let blockedWord: string | null = null;
-  if (!online) blockedWord = 'потрібна мережа';
-  else if (half.link.status !== 'active') blockedWord = 'кухня вимкнена';
-  else if (half.kitchen?.accepting === false) blockedWord = 'пауза';
+  if (half.link.status !== 'active') blockedWord = 'кухня вимкнена';
+  // Offline the kitchen's pause is not known, and by phone it can still say yes.
+  else if (online && half.kitchen?.accepting === false) blockedWord = 'пауза';
 
   const load = Math.max(0, num(half.kitchen?.load_minutes) ?? 0);
   const transit = Math.max(0, num(half.link.transit_minutes) ?? 0);
@@ -55,7 +59,9 @@ export function cafeTileMarks(asCafe: unknown, online: boolean): Record<number, 
     if (id == null) continue;
     marks[id] = blockedWord
       ? { text: blockedWord, blocked: true }
-      : { text: dishWord(num(item.prep_minutes), load, transit), blocked: false };
+      : !online
+        ? { text: OFFLINE_WORD, blocked: false }
+        : { text: dishWord(num(item.prep_minutes), load, transit), blocked: false };
   }
   return Object.keys(marks).length > 0 ? marks : null;
 }

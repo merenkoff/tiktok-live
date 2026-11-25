@@ -25,6 +25,7 @@ import type {
   SplitSaleResult,
   ListSalesParams,
   OpenBottleStamp,
+  RemotePhoneAgreement,
 } from '../types';
 
 /**
@@ -157,6 +158,11 @@ export const cashierApi = {
      * without a connection rather than queueing it.
      */
     remote_order_id?: number | null;
+    /**
+     * Kitchen dishes agreed by phone (РК5, §8) — the offline counterpart of
+     * `remote_order_id`: queued with the receipt and replayed with it.
+     */
+    remote_phone?: RemotePhoneAgreement | null;
     /**
      * The step the payment screen rounded the cash part by (0, 10, 50; НБУ
      * № 25). Kept on the offline path too: a queued sale replays with it, so

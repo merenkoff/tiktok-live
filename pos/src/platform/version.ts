@@ -188,6 +188,9 @@ export const POS_API_CLIENT_VERSION = 2;
 //     a word a module puts on catalog tiles by variant id («≈30 хв», «пауза»),
 //     drawn by the store's catalog through `ProductTile`'s new `note`, so the
 //     remote kitchen marks the cafe's dishes without touching `vertical-cafe`.
+//     And `useCartStore.remotePhone` / `setRemotePhone(agreement)` — kitchen
+//     dishes agreed with the kitchen by phone offline (§8), sent as the sale's
+//     `remote_phone` and, unlike `remoteOrderId`, queued with an offline receipt.
 export const PLATFORM_VERSION = 25;
 
 /**

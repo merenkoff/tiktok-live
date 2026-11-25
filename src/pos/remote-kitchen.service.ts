@@ -28,8 +28,10 @@
 // Expiry is read-time, as everywhere here: a named time that nobody used
 // becomes `expired` the next time anyone reads the order.
 
+import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { pool } from '../db.js';
+import { logger } from '../logger.js';
 import { consumeStockForLine, returnStockForLine } from './composites.service.js';
 import { createProductInTx } from './products.service.js';
 import { applyStockDelta } from './stock.service.js';
@@ -1449,6 +1451,200 @@ export async function claimRemoteLineTx(
     remoteItemId,
     JSON.stringify(modifiers),
   ]);
+}
+
+// ── a sale agreed by phone, offline (РК5, §8) ───────────────────────
+
+/** What the till sends with a receipt it rang offline after calling the kitchen. */
+export interface PhoneAgreement {
+  /** The whole promise the kitchen named on the phone, road included. */
+  minutes: number;
+  /** When the cashier wrote it down, by the till's clock; the promise counts from here. */
+  agreedAt: Date | null;
+}
+
+/**
+ * `remote_phone` of `POST /sales/complete`: `{ minutes, agreed_at? }`. Null for
+ * anything else — the caller decides whether that is a 400 (a live request) or
+ * simply no kitchen part (a replay, which must never fail for it).
+ */
+export function parsePhoneAgreement(raw: unknown): PhoneAgreement | null {
+  if (raw == null || typeof raw !== 'object') return null;
+  const value = raw as { minutes?: unknown; agreed_at?: unknown };
+  const minutes = Number(value.minutes);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES) return null;
+  let agreedAt: Date | null = null;
+  if (typeof value.agreed_at === 'string' && value.agreed_at.trim()) {
+    const at = new Date(value.agreed_at);
+    if (Number.isFinite(at.getTime())) agreedAt = at;
+  }
+  return { minutes, agreedAt };
+}
+
+/** A plain receipt line, as checkout hands it over before writing it. */
+export interface PhoneSaleLine {
+  variantId: number;
+  quantity: number;
+  modifiers: readonly LineModifierSnapshot[];
+  note: string | null | undefined;
+}
+
+/** A till clock is believed within a day back and never ahead of the server. */
+const PHONE_CLOCK_SLACK_MS = 24 * 60 * 60 * 1000;
+
+function phoneAgreedAt(agreement: PhoneAgreement, now: number): Date {
+  const at = agreement.agreedAt?.getTime();
+  if (at == null || !Number.isFinite(at)) return new Date(now);
+  return new Date(Math.min(now, Math.max(now - PHONE_CLOCK_SLACK_MS, at)));
+}
+
+/**
+ * Checkout's half of a sale the cashier agreed with the kitchen by phone
+ * while the till had no network (§8): the receipt's lines the kitchen cooks
+ * become an order of this cafe, already named a time «по телефону», and their
+ * lines come back for checkout to match exactly as a paid order's do — they
+ * skip the cafe's shelf. Null when nothing on the receipt is the kitchen's
+ * (or the cafe has no kitchen any more): then it is an ordinary sale.
+ *
+ * Nothing is asked of the kitchen and nothing is refused: the kitchen said yes
+ * on the phone, and the receipt is already in the guest's hand. A stop-listed
+ * or paused dish still goes; only a dish no longer linked stays the cafe's.
+ * Its own savepoint, so whatever goes wrong here costs the kitchen's record,
+ * never the receipt.
+ */
+export async function phoneOrderForSaleTx(
+  client: DbClient,
+  actor: Actor,
+  agreement: PhoneAgreement,
+  lines: readonly PhoneSaleLine[]
+): Promise<{ orderId: number; lines: RemoteSaleLine[] } | null> {
+  if (lines.length === 0) return null;
+  await client.query('SAVEPOINT remote_phone');
+  try {
+    const result = await phoneOrderInside(client, actor, agreement, lines);
+    await client.query('RELEASE SAVEPOINT remote_phone');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK TO SAVEPOINT remote_phone');
+    logger.warn('Phone-agreed remote-kitchen order not recorded', {
+      storeId: actor.storeId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+async function phoneOrderInside(
+  client: DbClient,
+  actor: Actor,
+  agreement: PhoneAgreement,
+  lines: readonly PhoneSaleLine[]
+): Promise<{ orderId: number; lines: RemoteSaleLine[] } | null> {
+  const link = await findLinkForCafe(actor.storeId, client);
+  if (!link) return null;
+  const rows = await client.query(
+    `SELECT li.cafe_variant_id, li.kitchen_variant_id, cp.name AS cafe_name, cv.label AS cafe_label
+       FROM pos_kitchen_link_items li
+       JOIN pos_variants cv ON cv.id = li.cafe_variant_id
+       JOIN pos_products cp ON cp.id = cv.product_id
+      WHERE li.link_id = $1 AND li.cafe_variant_id = ANY($2::bigint[])`,
+    [link.id, lines.map((line) => line.variantId)]
+  );
+  const byCafe = new Map<number, Record<string, unknown>>();
+  for (const row of rows.rows) byCafe.set(Number(row.cafe_variant_id), row);
+  const resolved: ResolvedLine[] = [];
+  for (const line of lines) {
+    const row = byCafe.get(line.variantId);
+    if (!row) continue;
+    resolved.push({
+      cafeVariantId: line.variantId,
+      quantity: line.quantity,
+      modifiers: [...line.modifiers],
+      note: (line.note ?? '').trim().slice(0, 120),
+      kitchenVariantId: Number(row.kitchen_variant_id),
+      productName: String(row.cafe_name),
+      variantLabel: String(row.cafe_label ?? ''),
+      prepMinutes: null,
+    });
+  }
+  if (resolved.length === 0) return null;
+
+  const quoted = roundUpToFive(agreement.minutes);
+  const agreedAt = phoneAgreedAt(agreement, Date.now());
+  const inserted = await client.query(
+    `INSERT INTO pos_remote_orders
+       (link_id, cafe_store_id, kitchen_store_id, client_uuid, requested_by,
+        status, quote_source, quoted_minutes, quoted_at, transit_minutes)
+     VALUES ($1, $2, $3, $4, $5, 'quoted', 'phone', $6, $7, $8)
+     RETURNING id`,
+    [link.id, actor.storeId, link.kitchen_store_id, randomUUID(), actor.staffId, quoted, agreedAt, link.transit_minutes]
+  );
+  const orderId = Number(inserted.rows[0].id);
+  await writeItems(client, orderId, resolved);
+  await logEvent(client, orderId, actor, 'phone_quoted', { minutes: quoted, offline: true });
+  const items = await client.query(
+    `SELECT id, cafe_variant_id, quantity, modifiers
+       FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
+    [orderId]
+  );
+  return {
+    orderId,
+    lines: items.rows.map((row) => ({
+      id: Number(row.id),
+      cafeVariantId: Number(row.cafe_variant_id),
+      quantity: Number(row.quantity),
+      modifierIds: modifierIdsOf(row.modifiers),
+    })),
+  };
+}
+
+/**
+ * The receipt is written: the phone order is paid by it and goes straight to
+ * `cooking` — the kitchen has been cooking since the call. Its number and the
+ * kitchen's stock as `markPaidTx`; no ticket is queued for the kitchen's
+ * printer (it wrote the order down on the phone, and a second paper would be
+ * a second dinner), and the promise counts from the call, not from the sync.
+ */
+export async function markPhonePaidTx(
+  client: DbClient,
+  actor: Actor,
+  orderId: number,
+  saleId: number,
+  agreement: PhoneAgreement
+): Promise<void> {
+  const order = (
+    await client.query(`SELECT kitchen_store_id, quoted_minutes FROM pos_remote_orders WHERE id = $1`, [orderId])
+  ).rows[0];
+  if (!order) return;
+  const quoted = Number(order.quoted_minutes);
+  const kitchenStoreId = Number(order.kitchen_store_id);
+  const agreedAt = phoneAgreedAt(agreement, Date.now());
+  const clock = await storeClock(client, kitchenStoreId);
+  const orderNo = await nextCounterValue(client, kitchenStoreId, dailyCounterKey('remote', clock.today));
+  await client.query(
+    `UPDATE pos_remote_orders
+        SET status = 'cooking', cafe_sale_id = $2, order_no = $3,
+            paid_at = NOW(), promised_at = $4::timestamptz + make_interval(mins => $5), updated_at = NOW()
+      WHERE id = $1`,
+    [orderId, saleId, orderNo, agreedAt, quoted]
+  );
+  const items = await client.query(
+    `SELECT id, kitchen_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
+    [orderId]
+  );
+  for (const item of items.rows) {
+    await consumeStockForLine(client, {
+      storeId: kitchenStoreId,
+      target: 'remote',
+      lineId: Number(item.id),
+      referenceType: 'remote_order',
+      referenceId: orderId,
+      variantId: Number(item.kitchen_variant_id),
+      quantity: Number(item.quantity),
+      staffId: null,
+    });
+  }
+  await logEvent(client, orderId, actor, 'paid', { sale_id: saleId, order_no: orderNo, minutes: quoted, phone: true });
 }
 
 /** The cafe's two taps at the end: the courier came, the guest got it. */

@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const posRequest = vi.fn();
-vi.mock('./hostPlatform', () => ({ posRequest: (...a: unknown[]) => posRequest(...a) }));
+vi.mock('./hostPlatform', () => ({ posRequest: (...a: unknown[]) => posRequest(...a), currentStoreId: () => null }));
 
 const { SIDES_FRESH_MS, forgetSides, readSides } = await import('./sides');
 

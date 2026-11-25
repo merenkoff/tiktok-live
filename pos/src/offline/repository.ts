@@ -18,6 +18,7 @@ import type {
   SplitSaleResult,
   ListSalesParams,
   OpenBottleStamp,
+  RemotePhoneAgreement,
 } from '../types';
 import {
   FiscalSaleUnknownError,
@@ -515,6 +516,12 @@ export async function completeSale(payload: {
    * the same key rather than rung a second time from the outbox.
    */
   remote_order_id?: number | null;
+  /**
+   * Kitchen dishes agreed with the kitchen by phone (РК5, §8): unlike
+   * `remote_order_id` this one IS queued — the kitchen already said yes, and
+   * the server files its order when the receipt replays.
+   */
+  remote_phone?: RemotePhoneAgreement | null;
 }, opts: { clientUuid?: string } = {}): Promise<SaleDetail> {
   // Reusing a uuid is how the "server did not answer" probe stays idempotent:
   // the server's own pre-check resolves it to the existing sale, a 409, or a
@@ -544,6 +551,7 @@ export async function completeSale(payload: {
     ...(payload.cash_rounding ? { cash_rounding: payload.cash_rounding } : {}),
     ...(payload.open_bottles?.length ? { open_bottles: payload.open_bottles } : {}),
     ...(payload.age_confirmed ? { age_confirmed: true } : {}),
+    ...(payload.remote_phone && !remote ? { remote_phone: payload.remote_phone } : {}),
   };
 
   if (navigator.onLine && api.hasLiveJwt()) {

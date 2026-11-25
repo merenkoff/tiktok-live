@@ -62,10 +62,21 @@ export function posRequest<T>(
   );
 }
 
-/** The two cart members the «З кухні» block writes (platform 25). */
+/** Kitchen dishes agreed by phone offline (the host's `RemotePhoneAgreement`, platform 25). */
+export interface RemotePhoneAgreement {
+  minutes: number;
+  agreed_at: string;
+}
+
+/** The cart members the «З кухні» block writes (platform 25). */
 export interface RemoteCartControls {
   setCheckoutHold: (reason: string | null) => void;
   setRemoteOrderId: (id: number | null) => void;
+  /**
+   * The phone agreement the offline sale carries (РК5, §8); absent on a host
+   * that cannot queue one — there kitchen dishes simply wait for the network.
+   */
+  setRemotePhone?: (agreement: RemotePhoneAgreement | null) => void;
 }
 
 /**
@@ -88,7 +99,20 @@ export function remoteCartControls(): RemoteCartControls | null {
         reason
       ),
     setRemoteOrderId: (id) => (store!.getState!().setRemoteOrderId as (i: number | null) => void)(id),
+    ...(hasFn(state.setRemotePhone)
+      ? {
+          setRemotePhone: (agreement: RemotePhoneAgreement | null) =>
+            (store!.getState!().setRemotePhone as (a: RemotePhoneAgreement | null) => void)(agreement),
+        }
+      : {}),
   };
+}
+
+/** The store this till is signed in to, or null before login. Keys what is kept for offline. */
+export function currentStoreId(): number | null {
+  const store = member('useAuthStore') as { getState?: () => { auth?: { store?: { id?: unknown } } | null } };
+  const id = typeof store?.getState === 'function' ? Number(store.getState().auth?.store?.id) : NaN;
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 /** One word on a catalog tile — the host's `TileMark` (platform 25), mirrored. */
