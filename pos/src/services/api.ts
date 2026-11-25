@@ -63,6 +63,7 @@ import type {
   ModifierInput,
   ListSalesParams,
   OpenBottleStamp,
+  RemotePhoneAgreement,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -552,6 +553,11 @@ class PosApi {
      * §8). Online only: the kitchen's stock and its clock live on the server.
      */
     remote_order_id?: number | null;
+    /**
+     * Kitchen dishes agreed with the kitchen by phone while offline (РК5, §8):
+     * the server files the kitchen's order, already cooking, with the sale.
+     */
+    remote_phone?: RemotePhoneAgreement | null;
     /** Cash-rounding step (0, 10, 50 kopecks) the till showed; the server computes the sum. */
     cash_rounding?: number;
     /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */

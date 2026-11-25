@@ -31,8 +31,10 @@
 //     «Точки» — its pause, its queue and the cafes that ask it. The link
 //     itself is still the super-admin's.
 // No `offline` hooks: the kitchen cooks only on the server's word, so every
-// write needs the network and an offline receipt with a kitchen order is
-// refused rather than queued.
+// write needs the network and an offline receipt with a kitchen ORDER is
+// refused rather than queued. Offline the kitchen's word comes by phone
+// instead (РК5, §8): the block writes the time down into the host's cart
+// (`remotePhone`), and that rides with the queued receipt to the server.
 
 // Type-only import — erased at build time, so this does NOT pull the bundled
 // registry (and every manifest alongside it) into the remote chunk.

@@ -11,6 +11,7 @@
 import * as defaultApi from './cafeApi';
 import {
   REVISABLE,
+  clampPhoneMinutes,
   holdReason,
   kitchenLines,
   phaseOf,
@@ -21,7 +22,7 @@ import {
   type KitchenCartLine,
   type Phase,
 } from './lib';
-import { remoteCartControls, type RemoteCartControls } from '../lib/hostPlatform';
+import { isOnline, queuesOfflineSales, remoteCartControls, type RemoteCartControls } from '../lib/hostPlatform';
 import { printGuestTicket, type TicketOrder, type TicketOutcome } from '../ticket/guestTicket';
 import { noticeTicketFailure } from '../ticket/notices';
 
@@ -47,6 +48,11 @@ export interface RemoteCheckoutState {
   signature: string;
   busy: boolean;
   error: string | null;
+  /**
+   * Agreed with the kitchen by phone while offline (РК5, §8), for the cart it
+   * was agreed for: another dish, and it is void.
+   */
+  phone: { minutes: number; agreedAt: string; signature: string } | null;
 }
 
 type Api = typeof defaultApi;
@@ -60,18 +66,30 @@ const initial = (): RemoteCheckoutState => ({
   signature: '',
   busy: false,
   error: null,
+  phone: null,
 });
 
 export function createRemoteCheckout(
   api: Api = defaultApi,
   cart: () => RemoteCartControls | null = remoteCartControls,
   now: () => number = Date.now,
-  printTicket: (order: TicketOrder) => Promise<TicketOutcome> = printGuestTicket
+  printTicket: (order: TicketOrder) => Promise<TicketOutcome> = printGuestTicket,
+  online: () => boolean = isOnline,
+  /** Whether this till queues an offline sale (the desktop): only there may a phone time ride with it. */
+  queues: () => boolean = queuesOfflineSales
 ) {
   let state = initial();
   const listeners = new Set<() => void>();
   let setupLoading = false;
   let setupFailedAt = 0;
+  /** When the setup in hand was taken from what the till kept: read again once there is a network. */
+  let memoryAt = 0;
+  /**
+   * Requests the kitchen must stop holding a time for, sent while the till had
+   * no network: told again once it has one, or the kitchen would keep an
+   * unanswered request beside the order it took by phone.
+   */
+  const toDecline = new Map<number, CafeOrder>();
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   /** The uuid of a request not yet answered, so a retried tap is the same request. */
   let pendingUuid: string | null = null;
@@ -83,7 +101,32 @@ export function createRemoteCheckout(
     for (const l of listeners) l();
   };
 
-  const phase = (): Phase => phaseOf(state.order, state.agreed, now());
+  const phoneHolds = () => state.phone != null && state.phone.signature === state.signature;
+
+  /** May a kitchen dish be sold here offline on the kitchen's word by phone (§8). */
+  const canPhone = () => cart()?.setRemotePhone != null && queues();
+
+  /**
+   * Tell the kitchen to stop holding a time; with no answer at all (offline),
+   * remember to tell it later. An answer that said no (the request expired, was
+   * paid meanwhile) is final and never asked again.
+   */
+  function declineQuietly(order: CafeOrder) {
+    void api.guestDeclined(order).then(
+      () => toDecline.delete(order.id),
+      (error: unknown) => {
+        const answered = Boolean(error && typeof error === 'object' && (error as { response?: unknown }).response);
+        if (answered) toDecline.delete(order.id);
+        else toDecline.set(order.id, order);
+      }
+    );
+  }
+
+  const phase = (): Phase => {
+    if (phoneHolds()) return 'phone_agreed';
+    if (!online()) return 'offline';
+    return phaseOf(state.order, state.agreed, now());
+  };
 
   /** The host cart follows the store: the hold, and the order the sale pays. */
   function applyToCart() {
@@ -91,6 +134,25 @@ export function createRemoteCheckout(
     if (!controls) return;
     const hasLines = state.setup != null && state.lines.length > 0;
     const p = phase();
+    // Agreed by phone (§8): nothing holds the receipt, and it carries the time.
+    if (hasLines && p === 'phone_agreed' && controls.setRemotePhone && canPhone()) {
+      controls.setCheckoutHold(null);
+      controls.setRemoteOrderId(null);
+      controls.setRemotePhone({ minutes: state.phone!.minutes, agreed_at: state.phone!.agreedAt });
+      return;
+    }
+    controls.setRemotePhone?.(null);
+    if (hasLines && (p === 'offline' || (p === 'phone_agreed' && !canPhone()))) {
+      controls.setRemoteOrderId(null);
+      controls.setCheckoutHold(
+        !state.setup!.linkActive
+          ? 'Страви з кухні: звʼязок із кухнею призупинено.'
+          : canPhone()
+            ? holdReason('offline', true)
+            : 'Страви з кухні продаються лише онлайн — перевірте звʼязок.'
+      );
+      return;
+    }
     const fresh = state.order != null && state.askedSignature === state.signature;
     const payable = hasLines && fresh && p === 'agreed';
     controls.setCheckoutHold(hasLines ? (payable ? null : holdReason(fresh ? p : 'idle', true)) : null);
@@ -128,6 +190,7 @@ export function createRemoteCheckout(
     try {
       const setup = await api.loadSetup();
       setupFailedAt = 0;
+      if (setup?.fromMemory) memoryAt = now();
       set({ setup: setup && setup.variantIds.size > 0 ? setup : null });
     } catch {
       setupFailedAt = now();
@@ -142,6 +205,9 @@ export function createRemoteCheckout(
       void loadSetup();
       return;
     }
+    // Taken from what the till kept, and the network seems to be there: look
+    // again now and then, in case the change of state was never announced.
+    if (state.setup?.fromMemory && online() && now() - memoryAt >= SETUP_RETRY_MS) void reloadSetup();
     if (state.setup === null) return;
     const lines = kitchenLines(cartLines, state.setup.variantIds);
     const signature = signatureOf(lines);
@@ -151,21 +217,25 @@ export function createRemoteCheckout(
       const order = state.order;
       // Kitchen dishes gone from the cart. After a paid receipt the cart is
       // simply empty; otherwise the kitchen should stop holding the time.
-      if (order && !state.agreed && REVISABLE.has(order.status)) {
-        void api.guestDeclined(order).catch(() => undefined);
-      }
+      if (order && !state.agreed && REVISABLE.has(order.status)) declineQuietly(order);
       // The guest agreed and the cart emptied: the sale most likely went
       // through. The guest's ticket — once the order is paid and numbered;
       // and if it never was, the kitchen stops holding the time.
       if (order && state.agreed) void ticketAfterSale(order);
       pendingUuid = null;
-      set({ lines, signature, order: null, askedSignature: null, agreed: false, error: null });
+      set({ lines, signature, order: null, askedSignature: null, agreed: false, error: null, phone: null });
       return;
     }
-    set({ lines, signature, agreed: state.askedSignature === signature ? state.agreed : false });
+    set({
+      lines,
+      signature,
+      agreed: state.askedSignature === signature ? state.agreed : false,
+      // A time the kitchen named on the phone was for those dishes, not these.
+      phone: state.phone?.signature === signature ? state.phone : null,
+    });
     // An open request follows the cart: the kitchen sees the new dishes at once.
     const order = state.order;
-    if (order && state.askedSignature !== signature && (order.status === 'requested' || order.status === 'quoted')) {
+    if (online() && order && state.askedSignature !== signature && (order.status === 'requested' || order.status === 'quoted')) {
       void revise();
     }
   }
@@ -229,9 +299,7 @@ export function createRemoteCheckout(
       if (outcome.kind === 'failed') noticeTicketFailure({ orderId: order.id, error: outcome.error });
       return;
     }
-    if (lastStatus === 'requested' || lastStatus === 'quoted') {
-      void api.guestDeclined(order).catch(() => undefined);
-    }
+    if (lastStatus === 'requested' || lastStatus === 'quoted') declineQuietly(order);
   }
 
   async function revise() {
@@ -269,6 +337,71 @@ export function createRemoteCheckout(
     set({ agreed: false });
   }
 
+  /**
+   * «Узгоджено телефоном» (РК5, §8): offline, the cashier called the kitchen,
+   * it named a time and the guest agreed. The receipt may go; it carries the
+   * time, and the server files the kitchen's order when the receipt arrives.
+   */
+  function phoneAgree(minutes: number) {
+    if (!state.setup || !state.setup.linkActive || state.lines.length === 0 || !canPhone()) return;
+    // A request asked before the network went is now answered by the phone:
+    // the kitchen must not keep holding a time for it beside the phone order.
+    const open = state.order;
+    if (open && REVISABLE.has(open.status)) declineQuietly(open);
+    pendingUuid = null;
+    set({
+      phone: { minutes: clampPhoneMinutes(minutes), agreedAt: new Date(now()).toISOString(), signature: state.signature },
+      order: null,
+      askedSignature: null,
+      agreed: false,
+      error: null,
+    });
+  }
+
+  /** «Змінити» after a phone agreement: back to the call. */
+  function phoneUndo() {
+    set({ phone: null });
+  }
+
+  /**
+   * The till went on- or offline: the hold and the screen follow, and a setup
+   * that came from what the till kept is read again once there is a network.
+   */
+  function connectivityChanged() {
+    if (online()) {
+      if (state.setup?.fromMemory) {
+        setupFailedAt = 0;
+        void reloadSetup();
+      }
+      for (const order of [...toDecline.values()]) declineQuietly(order);
+    } else if (state.setup === undefined) {
+      // The first read failed while the till still thought it was online — a
+      // router with no internet: what the till kept stands in now, at once,
+      // not after the minute a failed read waits.
+      setupFailedAt = 0;
+      void loadSetup();
+    }
+    set({});
+  }
+
+  async function reloadSetup() {
+    if (setupLoading) return;
+    setupLoading = true;
+    try {
+      const setup = await api.loadSetup();
+      if (setup?.fromMemory) {
+        memoryAt = now();
+        return;
+      }
+      // The block's effect reads the cart again against the fresh list of dishes.
+      set({ setup: setup && setup.variantIds.size > 0 ? setup : null });
+    } catch {
+      // Still nothing: what the till kept stands.
+    } finally {
+      setupLoading = false;
+    }
+  }
+
   /** «Гість відмовився»: the kitchen stops holding the time; the dishes stay for the cashier to remove. */
   async function decline() {
     const order = state.order;
@@ -301,6 +434,11 @@ export function createRemoteCheckout(
     phoneQuote,
     agree,
     unagree,
+    phoneAgree,
+    phoneUndo,
+    /** Whether the block offers «Узгоджено телефоном» here (the desktop, platform 25). */
+    canPhone,
+    connectivityChanged,
     decline,
     refresh,
     /** Tests only. */
@@ -309,6 +447,8 @@ export function createRemoteCheckout(
       pollTimer = null;
       pendingUuid = null;
       setupFailedAt = 0;
+      memoryAt = 0;
+      toDecline.clear();
       state = initial();
     },
   };

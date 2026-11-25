@@ -4,7 +4,7 @@
 
 // What other modules say on this catalog's tiles (platform 25,
 // `useCartStore.tileMarks`): the remote kitchen's «≈30 хв» on a dish it cooks
-// for this cafe, «пауза» while it takes nothing, «потрібна мережа» offline.
+// for this cafe, «пауза» while it takes nothing, «дзвінок на кухню» offline.
 // The catalog draws the word and knows nothing of the kitchen — a module that
 // reaches into another module's screen is what this keeps out.
 

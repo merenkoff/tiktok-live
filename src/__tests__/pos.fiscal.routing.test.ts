@@ -213,6 +213,36 @@ describe.skipIf(!hasDb)('POS fiscal: products go through their own register (Д�
     expect(registered(bar)).toHaveLength(0);
   });
 
+  it('meets a two-register receipt with a phone time from the kitchen as any other: refused live, filed as a replay would be (РК5)', async () => {
+    await enableBar();
+    const items = [
+      { variant_id: borscht, quantity: 1 },
+      { variant_id: vodka, quantity: 1 },
+    ];
+    const send = (extra: Record<string, unknown>) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/pos/sales/complete',
+        headers: { ...auth(store.sellerToken), 'x-pos-device-id': 'till-routing' },
+        payload: {
+          items,
+          payments: [{ method: 'cash', amount_cents: 20_000 }],
+          client_uuid: randomUUID(),
+          remote_phone: { minutes: 30, agreed_at: new Date().toISOString() },
+          ...extra,
+        },
+      });
+    // Live: one receipt for the kitchen's dishes, said in the cashier's words.
+    const live = await send({});
+    expect(live.statusCode).toBe(409);
+    expect(live.json().error).toBe('remote_order_single_receipt');
+    // A replay is already in the guest's hand: the phone time is not what
+    // refuses it — it meets exactly the refusal every two-register replay does.
+    const replay = await send({ offline_replay: true });
+    expect(replay.statusCode).toBe(409);
+    expect(replay.json().error).toBe('split_needs_update');
+  });
+
   // ── A table's bill ────────────────────────────────────────────────────────
 
   it('pays a food-and-alcohol bill as two receipts, change on the last', async () => {

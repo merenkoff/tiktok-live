@@ -2057,3 +2057,15 @@ export interface GtinLearnResult {
   upserted: number;
   skipped: Array<{ gtin: string; reason: string }>;
 }
+
+/**
+ * Kitchen dishes the cashier agreed with the remote kitchen by phone while the
+ * till had no network (РК5, TechDocs/POS_REMOTE_KITCHEN.md §8): the sale's
+ * `remote_phone`, and the cart's `remotePhone` (platform 25).
+ */
+export interface RemotePhoneAgreement {
+  /** The whole promise the kitchen named, road included. */
+  minutes: number;
+  /** When it was agreed, ISO, by the till's clock. */
+  agreed_at: string;
+}

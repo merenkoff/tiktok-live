@@ -119,6 +119,8 @@ export interface ReportRow {
   /** By the promise after every «+N хв». */
   on_time_moved?: number;
   delayed: number;
+  /** Of `orders`, sold by phone offline and filed after their promise: nobody timed them. */
+  untimed?: number;
   /** What it took off the kitchen's shelf at today's purchase prices; unpriced lines left out. */
   cost_cents?: number;
   unpriced_lines?: number;

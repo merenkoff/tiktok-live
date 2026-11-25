@@ -25,10 +25,17 @@ function percent(part: number, whole: number): number {
   return Math.round((part / whole) * 100);
 }
 
-/** «9 з 10 вчасно (90 %)» — by the time the guest was told; nothing when nothing reached the cafe. */
-function keptLine(row: Pick<ReportRow, 'orders' | 'on_time'>): string {
-  if (row.orders === 0) return '';
-  return `${row.on_time} з ${row.orders} вчасно (${percent(row.on_time, row.orders)} %)`;
+/**
+ * «9 з 10 вчасно (90 %)» — by the time the guest was told; nothing when nothing
+ * reached the cafe. Orders nobody timed (sold by phone offline and filed after
+ * their promise) are neither: «· 2 без відмітки часу (телефоном без мережі)».
+ */
+function keptLine(row: Pick<ReportRow, 'orders' | 'on_time' | 'untimed'>): string {
+  const untimed = Math.min(Math.max(row.untimed ?? 0, 0), row.orders);
+  const timed = row.orders - untimed;
+  const kept = timed > 0 ? `${row.on_time} з ${timed} вчасно (${percent(row.on_time, timed)} %)` : '';
+  const phone = untimed > 0 ? `${untimed} без відмітки часу (телефоном без мережі)` : '';
+  return [kept, phone].filter(Boolean).join(' · ');
 }
 
 /** «переносили 2, з переносом вчасно 10» — what «+N хв» bought. */
