@@ -41,6 +41,7 @@
 import type { RemoteModuleDescriptor } from '@host/modules/registry';
 import { lazyWithRetry } from '@host/modules/lazyWithRetry';
 import { isKitchenStore } from './lib/hostPlatform';
+import { GUEST_TICKET_STATION } from './ticket/guestTicket';
 
 const KitchenCheckoutAction = lazyWithRetry(() => import('./checkout/KitchenCheckoutAction'));
 const RemoteKitchenBanner = lazyWithRetry(() => import('./till/TillBanner'));
@@ -55,6 +56,21 @@ export const remoteKitchenModule: RemoteModuleDescriptor = {
   shells: ['web', 'cashier', 'tablet'],
   alwaysEnabled: true,
   checkout: { Action: KitchenCheckoutAction },
+  // The guest's ticket «П-12 · буде о 18:40» (РК5): printed by the till that
+  // took the money, on the printer this station names on that desktop. The
+  // slot is data, the same in every store with the module, so a kitchen's
+  // «Обладнання» lists it too — the hint tells its owner to leave it empty.
+  hardware: {
+    stations: [
+      {
+        id: GUEST_TICKET_STATION,
+        title: 'Талон гостю (віддалена кухня)',
+        hint:
+          'Лише для каси кафе: номер замовлення кухні й час, коли привезуть, для гостя. ' +
+          'На касі кухні залиште порожнім. Без принтера талон не друкується.',
+      },
+    ],
+  },
   till: { Banner: RemoteKitchenBanner },
   // The owner's page, and the kitchen's «Прийом запитів» on the till — the
   // pause and the queue where the cook works, shown only in a kitchen store.

@@ -15,6 +15,9 @@ export interface TrackedItem {
   product_name: string;
   variant_label: string;
   quantity: number;
+  /** The receipt's answers once paid — what the guest's ticket names besides the size. */
+  modifiers?: unknown[];
+  note?: string;
 }
 
 /** The fields of `GET /remote-kitchen/orders?side=cafe` the tracker reads. */
