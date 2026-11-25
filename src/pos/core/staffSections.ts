@@ -107,6 +107,7 @@ export const SECTION_ROUTES: Readonly<Record<string, readonly string[]>> = {
     'POST /remote-kitchen/orders/:id/paid',
     'POST /remote-kitchen/orders/:id/arrived',
     'POST /remote-kitchen/orders/:id/handed',
+    'POST /remote-kitchen/orders/:id/cancel-seen',
     'POST /remote-kitchen/orders/:id/quote',
     'POST /remote-kitchen/orders/:id/decline',
     'POST /remote-kitchen/orders/:id/ready',

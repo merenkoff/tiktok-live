@@ -125,9 +125,9 @@ function watchRemoteKitchen(page: Page): string[] {
   return seen;
 }
 
-async function signIn(page: Page, moduleRemotes: Record<string, unknown>) {
+async function signIn(page: Page, moduleRemotes: Record<string, unknown>, store: Record<string, unknown> = {}) {
   await serveBuiltRemotes(page);
-  await mockPosApi(page, ALL_MODULES, { moduleRemotes, store: { vertical: CAFE_VERTICAL } });
+  await mockPosApi(page, ALL_MODULES, { moduleRemotes, store: { vertical: CAFE_VERTICAL, ...store } });
   // Registered after `mockPosApi`, so they beat its catch-all.
   await page.route('**/api/pos/catalog**', async (route) => route.fulfill({ json: MENU }));
   await page.route('**/api/pos/kitchen/orders**', async (route) =>
@@ -164,6 +164,10 @@ test('the cafe asks the kitchen, the guest agrees, and the receipt pays the kitc
     asked.push(route.request().postDataJSON());
     await route.fulfill({ status: 201, json: quoted() });
   });
+  // The cafe's tracker over the till (РК5): nothing paid is on its way yet.
+  await page.route('**/api/pos/remote-kitchen/orders?side=cafe', async (route) =>
+    route.fulfill({ json: { orders: [], now: new Date().toISOString() } })
+  );
   await page.route('**/api/pos/remote-kitchen/orders/5', async (route) => route.fulfill({ json: quoted() }));
   const completed: Array<Record<string, unknown>> = [];
   await page.route('**/api/pos/sales/complete', async (route) => {
@@ -267,6 +271,110 @@ test('the kitchen’s requests stand over the board, and one tap answers', async
   await page.getByTestId('remote-answer-7').click();
   await expect.poll(() => answers).toEqual([{ minutes: 20, revision: 1 }]);
   await expect(page.getByTestId('remote-requests')).toHaveCount(0);
+});
+
+test('the cafe’s till follows a paid kitchen order, and keeps the kitchen’s cancel until the guest is paid back', async ({
+  page,
+}) => {
+  await signIn(page, { 'vertical-cafe': CAFE_REMOTE, 'remote-kitchen': KITCHEN_REMOTE });
+  await page.route('**/api/pos/remote-kitchen/setup', async (route) => route.fulfill({ json: SETUP }));
+  const tracked = (over: Record<string, unknown>) => ({
+    id: 5,
+    status: 'dispatched',
+    order_no: 12,
+    guest_label: 'Стіл 3',
+    kitchen_title: 'Кухня Пульчинелли',
+    kitchen_phone: '+380671112233',
+    promised_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+    paid_at: new Date().toISOString(),
+    arrived_at: null,
+    decline_reason: null,
+    cancelled_by: null,
+    cancel_seen_at: null,
+    delayed_minutes: 0,
+    items: [{ id: 1, product_name: 'Маргарита', variant_label: '32 см', quantity: 1 }],
+    ...over,
+  });
+  let orders = [tracked({}), tracked({ id: 6, order_no: 13, status: 'cancelled', cancelled_by: 'kitchen', decline_reason: 'Згоріла піч' })];
+  const taps: string[] = [];
+  await page.route('**/api/pos/remote-kitchen/orders?side=cafe', async (route) =>
+    route.fulfill({ json: { orders, now: new Date().toISOString() } })
+  );
+  await page.route('**/api/pos/remote-kitchen/orders/5/arrived', async (route) => {
+    taps.push('arrived 5');
+    orders = orders.map((o) => (o.id === 5 ? { ...o, status: 'arrived', arrived_at: new Date().toISOString() } : o));
+    await route.fulfill({ json: orders.find((o) => o.id === 5) });
+  });
+  await page.route('**/api/pos/remote-kitchen/orders/6/cancel-seen', async (route) => {
+    taps.push('cancel-seen 6');
+    orders = orders.map((o) => (o.id === 6 ? { ...o, cancel_seen_at: new Date().toISOString() } : o));
+    await route.fulfill({ json: orders.find((o) => o.id === 6) });
+  });
+
+  await page.goto('/register');
+  await expect(page.getByTestId('cafe-catalog')).toBeVisible();
+  const tracker = page.getByTestId('remote-tracker');
+  await expect(tracker).toContainText('Замовлення з кухні · 2');
+  await expect(page.getByTestId('remote-tracker-cancel-6')).toContainText('скасовано кухнею — поверніть гостю');
+  await expect(page.getByTestId('remote-tracker-5')).toContainText('П-12 · Стіл 3');
+
+  await page.getByTestId('remote-tracker-step-5').click();
+  await expect(page.getByTestId('remote-tracker-step-5')).toHaveText('Видали гостю');
+  await page.getByTestId('remote-tracker-seen-6').click();
+  await expect(page.getByTestId('remote-tracker-cancel-6')).toHaveCount(0);
+  expect(taps).toEqual(['arrived 5', 'cancel-seen 6']);
+});
+
+test('the kitchen adds ten minutes or cancels a paid order on «Прийом запитів», with a reason', async ({ page }) => {
+  await signIn(page, { 'vertical-cafe': CAFE_REMOTE, 'remote-kitchen': KITCHEN_REMOTE }, { remote_kitchen: true });
+  await page.route('**/api/pos/remote-kitchen/setup', async (route) =>
+    route.fulfill({ json: { as_cafe: null, as_kitchen: { status: { accepting: true }, cafes: [] }, cafe_orders: false } })
+  );
+  await page.route('**/api/pos/remote-kitchen/kitchen/cafes', async (route) =>
+    route.fulfill({ json: { status: { accepting: true, paused_until: null, load_minutes: 0 }, cafes: [] } })
+  );
+  let orders = [
+    {
+      id: 5,
+      status: 'cooking',
+      order_no: 12,
+      cafe_name: 'Pulcinella Park',
+      guest_label: 'Стіл 3',
+      promised_at: new Date(Date.now() + 20 * 60_000).toISOString(),
+      delayed_minutes: 0,
+      items: [{ id: 1, product_name: 'Маргарита', variant_label: '32 см', quantity: 1 }],
+    },
+  ];
+  await page.route('**/api/pos/remote-kitchen/orders?side=kitchen', async (route) =>
+    route.fulfill({ json: { orders, now: new Date().toISOString() } })
+  );
+  const sent: Array<{ path: string; body: unknown }> = [];
+  await page.route('**/api/pos/remote-kitchen/orders/5/delay', async (route) => {
+    sent.push({ path: 'delay', body: route.request().postDataJSON() });
+    orders = orders.map((o) => ({ ...o, delayed_minutes: o.delayed_minutes + 10 }));
+    await route.fulfill({ json: orders[0] });
+  });
+  await page.route('**/api/pos/remote-kitchen/orders/5/cancel', async (route) => {
+    sent.push({ path: 'cancel', body: route.request().postDataJSON() });
+    orders = orders.map((o) => ({ ...o, status: 'cancelled' }));
+    await route.fulfill({ json: orders[0] });
+  });
+
+  await page.goto('/remote-kitchen');
+  const card = page.getByTestId('rk-kitchen-order-5');
+  await expect(card).toContainText('П-12 · Pulcinella Park · Стіл 3');
+  await card.getByRole('button', { name: '+10 хв' }).click();
+  await expect(page.getByTestId('rk-kitchen-order-time-5')).toContainText('додали 10 хв');
+
+  await card.getByRole('button', { name: 'Скасувати…' }).click();
+  await expect(page.getByTestId('rk-kitchen-cancel-confirm-5')).toBeDisabled();
+  await card.getByRole('button', { name: 'Немає продуктів' }).click();
+  await page.getByTestId('rk-kitchen-cancel-confirm-5').click();
+  await expect(page.getByTestId('rk-kitchen-order-5')).toHaveCount(0);
+  expect(sent).toEqual([
+    { path: 'delay', body: { minutes: 10 } },
+    { path: 'cancel', body: { reason: 'Немає продуктів' } },
+  ]);
 });
 
 test('a café without the module: no block, no strip, and nothing asked of the remote kitchen', async ({ page }) => {
