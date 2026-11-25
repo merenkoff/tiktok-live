@@ -26,7 +26,7 @@ function percent(part: number, whole: number): number {
 }
 
 /** «9 з 10 вчасно (90 %)» — by the time the guest was told; nothing when nothing reached the cafe. */
-export function keptLine(row: Pick<ReportRow, 'orders' | 'on_time'>): string {
+function keptLine(row: Pick<ReportRow, 'orders' | 'on_time'>): string {
   if (row.orders === 0) return '';
   return `${row.on_time} з ${row.orders} вчасно (${percent(row.on_time, row.orders)} %)`;
 }

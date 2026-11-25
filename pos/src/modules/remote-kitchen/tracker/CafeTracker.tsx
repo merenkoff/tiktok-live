@@ -12,7 +12,7 @@
 // It draws NOTHING while no order is paid and on its way, and in a store that
 // is not a cafe of some kitchen it does not even poll (`useCafeOrders`).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from '@pos/platform/ui';
 import type { TrackedOrder } from './trackerApi';
 import {
@@ -27,6 +27,8 @@ import {
   waitingTooLong,
 } from './lib';
 import { useCafeOrders } from './useCafeOrders';
+import { hasTicketPrinter, printGuestTicket, type TicketOutcome } from '../ticket/guestTicket';
+import { onTicketFailure } from '../ticket/notices';
 
 /** A tick every half minute while something shows: «запізнюється» moves on by itself. */
 function useHalfMinuteTick(active: boolean): void {
@@ -38,11 +40,106 @@ function useHalfMinuteTick(active: boolean): void {
   }, [active]);
 }
 
-export function CafeTracker({ hook = useCafeOrders }: { hook?: () => ReturnType<typeof useCafeOrders> } = {}) {
+/**
+ * How often the tracker looks again whether this device has a printer for the
+ * ticket. It hangs over every till screen, «Обладнання» included, and is never
+ * mounted afresh: a printer picked there must bring «Талон» without a restart.
+ */
+export const TICKET_PRINTER_RECHECK_MS = 30_000;
+
+/** A failed ticket, kept with the order it was for. */
+interface TicketError {
+  orderId: number;
+  text: string;
+}
+
+/**
+ * «Талон» on a row: the guest's ticket again, when this device has a printer
+ * for it (the till that sold prints it once by itself). Null without one.
+ * The printer is looked for again while orders show, and once more at the
+ * tap; a tap that finds none says so and takes the button away.
+ */
+function useTicketReprint(
+  check: () => Promise<boolean>,
+  print: (order: TrackedOrder) => Promise<TicketOutcome>,
+  active: boolean
+): {
+  reprint: ((order: TrackedOrder) => Promise<string | null>) | null;
+  printing: ReadonlySet<number>;
+} {
+  const [can, setCan] = useState(false);
+  const [printing, setPrinting] = useState<ReadonlySet<number>>(() => new Set());
+  const inFlight = useRef(new Set<number>());
+  useEffect(() => {
+    let alive = true;
+    const look = () =>
+      void check().then(
+        (yes) => {
+          if (alive) setCan(yes);
+        },
+        () => undefined
+      );
+    look();
+    const id = active ? setInterval(look, TICKET_PRINTER_RECHECK_MS) : null;
+    return () => {
+      alive = false;
+      if (id) clearInterval(id);
+    };
+  }, [check, active]);
+  if (!can) return { reprint: null, printing };
+  return {
+    printing,
+    reprint: async (order) => {
+      // One ticket per tap: a second tap while the printer starts prints nothing.
+      if (inFlight.current.has(order.id)) return null;
+      inFlight.current.add(order.id);
+      setPrinting(new Set(inFlight.current));
+      try {
+        let outcome: TicketOutcome;
+        try {
+          outcome = await print(order);
+        } catch (e) {
+          outcome = { kind: 'failed', error: e instanceof Error ? e.message : String(e) };
+        }
+        if (outcome.kind === 'none') {
+          setCan(false);
+          return 'Немає принтера для талона — оберіть його на «Обладнанні».';
+        }
+        return outcome.kind === 'failed' ? `Талон не надруковано: ${outcome.error}` : null;
+      } finally {
+        inFlight.current.delete(order.id);
+        setPrinting(new Set(inFlight.current));
+      }
+    },
+  };
+}
+
+export function CafeTracker({
+  hook = useCafeOrders,
+  ticketPrinter = hasTicketPrinter,
+  printTicket = printGuestTicket,
+}: {
+  hook?: () => ReturnType<typeof useCafeOrders>;
+  ticketPrinter?: () => Promise<boolean>;
+  printTicket?: (order: TrackedOrder) => Promise<TicketOutcome>;
+} = {}) {
   const { orders, offset, banner, busy, act, clearBanner } = hook();
+  const { reprint, printing } = useTicketReprint(ticketPrinter, printTicket, orders.length > 0);
+  const [ticketError, setTicketError] = useState<TicketError | null>(null);
+  // The ticket the till printed by itself after the sale did not come out.
+  useEffect(
+    () =>
+      onTicketFailure(({ orderId, error }) => setTicketError({ orderId, text: `Талон не надруковано: ${error}` })),
+    []
+  );
   useHalfMinuteTick(orders.length > 0);
   if (orders.length === 0 && !banner) return null;
   const now = Date.now() + offset;
+  // An error is about one order, and only while that order is on the list:
+  // it must not come back over the next order an hour later.
+  const errorOrder = ticketError ? orders.find((o) => o.id === ticketError.orderId) : undefined;
+  const ticketLine =
+    ticketError && errorOrder ? `${title(errorOrder) || errorOrder.kitchen_title} · ${ticketError.text}` : null;
 
   return (
     <section
@@ -51,6 +148,14 @@ export function CafeTracker({ hook = useCafeOrders }: { hook?: () => ReturnType<
       aria-label="Замовлення з кухні"
     >
       <h2 className="text-[15px] font-bold text-sq-heading">Замовлення з кухні · {orders.length}</h2>
+      {ticketLine && (
+        <div className="flex items-center justify-between gap-2 text-sm text-red-700" data-testid="remote-tracker-ticket-error">
+          <span>{ticketLine}</span>
+          <button type="button" className="min-h-11 px-2" onClick={() => setTicketError(null)} aria-label="Закрити">
+            <X size={18} />
+          </button>
+        </div>
+      )}
       {banner && (
         <div className="flex items-center justify-between gap-2 text-sm text-red-700" data-testid="remote-tracker-banner">
           <span>{banner}</span>
@@ -75,6 +180,18 @@ export function CafeTracker({ hook = useCafeOrders }: { hook?: () => ReturnType<
               now={now}
               busy={busy.has(order.id)}
               onStep={(action) => void act(order, action)}
+              onTicket={
+                reprint && order.order_no != null
+                  ? () =>
+                      void reprint(order).then((error) =>
+                        // A ticket that came out answers its own order's error, not another's.
+                        setTicketError((prev) =>
+                          error ? { orderId: order.id, text: error } : prev?.orderId === order.id ? null : prev
+                        )
+                      )
+                  : undefined
+              }
+              ticketBusy={printing.has(order.id)}
             />
           )
         )}
@@ -126,11 +243,16 @@ function OrderRow({
   now,
   busy,
   onStep,
+  onTicket,
+  ticketBusy = false,
 }: {
   order: TrackedOrder;
   now: number;
   busy: boolean;
   onStep: (action: 'arrived' | 'handed') => void;
+  onTicket?: () => void;
+  /** The ticket is printing: a second tap would print a second one. */
+  ticketBusy?: boolean;
 }) {
   const stage = stageOf(order.status);
   const late = minutesLate(order, now);
@@ -183,6 +305,17 @@ function OrderRow({
           </p>
         )}
       </div>
+      {onTicket && (
+        <button
+          type="button"
+          className="min-h-11 px-3 rounded-xl bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text disabled:opacity-60"
+          onClick={onTicket}
+          disabled={ticketBusy}
+          data-testid={`remote-tracker-ticket-${order.id}`}
+        >
+          Талон
+        </button>
+      )}
       {step && asking && step.confirm ? (
         <div className="flex gap-2">
           <button
