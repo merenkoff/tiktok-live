@@ -127,6 +127,12 @@ BEGIN
       EXECUTE 'DELETE FROM pos_remote_orders
                WHERE cafe_store_id = $1 OR kitchen_store_id = $1' USING v_store;
     END IF;
+    -- Table bills (052) hold variants with RESTRICT and arrived after this
+    -- file; the café once had a floor plan, so it may have some. Their lines
+    -- and rounds go with them (CASCADE). `pos.demo-rebuilds.test.ts`.
+    IF to_regclass('pos_bills') IS NOT NULL THEN
+      EXECUTE 'DELETE FROM pos_bills WHERE store_id = $1' USING v_store;
+    END IF;
     -- Otherwise a replayed `client_uuid` answers with a sale that is gone.
     DELETE FROM pos_idempotency_keys WHERE store_id = v_store;
     -- Reservations would cascade from the carts; explicit, so the order is provable.

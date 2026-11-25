@@ -106,6 +106,11 @@ BEGIN
       EXECUTE 'DELETE FROM pos_remote_orders
                WHERE cafe_store_id = $1 OR kitchen_store_id = $1' USING v_store;
     END IF;
+    -- Table bills (052) and modifiers (046) hold variants with RESTRICT; a
+    -- visitor may have added either to the boutique. Lines and answers go
+    -- with them (CASCADE). `pos.demo-rebuilds.test.ts` checks this list.
+    DELETE FROM pos_bills WHERE store_id = v_store;
+    DELETE FROM pos_modifier_groups WHERE store_id = v_store;
     -- Otherwise a replayed `client_uuid` answers with a sale that is gone.
     DELETE FROM pos_idempotency_keys WHERE store_id = v_store;
     DELETE FROM pos_stock_reservations WHERE store_id = v_store;

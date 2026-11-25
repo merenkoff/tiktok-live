@@ -139,6 +139,23 @@ BEGIN
       EXECUTE 'DELETE FROM pos_remote_orders
                WHERE cafe_store_id = $1 OR kitchen_store_id = $1' USING v_store;
     END IF;
+    -- Parked carts (042), pre-orders (043), modifiers (046) and table bills
+    -- (052) hold variants with RESTRICT and arrived after this file: a
+    -- visitor's parked cart would otherwise stop the rebuild — and the API —
+    -- on the boot after the next version bump. Their lines, reservations and
+    -- rounds go with them (CASCADE). `pos.demo-rebuilds.test.ts` checks it.
+    IF to_regclass('pos_bills') IS NOT NULL THEN
+      EXECUTE 'DELETE FROM pos_bills WHERE store_id = $1' USING v_store;
+    END IF;
+    IF to_regclass('pos_parked_carts') IS NOT NULL THEN
+      EXECUTE 'DELETE FROM pos_parked_carts WHERE store_id = $1' USING v_store;
+    END IF;
+    IF to_regclass('pos_preorders') IS NOT NULL THEN
+      EXECUTE 'DELETE FROM pos_preorders WHERE store_id = $1' USING v_store;
+    END IF;
+    IF to_regclass('pos_modifier_groups') IS NOT NULL THEN
+      EXECUTE 'DELETE FROM pos_modifier_groups WHERE store_id = $1' USING v_store;
+    END IF;
     -- Otherwise a replayed `client_uuid` answers with a sale that is gone.
     DELETE FROM pos_idempotency_keys WHERE store_id = v_store;
     DELETE FROM pos_stock_document_lines WHERE store_id = v_store;
