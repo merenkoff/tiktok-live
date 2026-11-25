@@ -149,6 +149,16 @@ interface CartStore {
   setRemoteOrderId: (id: number | null) => void;
   /** `reason` null lifts this module's hold and leaves every other one. */
   setCheckoutHold: (moduleId: string, reason: string | null) => void;
+  /**
+   * A word a module puts on a catalog tile, per module and then per variant
+   * id (platform 25): the remote kitchen's «≈30 хв» on a dish it cooks, or
+   * «пауза» while the kitchen takes nothing. The store's catalog reads it and
+   * draws it; the module never touches the catalog, which belongs to another
+   * module. `blocked` greys the tile — the dish cannot be sold right now.
+   */
+  tileMarks: Readonly<Record<string, Readonly<Record<number, TileMark>>>>;
+  /** `marks` null (or empty) takes this module's marks off every tile. */
+  setTileMarks: (moduleId: string, marks: Readonly<Record<number, TileMark>> | null) => void;
   cartDiscount: CartDiscount | null;
   customer: PosCustomer | null;
   setBanner: (msg: string | null) => void;
@@ -277,6 +287,29 @@ export function computeCartDiscountCents(
   return Math.min(Math.max(0, cartDiscount.value), eligibleSum);
 }
 
+/** What a module says on a catalog tile (`CartStore.tileMarks`). */
+export interface TileMark {
+  /** A word or two: «≈30 хв», «пауза», «потрібна мережа». */
+  text: string;
+  /** The dish cannot be sold now: the tile is greyed and does not ring. */
+  blocked: boolean;
+}
+
+/** Same marks — so a module re-publishing every poll does not re-render the catalog. */
+function sameMarks(
+  a: Readonly<Record<number, TileMark>> | undefined,
+  b: Readonly<Record<number, TileMark>>
+): boolean {
+  if (!a) return false;
+  const keys = Object.keys(b);
+  if (Object.keys(a).length !== keys.length) return false;
+  return keys.every((k) => {
+    const x = a[Number(k)];
+    const y = b[Number(k)];
+    return x != null && x.text === y.text && x.blocked === y.blocked;
+  });
+}
+
 export const useCartStore = create<CartStore>((set, get) => ({
   lines: [],
   banner: null,
@@ -292,6 +325,17 @@ export const useCartStore = create<CartStore>((set, get) => ({
       if (reason) next[moduleId] = reason;
       else delete next[moduleId];
       return { checkoutHolds: next };
+    }),
+  tileMarks: {},
+  setTileMarks: (moduleId, marks) =>
+    set((state) => {
+      const empty = !marks || Object.keys(marks).length === 0;
+      if (empty && !(moduleId in state.tileMarks)) return state;
+      if (!empty && sameMarks(state.tileMarks[moduleId], marks)) return state;
+      const next = { ...state.tileMarks };
+      if (empty) delete next[moduleId];
+      else next[moduleId] = marks;
+      return { tileMarks: next };
     }),
   cartDiscount: null,
   customer: null,
