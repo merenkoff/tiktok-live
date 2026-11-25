@@ -22,11 +22,17 @@ import {
   type Phase,
 } from './lib';
 import { remoteCartControls, type RemoteCartControls } from '../lib/hostPlatform';
+import { printGuestTicket, type TicketOrder, type TicketOutcome } from '../ticket/guestTicket';
+import { noticeTicketFailure } from '../ticket/notices';
 
 export const ASK_POLL_MS = 3000;
 export const QUOTE_POLL_MS = 10000;
 /** A failed setup read is tried again after this long, not on every render. */
 export const SETUP_RETRY_MS = 60000;
+/** After the sale: how long to wait for the kitchen's number, and how many times to look. */
+export const TICKET_RETRY_MS = 1500;
+export const TICKET_TRIES = 4;
+const PAID_ON_ITS_WAY: ReadonlySet<string> = new Set(['paid', 'cooking', 'ready', 'dispatched', 'arrived']);
 
 export interface RemoteCheckoutState {
   /** undefined: not read yet; null: this store has no remote kitchen. */
@@ -59,7 +65,8 @@ const initial = (): RemoteCheckoutState => ({
 export function createRemoteCheckout(
   api: Api = defaultApi,
   cart: () => RemoteCartControls | null = remoteCartControls,
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  printTicket: (order: TicketOrder) => Promise<TicketOutcome> = printGuestTicket
 ) {
   let state = initial();
   const listeners = new Set<() => void>();
@@ -147,6 +154,10 @@ export function createRemoteCheckout(
       if (order && !state.agreed && REVISABLE.has(order.status)) {
         void api.guestDeclined(order).catch(() => undefined);
       }
+      // The guest agreed and the cart emptied: the sale most likely went
+      // through. The guest's ticket — once the order is paid and numbered;
+      // and if it never was, the kitchen stops holding the time.
+      if (order && state.agreed) void ticketAfterSale(order);
       pendingUuid = null;
       set({ lines, signature, order: null, askedSignature: null, agreed: false, error: null });
       return;
@@ -182,6 +193,44 @@ export function createRemoteCheckout(
         ? `Кухня зараз не приймає замовлень.${refusal.phone ? ` Телефон: ${refusal.phone}` : ''}`
         : refusal.message;
       set({ busy: false, error: message });
+    }
+  }
+
+  /**
+   * After an agreed cart emptied: print the guest's ticket for the order this
+   * till just sold. Reads the order until the kitchen has numbered it (payment
+   * numbers it in the same transaction, so the first read normally sees it).
+   * An order still waiting for the guest after every read was not paid — the
+   * cashier cleared the cart, parked it, gave it «під запис» — so the kitchen
+   * is told the guest declined rather than hold the time until it expires.
+   * Prints at most once: whatever the printer says, the loop is over.
+   */
+  async function ticketAfterSale(order: CafeOrder) {
+    let lastStatus: string | null = null;
+    for (let attempt = 0; attempt < TICKET_TRIES; attempt += 1) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, TICKET_RETRY_MS));
+      let view: CafeOrder & TicketOrder;
+      try {
+        view = (await api.readOrder(order.id)) as CafeOrder & TicketOrder;
+      } catch {
+        // No answer: look again; the tracker's «Талон» is there if every try fails.
+        continue;
+      }
+      lastStatus = view.status;
+      if (view.status === 'requested' || view.status === 'quoted') continue;
+      if (!PAID_ON_ITS_WAY.has(view.status)) return;
+      if (view.order_no == null) continue;
+      let outcome: TicketOutcome;
+      try {
+        outcome = await printTicket(view);
+      } catch (e) {
+        outcome = { kind: 'failed', error: e instanceof Error ? e.message : String(e) };
+      }
+      if (outcome.kind === 'failed') noticeTicketFailure({ orderId: order.id, error: outcome.error });
+      return;
+    }
+    if (lastStatus === 'requested' || lastStatus === 'quoted') {
+      void api.guestDeclined(order).catch(() => undefined);
     }
   }
 
