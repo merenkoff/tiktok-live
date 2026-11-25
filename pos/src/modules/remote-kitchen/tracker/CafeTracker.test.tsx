@@ -10,7 +10,8 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CafeTracker } from './CafeTracker';
+import { CafeTracker, TICKET_PRINTER_RECHECK_MS } from './CafeTracker';
+import { noticeTicketFailure } from '../ticket/notices';
 import { CAFE_POLL_MS, NOT_CAFE_RECHECK_MS, useCafeOrders } from './useCafeOrders';
 import type { TrackedOrder } from './trackerApi';
 
@@ -237,5 +238,63 @@ describe('CafeTracker', () => {
     render(trackerWith(api));
     await screen.findByTestId('remote-tracker-5');
     expect(screen.queryByTestId('remote-tracker-ticket-5')).toBeNull();
+  });
+  it('finds a printer picked on «Обладнання» without a restart — the tracker is never mounted afresh', async () => {
+    const api = fakeApi(true, [order()]);
+    let printer = false;
+    const check = vi.fn(async () => printer);
+    render(trackerWith(api, { printer: check }));
+    await screen.findByTestId('remote-tracker-5');
+    expect(screen.queryByTestId('remote-tracker-ticket-5')).toBeNull();
+    printer = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TICKET_PRINTER_RECHECK_MS);
+    });
+    expect(screen.getByTestId('remote-tracker-ticket-5')).toBeInTheDocument();
+  });
+
+  it('says so when the printer is gone at the tap, and takes «Талон» away', async () => {
+    const api = fakeApi(true, [order()]);
+    const print = vi.fn(async () => ({ kind: 'none' }) as never);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(trackerWith(api, { printer: async () => true, print }));
+    await user.click(await screen.findByTestId('remote-tracker-ticket-5'));
+    expect(await screen.findByTestId('remote-tracker-ticket-error')).toHaveTextContent(
+      'П-12 · Стіл 3 · Немає принтера для талона — оберіть його на «Обладнанні».'
+    );
+    expect(screen.queryByTestId('remote-tracker-ticket-5')).toBeNull();
+  });
+
+  it('prints one ticket per tap, however fast the second tap comes', async () => {
+    const api = fakeApi(true, [order()]);
+    let finish: (v: never) => void = () => undefined;
+    const print = vi.fn(() => new Promise<never>((resolve) => (finish = resolve)));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(trackerWith(api, { printer: async () => true, print }));
+    const button = await screen.findByTestId('remote-tracker-ticket-5');
+    await user.click(button);
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(print).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finish({ kind: 'printed', printer: 'Talon-1' } as never);
+    });
+    expect(button).toBeEnabled();
+  });
+
+  it('shows the after-sale ticket that did not come out under its order, and never over another', async () => {
+    const api = fakeApi(true, [order()]);
+    render(trackerWith(api));
+    await screen.findByTestId('remote-tracker-5');
+    act(() => noticeTicketFailure({ orderId: 5, error: 'немає паперу' }));
+    expect(screen.getByTestId('remote-tracker-ticket-error')).toHaveTextContent('П-12 · Стіл 3 · Талон не надруковано: немає паперу');
+
+    // The order leaves the list; the next one must not inherit its error.
+    api.state.orders = [order({ id: 6, order_no: 13 })];
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CAFE_POLL_MS);
+    });
+    await screen.findByTestId('remote-tracker-6');
+    expect(screen.queryByTestId('remote-tracker-ticket-error')).toBeNull();
   });
 });

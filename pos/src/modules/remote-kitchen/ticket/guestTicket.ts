@@ -14,19 +14,58 @@ import { REMOTE_KITCHEN_MODULE_ID } from '../lib/hostPlatform';
 
 export const GUEST_TICKET_STATION = 'guest-ticket';
 
+/** A line of the order as the ticket reads it. */
+export interface TicketItem {
+  product_name: string;
+  variant_label?: string | null;
+  quantity: number;
+  /** The receipt's answers (snapshots with a `name`) once the order is paid. */
+  modifiers?: unknown[];
+  note?: string | null;
+}
+
 /** The fields of the order view the ticket reads. */
 export interface TicketOrder {
   order_no: number | null;
   promised_at: string | null;
   kitchen_title?: string | null;
+  /** Printed when present; the cafe's till sends none today. */
   guest_label?: string | null;
-  items?: Array<{ product_name: string; variant_label?: string | null; quantity: number }>;
+  items?: TicketItem[];
 }
 
 function clock(iso: string | null): string {
   if (!iso) return '';
   const at = new Date(iso);
   return Number.isNaN(at.getTime()) ? '' : at.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** The answers' names: «сирний борт». Anything without a name (a bare id) is left out. */
+function answerNames(raw: unknown[] | undefined): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((m) => (m && typeof m === 'object' ? (m as { name?: unknown }).name : null))
+    .filter((name): name is string => typeof name === 'string' && name.trim() !== '')
+    .map((name) => name.trim());
+}
+
+/**
+ * «Маргарита 30 см · сирний борт — без цибулі». Two pizzas of one size that
+ * differ only by their answers are what the guest matches the boxes by. The
+ * caption may already end with the answers (the server's «M · вівсяне»), so
+ * they are taken off it first, as the kitchen's ticket does.
+ */
+function itemName(item: TicketItem): string {
+  const answers = answerNames(item.modifiers);
+  let label = (item.variant_label ?? '').trim();
+  for (const name of [...answers].reverse()) {
+    if (label.endsWith(` · ${name}`)) label = label.slice(0, -(name.length + 3));
+    else if (label === name) label = '';
+  }
+  const head = label ? `${item.product_name} ${label}` : item.product_name;
+  const withAnswers = answers.length > 0 ? `${head} · ${answers.join(', ')}` : head;
+  const note = item.note?.trim();
+  return note ? `${withAnswers} — ${note}` : withAnswers;
 }
 
 /** The slip, or null for an order the kitchen has not numbered yet. */
@@ -41,10 +80,7 @@ export function ticketSlip(order: TicketOrder, printedAt: Date = new Date()): Sl
   return {
     title: `ТАЛОН П-${order.order_no}`,
     lines,
-    items: (order.items ?? []).map((i) => ({
-      name: i.variant_label ? `${i.product_name} ${i.variant_label}` : i.product_name,
-      quantity: String(i.quantity),
-    })),
+    items: (order.items ?? []).map((i) => ({ name: itemName(i), quantity: String(i.quantity) })),
     footer: ['Покажіть талон, коли привезуть.'],
     printed_at: printedAt.toLocaleString('uk-UA', {
       day: '2-digit',

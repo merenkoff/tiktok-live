@@ -55,13 +55,17 @@ export const remoteKitchenModule: RemoteModuleDescriptor = {
   alwaysEnabled: true,
   checkout: { Action: KitchenCheckoutAction },
   // The guest's ticket «П-12 · буде о 18:40» (РК5): printed by the till that
-  // took the money, on the printer this station names on that desktop.
+  // took the money, on the printer this station names on that desktop. The
+  // slot is data, the same in every store with the module, so a kitchen's
+  // «Обладнання» lists it too — the hint tells its owner to leave it empty.
   hardware: {
     stations: [
       {
         id: GUEST_TICKET_STATION,
         title: 'Талон гостю (віддалена кухня)',
-        hint: 'Номер замовлення кухні й час, коли привезуть, для гостя кафе. Без принтера талон не друкується.',
+        hint:
+          'Лише для каси кафе: номер замовлення кухні й час, коли привезуть, для гостя. ' +
+          'На касі кухні залиште порожнім. Без принтера талон не друкується.',
       },
     ],
   },
