@@ -1504,7 +1504,9 @@ export function sameRemoteDish(
 export async function remoteLinesForSaleTx(
   client: DbClient,
   cafeStoreId: number,
-  orderId: number
+  orderId: number,
+  /** The time the guest agreed to, as the till showed it; null checks nothing (an older till). */
+  agreedMinutes: number | null = null
 ): Promise<RemoteSaleLine[]> {
   const order = await lockOrder(client, cafeStoreId, orderId, 'cafe');
   if (order.status !== 'quoted') {
@@ -1512,6 +1514,14 @@ export async function remoteLinesForSaleTx(
       order.status === 'expired'
         ? 'Час від кухні вже не діє — спитайте кухню знову'
         : 'Замовлення кухні не чекає на оплату'
+    );
+  }
+  // The kitchen may correct a time the server gave by itself (РК4): the guest
+  // agreed to the old one, and the till hears of the new one only on its next
+  // read. A receipt rung in between pays nothing until the guest is asked again.
+  if (agreedMinutes !== null && Number(order.quoted_minutes) !== agreedMinutes) {
+    throw new RemoteKitchenConflict(
+      `Кухня змінила час: тепер ${Number(order.quoted_minutes)} хв — спитайте гостя ще раз`
     );
   }
   const rows = await client.query(
@@ -1899,7 +1909,10 @@ export async function kitchenQuote(
     const order = await lockOrder(client, actor.storeId, orderId, 'kitchen');
     // «Змінити час» (РК4): a time the server confirmed by itself is the
     // kitchen's to correct while the guest is still thinking. Its own answer,
-    // or the cafe's phone, is not.
+    // or the cafe's phone, is not; nor one whose time to agree has run out.
+    if (order.status === 'expired') {
+      throw new RemoteKitchenConflict('Час для гостя вже минув — кафе спитає кухню знову');
+    }
     const requote = order.status === 'quoted' && order.quote_source === 'auto';
     if (!requote) statusIs(order, ['requested'], 'На це замовлення вже відповіли');
     if (Number(input.revision) !== Number(order.revision)) {
@@ -1908,13 +1921,20 @@ export async function kitchenQuote(
     const link = linkOf((await client.query(`SELECT * FROM pos_kitchen_links WHERE id = $1`, [order.link_id])).rows[0]);
     const transit = order.transit_minutes == null ? link.transit_minutes : Number(order.transit_minutes);
     const quoted = roundUpToFive(minutes + transit);
+    // The same time again is the kitchen's yes to it, not a new question: the
+    // guest's time to agree runs on, or every idle tap would hold the order
+    // longer than the cafe's own limit. A new time is a new question.
+    const sameTime = requote && quoted === Number(order.quoted_minutes);
     await client.query(
       `UPDATE pos_remote_orders
           SET status = 'quoted', quote_source = 'kitchen', prep_minutes = $2, transit_minutes = $3,
-              quoted_minutes = $4, quoted_at = NOW(), quoted_by = $5,
-              quote_expires_at = NOW() + make_interval(secs => $6), updated_at = NOW()
+              quoted_minutes = $4, quoted_by = $5,
+              quoted_at = CASE WHEN $7::boolean THEN quoted_at ELSE NOW() END,
+              quote_expires_at = CASE WHEN $7::boolean THEN quote_expires_at
+                                      ELSE NOW() + make_interval(secs => $6) END,
+              updated_at = NOW()
         WHERE id = $1`,
-      [orderId, minutes, transit, quoted, actor.staffId, link.quote_ttl_seconds]
+      [orderId, minutes, transit, quoted, actor.staffId, link.quote_ttl_seconds, sameTime]
     );
     await logEvent(client, orderId, actor, requote ? 'requoted' : 'quoted', { prep_minutes: minutes, minutes: quoted });
     return reread(client, actor.storeId, orderId);

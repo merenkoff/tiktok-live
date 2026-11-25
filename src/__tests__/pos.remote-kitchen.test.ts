@@ -234,6 +234,57 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     await step(cafe.sellerToken, order.id, 'guest-declined');
   });
 
+  it('refuses a receipt for a time the kitchen changed after the guest agreed, and takes the one the till shows', async () => {
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    expect(order.quote_source).toBe('auto');
+    const agreed = Number(order.quoted_minutes);
+    // The guest said yes to the server's time; the cook corrects it a moment later.
+    const changed = await step(kitchen.sellerToken, order.id, 'quote', { minutes: 60, revision: order.revision });
+    expect(changed.statusCode, changed.body).toBe(200);
+    const now = Number(changed.json().quoted_minutes);
+    expect(now).not.toBe(agreed);
+    const pay = (minutes: number) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/pos/sales/complete',
+        headers: auth(cafe.sellerToken),
+        payload: {
+          items: [{ variant_id: cafePizza, quantity: 1 }],
+          payments: [{ method: 'cash', amount_cents: 10000 }],
+          remote_order_id: order.id,
+          remote_quoted_minutes: minutes,
+        },
+      });
+    // Rung before the till heard: nothing is paid, and the cashier is told why.
+    const stale = await pay(agreed);
+    expect(stale.statusCode, stale.body).toBe(409);
+    expect(stale.json().message).toMatch(/Кухня змінила час/);
+    expect((await orderView(order.id)).status).toBe('quoted');
+    // Asked again, the guest agrees to the new time: it goes.
+    const fresh = await pay(now);
+    expect(fresh.statusCode, fresh.body).toBe(201);
+    expect((await orderView(order.id)).cafe_sale_id).toBe(Number(fresh.json().id));
+  });
+
+  it('the same time again keeps the guest’s time to agree; an expired one is said as such', async () => {
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    const expires = order.quote_expires_at as string;
+    // The kitchen's own suggestion is the one the server gave: confirming it changes nothing for the guest.
+    const transit = Number(order.transit_minutes ?? 0);
+    const prep = Number(order.quoted_minutes) - transit;
+    const same = await step(kitchen.sellerToken, order.id, 'quote', { minutes: prep, revision: order.revision });
+    expect(same.statusCode, same.body).toBe(200);
+    expect(same.json().quoted_minutes).toBe(order.quoted_minutes);
+    expect(same.json().quote_expires_at).toBe(expires);
+    await step(cafe.sellerToken, order.id, 'guest-declined');
+
+    const late = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    await pool.query(`UPDATE pos_remote_orders SET quote_expires_at = NOW() - INTERVAL '1 second' WHERE id = $1`, [late.id]);
+    const gone = await step(kitchen.sellerToken, late.id, 'quote', { minutes: 30, revision: late.revision });
+    expect(gone.statusCode).toBe(409);
+    expect(gone.json().error).toMatch(/Час для гостя вже минув/);
+  });
+
   it('a long order waits for the kitchen, which answers only the revision it saw', async () => {
     const res = await ask([
       { variant_id: cafePizza, quantity: 1 },

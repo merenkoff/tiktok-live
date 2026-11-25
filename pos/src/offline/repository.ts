@@ -516,6 +516,8 @@ export async function completeSale(payload: {
    * the same key rather than rung a second time from the outbox.
    */
   remote_order_id?: number | null;
+  /** The time the guest agreed to for `remote_order_id` (РК4); the server refuses another. */
+  remote_quoted_minutes?: number | null;
   /**
    * Kitchen dishes agreed with the kitchen by phone (РК5, §8): unlike
    * `remote_order_id` this one IS queued — the kitchen already said yes, and

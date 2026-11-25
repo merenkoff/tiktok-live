@@ -71,7 +71,12 @@ export interface RemotePhoneAgreement {
 /** The cart members the «З кухні» block writes (platform 25). */
 export interface RemoteCartControls {
   setCheckoutHold: (reason: string | null) => void;
-  setRemoteOrderId: (id: number | null) => void;
+  /**
+   * The order the sale pays and the time the guest agreed to (РК4): the server
+   * refuses a receipt whose order's time has changed since. A host before this
+   * takes only the id and checks nothing.
+   */
+  setRemoteOrderId: (id: number | null, quotedMinutes?: number | null) => void;
   /**
    * The phone agreement the offline sale carries (РК5, §8); absent on a host
    * that cannot queue one — there kitchen dishes simply wait for the network.
@@ -98,7 +103,8 @@ export function remoteCartControls(): RemoteCartControls | null {
         REMOTE_KITCHEN_MODULE_ID,
         reason
       ),
-    setRemoteOrderId: (id) => (store!.getState!().setRemoteOrderId as (i: number | null) => void)(id),
+    setRemoteOrderId: (id, quotedMinutes) =>
+      (store!.getState!().setRemoteOrderId as (i: number | null, m?: number | null) => void)(id, quotedMinutes ?? null),
     ...(hasFn(state.setRemotePhone)
       ? {
           setRemotePhone: (agreement: RemotePhoneAgreement | null) =>

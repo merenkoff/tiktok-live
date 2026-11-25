@@ -171,6 +171,7 @@ export function RegisterPage() {
   // time the guest agreed to. And any module's reason to hold «Оплатити» — the
   // `remote-kitchen` module's while a kitchen dish has no agreed time yet.
   const remoteOrderId = useCartStore((s) => s.remoteOrderId);
+  const remoteQuotedMinutes = useCartStore((s) => s.remoteQuotedMinutes);
   const remotePhone = useCartStore((s) => s.remotePhone);
   const checkoutHold = useCartStore((s) => firstHold(s.checkoutHolds));
   const online = useOfflineStatus((s) => s.online);
@@ -656,6 +657,9 @@ export function RegisterPage() {
           parked_cart_id: fromParkedId,
           preorder_id: preorderId,
           ...(remoteOrderId != null ? { remote_order_id: remoteOrderId } : {}),
+          // The time the guest agreed to: a receipt rung just as the kitchen
+          // changed it is refused rather than paying a promise nobody told them.
+          ...(remoteOrderId != null && remoteQuotedMinutes != null ? { remote_quoted_minutes: remoteQuotedMinutes } : {}),
           // Agreed with the kitchen by phone, offline (РК5): queued with the receipt.
           ...(remoteOrderId == null && remotePhone != null ? { remote_phone: remotePhone } : {}),
           // The step the payment screen rounded the cash part by; the server

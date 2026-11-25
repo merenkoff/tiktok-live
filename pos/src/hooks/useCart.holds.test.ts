@@ -37,12 +37,24 @@ describe('useCartStore — checkout holds', () => {
 
   it('starts a new cart with no hold and no kitchen order', () => {
     useCartStore.getState().setCheckoutHold('remote-kitchen', 'Спершу запитайте кухню');
-    useCartStore.getState().setRemoteOrderId(5);
+    useCartStore.getState().setRemoteOrderId(5, 30);
     useCartStore.getState().setRemotePhone({ minutes: 40, agreed_at: '2026-11-25T18:00:00.000Z' });
     useCartStore.getState().clear();
     expect(useCartStore.getState().checkoutHolds).toEqual({});
     expect(useCartStore.getState().remoteOrderId).toBeNull();
     expect(useCartStore.getState().remotePhone).toBeNull();
+    expect(useCartStore.getState().remoteQuotedMinutes).toBeNull();
+  });
+
+  it('keeps the time the guest agreed to with the kitchen order, and drops it with the order (РК4)', () => {
+    const { setRemoteOrderId } = useCartStore.getState();
+    setRemoteOrderId(5, 35);
+    expect(useCartStore.getState()).toMatchObject({ remoteOrderId: 5, remoteQuotedMinutes: 35 });
+    // An older module says only the id: nothing is checked then.
+    setRemoteOrderId(5);
+    expect(useCartStore.getState().remoteQuotedMinutes).toBeNull();
+    setRemoteOrderId(null, 35);
+    expect(useCartStore.getState()).toMatchObject({ remoteOrderId: null, remoteQuotedMinutes: null });
   });
 
   it('keeps the same phone agreement as it was, so a repeat is no change', () => {

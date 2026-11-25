@@ -141,7 +141,7 @@ describe('RequestsStrip', () => {
     const useFakeApi = () => useRemoteRequests(onNew, api as never);
     render(<RequestsStrip hook={useFakeApi} />);
     const card = await screen.findByTestId('remote-auto-7');
-    expect(card).toHaveTextContent('Автопідтверджено 30 хв');
+    expect(card).toHaveTextContent('Автопідтверджено: гостю 30 хв');
     expect(screen.queryByText(/Запити з точок/)).toBeNull();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS + 10);
@@ -153,6 +153,41 @@ describe('RequestsStrip', () => {
     await user.click(within(card).getByRole('button', { name: '30' }));
     await user.click(screen.getByTestId('remote-requote-7'));
     expect(api.answerWithTime).toHaveBeenCalledWith(expect.objectContaining({ id: 7, revision: 1 }), 30);
+  });
+
+  it('says the guest’s minutes beside the kitchen’s on the grey card, so «30» there is not taken for the header’s', async () => {
+    const auto = request({
+      status: 'quoted',
+      quote_source: 'auto',
+      quoted_minutes: 30,
+      transit_minutes: 10,
+      quote_expires_at: new Date(Date.now() + 120_000).toISOString(),
+    });
+    render(stripWith(fakeApi(true, [auto])));
+    const card = await screen.findByTestId('remote-auto-7');
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(within(card).getByRole('button', { name: 'Змінити час' }));
+    await user.click(within(card).getByRole('button', { name: '30' }));
+    expect(screen.getByTestId('remote-requote-guest-7')).toHaveTextContent('кухні 30 хв · гостю: 40 хв з дорогою');
+    expect(screen.getByTestId('remote-requote-7')).toHaveTextContent('гостю 40');
+  });
+
+  it('takes a grey card off the second its time to agree runs out, before the next read', async () => {
+    const auto = request({
+      status: 'quoted',
+      quote_source: 'auto',
+      quoted_minutes: 30,
+      quote_expires_at: new Date(Date.now() + 3_000).toISOString(),
+    });
+    const api = fakeApi(true, [auto]);
+    render(stripWith(api));
+    await screen.findByTestId('remote-auto-7');
+    // Every read from now on hangs: only the strip's own clock can take the card off.
+    api.listKitchenSide.mockImplementation(() => new Promise(() => undefined));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    expect(screen.queryByTestId('remote-auto-7')).toBeNull();
   });
 
   it('drops a grey card once the guest’s time to agree ran out', async () => {

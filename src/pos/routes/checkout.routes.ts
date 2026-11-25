@@ -213,6 +213,13 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        */
       remote_order_id?: unknown;
       /**
+       * The time the guest agreed to for `remote_order_id`, as the till showed
+       * it (РК4): the kitchen may correct a time the server gave by itself,
+       * and a receipt rung in the seconds before the till heard of it must not
+       * pay a promise nobody told the guest. Absent from an older till.
+       */
+      remote_quoted_minutes?: unknown;
+      /**
        * Kitchen dishes agreed with the kitchen by phone while the till was
        * offline (РК5, §8): `{ minutes, agreed_at }`. The sale goes as usual;
        * the server writes the kitchen's order, already cooking, beside it.
@@ -236,6 +243,10 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     const remoteOrderId = positiveIdOrNull(body.remote_order_id);
     if (body.remote_order_id != null && remoteOrderId === null) {
       return reply.code(400).send({ error: 'Невірне замовлення кухні' });
+    }
+    const remoteQuotedMinutes = positiveIdOrNull(body.remote_quoted_minutes);
+    if (body.remote_quoted_minutes != null && remoteQuotedMinutes === null) {
+      return reply.code(400).send({ error: 'Невірний час від кухні' });
     }
     // A replayed receipt files whatever it carries; a live one is told when
     // its phone agreement is unreadable rather than losing the kitchen's part.
@@ -378,6 +389,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         fiscal_register: registerNo,
         age_confirmed: body.age_confirmed,
         remote_order_id: remoteOrderId,
+        remote_quoted_minutes: remoteOrderId !== null ? remoteQuotedMinutes : null,
         remote_phone: remotePhone,
       });
     } catch (error) {

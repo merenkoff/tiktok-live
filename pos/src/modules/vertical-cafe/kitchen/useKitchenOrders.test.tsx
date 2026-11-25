@@ -12,10 +12,12 @@ import type { KitchenBoard, KitchenOrder } from './types';
 
 const listOrders = vi.fn<[], Promise<KitchenBoard>>();
 const setPrep = vi.fn();
+const delayRemote = vi.fn();
 
 vi.mock('./kitchenApi', () => ({
   listOrders: () => listOrders(),
   setPrep: (...a: unknown[]) => setPrep(...a),
+  delayRemote: (...a: unknown[]) => delayRemote(...a),
 }));
 
 const { POLL_MS, useKitchenOrders } = await import('./useKitchenOrders');
@@ -140,5 +142,64 @@ describe('useKitchenOrders', () => {
     });
     expect(result.current.error).toBeNull();
     expect(result.current.orders).toHaveLength(1);
+  });
+  describe('«+10 хв» on a cafe’s order (РК4)', () => {
+    const remote = (cookBy: string) =>
+      order({ id: 5, kind: 'remote', cook_by: cookBy, promised_at: cookBy } as Partial<KitchenOrder>);
+
+    it('sends one delay however fast the second tap comes, and lets the next one go once it is done', async () => {
+      let finish: (v: unknown) => void = () => undefined;
+      delayRemote.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+      const { result } = renderHook(() => useKitchenOrders(true));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      let first: Promise<void> = Promise.resolve();
+      act(() => {
+        first = result.current.delayRemote({ id: 5 });
+      });
+      expect(result.current.delaying.has(5)).toBe(true);
+      await act(async () => {
+        await result.current.delayRemote({ id: 5 });
+      });
+      expect(delayRemote).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        finish({ id: 5, promised_at: null });
+        await first;
+      });
+      expect(result.current.delaying.has(5)).toBe(false);
+      delayRemote.mockResolvedValueOnce({ id: 5, promised_at: null });
+      await act(async () => {
+        await result.current.delayRemote({ id: 5 });
+      });
+      expect(delayRemote).toHaveBeenCalledTimes(2);
+    });
+
+    it('drops a read that started before the tap, so the old promise does not come back', async () => {
+      const late = remote('2026-09-20T09:55:00.000Z');
+      const moved = remote('2026-09-20T10:05:00.000Z');
+      listOrders.mockResolvedValue(board([late]));
+      const { result } = renderHook(() => useKitchenOrders(true));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      // A poll leaves before the tap and answers after it, with the board as it was.
+      let answerOld: (b: KitchenBoard) => void = () => undefined;
+      listOrders.mockImplementationOnce(() => new Promise((resolve) => (answerOld = resolve)));
+      await act(async () => {
+        vi.advanceTimersByTime(POLL_MS);
+      });
+      delayRemote.mockResolvedValueOnce({ id: 5, promised_at: moved.promised_at });
+      listOrders.mockResolvedValue(board([moved]));
+      await act(async () => {
+        await result.current.delayRemote({ id: 5 });
+      });
+      expect(result.current.orders[0]?.cook_by).toBe(moved.cook_by);
+      await act(async () => {
+        answerOld(board([late]));
+        await Promise.resolve();
+      });
+      expect(result.current.orders[0]?.cook_by).toBe(moved.cook_by);
+    });
   });
 });
