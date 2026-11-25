@@ -18,6 +18,7 @@ import type {
   SalePaymentInput,
   VerticalPublicConfig,
   OpenBottleStamp,
+  RemotePhoneAgreement,
 } from '../types';
 
 export interface MetaRow {
@@ -168,6 +169,11 @@ export interface OutboxSalePayload {
   open_bottles?: OpenBottleStamp[];
   /** «Покупцю є 18» answered for this receipt (migration 102). */
   age_confirmed?: boolean;
+  /**
+   * Kitchen dishes agreed with the remote kitchen by phone (РК5,
+   * TechDocs/POS_REMOTE_KITCHEN.md §8): the replay files the kitchen's order.
+   */
+  remote_phone?: RemotePhoneAgreement;
 }
 
 export interface OutboxRow {

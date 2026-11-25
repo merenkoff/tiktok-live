@@ -30,7 +30,7 @@ describe('the words on the cafe’s kitchen-dish tiles', () => {
     });
   });
 
-  it('greys every kitchen dish on a pause, a paused link, and offline — offline first', () => {
+  it('greys every kitchen dish on a pause or a paused link', () => {
     expect(cafeTileMarks(cafe({ kitchen: { accepting: false, load_minutes: 0 } }), true)?.[10]).toEqual({
       text: 'пауза',
       blocked: true,
@@ -39,8 +39,16 @@ describe('the words on the cafe’s kitchen-dish tiles', () => {
       text: 'кухня вимкнена',
       blocked: true,
     });
+  });
+
+  it('offline still sells the dish, after a call — but not over a paused link', () => {
+    // The kitchen's pause is not known offline, and on the phone it can say yes.
     expect(cafeTileMarks(cafe({ kitchen: { accepting: false } }), false)?.[10]).toEqual({
-      text: 'потрібна мережа',
+      text: 'дзвінок на кухню',
+      blocked: false,
+    });
+    expect(cafeTileMarks(cafe({ link: { status: 'paused' } }), false)?.[10]).toEqual({
+      text: 'кухня вимкнена',
       blocked: true,
     });
   });
@@ -59,10 +67,16 @@ describe('the words on the cafe’s kitchen-dish tiles', () => {
     expect(marks?.[11]).toEqual({ text: 'кухня ≈35 хв', blocked: false });
     // An older server says nothing of it: the dish reads as available.
     expect(cafeTileMarks(cafe(), true)?.[10]?.blocked).toBe(false);
-    // Offline still wins: the till cannot ask either way.
+    // Offline a stop list read earlier is not trusted over a call: the kitchen says on the phone.
     expect(
       cafeTileMarks(cafe({ items: [{ cafe_variant_id: 10, prep_minutes: 12, available: false }] }), false)?.[10]
-    ).toEqual({ text: 'потрібна мережа', blocked: true });
+    ).toEqual({ text: 'дзвінок на кухню', blocked: false });
+  });
+
+  it('offline on a till that cannot sell by phone (web, tablet): «потрібна мережа», grey', () => {
+    expect(cafeTileMarks(cafe(), false, false)?.[10]).toEqual({ text: 'потрібна мережа', blocked: true });
+    // Online it makes no difference.
+    expect(cafeTileMarks(cafe(), true, false)?.[10]?.blocked).toBe(false);
   });
 
   it('marks nothing in a store that asks no kitchen, or marked no dish', () => {

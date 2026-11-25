@@ -399,3 +399,14 @@ describe('completeSale — a dish from the remote kitchen (TechDocs/POS_REMOTE_K
     expect(outbox).toHaveLength(0);
   });
 });
+
+describe('completeSale — kitchen dishes agreed by phone offline (РК5, POS_REMOTE_KITCHEN.md §8)', () => {
+  const phone = { minutes: 40, agreed_at: '2026-11-25T18:00:00.000Z' };
+
+  it('is queued with the receipt, so the replay files the kitchen’s order', async () => {
+    vi.mocked(api.loadAuth).mockReturnValue({ staff: { display_name: 'Олена' }, store: {} } as never);
+    await completeSale({ ...payload, remote_phone: phone });
+    expect(outbox).toHaveLength(1);
+    expect((outbox[0].payload as OutboxSalePayload).remote_phone).toEqual(phone);
+  });
+});

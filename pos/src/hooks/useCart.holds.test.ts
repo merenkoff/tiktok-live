@@ -38,9 +38,21 @@ describe('useCartStore — checkout holds', () => {
   it('starts a new cart with no hold and no kitchen order', () => {
     useCartStore.getState().setCheckoutHold('remote-kitchen', 'Спершу запитайте кухню');
     useCartStore.getState().setRemoteOrderId(5);
+    useCartStore.getState().setRemotePhone({ minutes: 40, agreed_at: '2026-11-25T18:00:00.000Z' });
     useCartStore.getState().clear();
     expect(useCartStore.getState().checkoutHolds).toEqual({});
     expect(useCartStore.getState().remoteOrderId).toBeNull();
+    expect(useCartStore.getState().remotePhone).toBeNull();
+  });
+
+  it('keeps the same phone agreement as it was, so a repeat is no change', () => {
+    const { setRemotePhone } = useCartStore.getState();
+    setRemotePhone({ minutes: 40, agreed_at: '2026-11-25T18:00:00.000Z' });
+    const before = useCartStore.getState().remotePhone;
+    setRemotePhone({ minutes: 40, agreed_at: '2026-11-25T18:00:00.000Z' });
+    expect(useCartStore.getState().remotePhone).toBe(before);
+    setRemotePhone(null);
+    expect(useCartStore.getState().remotePhone).toBeNull();
   });
 });
 

@@ -30,6 +30,8 @@ export interface CafeSetup {
   accepting: boolean;
   /** The cafe's dishes the kitchen cooks. */
   variantIds: ReadonlySet<number>;
+  /** Read from what this till kept, offline (§8): read again once the network is back. */
+  fromMemory?: true;
 }
 
 /** The order view (`RemoteOrderView` on the server), the fields this block reads. */
@@ -66,7 +68,11 @@ export type Phase =
   /** «Не зможемо». */
   | 'declined'
   /** The named time went unused. */
-  | 'expired';
+  | 'expired'
+  /** No network (РК5, §8): call the kitchen, write down the time it says. */
+  | 'offline'
+  /** Agreed with the kitchen by phone: the receipt may be paid, and goes with the time. */
+  | 'phone_agreed';
 
 const n = (v: unknown): number | null => {
   const x = Number(v);
@@ -207,7 +213,8 @@ export function defaultPhoneMinutes(order: Pick<CafeOrder, 'suggested_minutes'> 
 
 /** Why «Оплатити» waits, or null when nothing holds it. */
 export function holdReason(phase: Phase, hasKitchenLines: boolean): string | null {
-  if (!hasKitchenLines || phase === 'agreed') return null;
+  if (!hasKitchenLines || phase === 'agreed' || phase === 'phone_agreed') return null;
+  if (phase === 'offline') return 'Страви з кухні: без мережі подзвоніть на кухню й запишіть, коли буде готово.';
   if (phase === 'quoted') return 'Страви з кухні: спершу запитайте гостя, чи згоден він на цей час.';
   if (phase === 'asking' || phase === 'overdue') return 'Страви з кухні: дочекайтеся часу від кухні.';
   return 'Страви з кухні: спершу запитайте кухню, коли буде готово.';

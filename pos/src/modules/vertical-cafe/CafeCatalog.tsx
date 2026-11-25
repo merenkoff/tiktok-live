@@ -190,7 +190,7 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
             // the kitchen board. Greyed with its own word, because the dish
             // may well be in the case — «немає» would be a lie.
             const stopped = isStopListed(first);
-            // «≈30 хв» from the remote kitchen, or «пауза» / «потрібна мережа»
+            // «≈30 хв» from the remote kitchen, or «пауза» / «немає на кухні»
             // while the dish cannot be sold — the module says which. A size
             // it blocks is left out of what a tap offers; the tile greys only
             // when no size is left.

@@ -28,8 +28,10 @@
 // Expiry is read-time, as everywhere here: a named time that nobody used
 // becomes `expired` the next time anyone reads the order.
 
+import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { pool } from '../db.js';
+import { logger } from '../logger.js';
 import { consumeStockForLine, returnStockForLine } from './composites.service.js';
 import { createProductInTx } from './products.service.js';
 import { applyStockDelta } from './stock.service.js';
@@ -1686,6 +1688,269 @@ export async function claimRemoteLineTx(
   ]);
 }
 
+// ── a sale agreed by phone, offline (РК5, §8) ───────────────────────
+
+/** What the till sends with a receipt it rang offline after calling the kitchen. */
+export interface PhoneAgreement {
+  /** The whole promise the kitchen named on the phone, road included. */
+  minutes: number;
+  /** When the cashier wrote it down, by the till's clock; the promise counts from here. */
+  agreedAt: Date | null;
+}
+
+/**
+ * `remote_phone` of `POST /sales/complete`: `{ minutes, agreed_at? }`. Null for
+ * anything else — the caller decides whether that is a 400 (a live request) or
+ * simply no kitchen part (a replay, which must never fail for it).
+ */
+export function parsePhoneAgreement(raw: unknown): PhoneAgreement | null {
+  if (raw == null || typeof raw !== 'object') return null;
+  const value = raw as { minutes?: unknown; agreed_at?: unknown };
+  const minutes = Number(value.minutes);
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES) return null;
+  let agreedAt: Date | null = null;
+  if (typeof value.agreed_at === 'string' && value.agreed_at.trim()) {
+    const at = new Date(value.agreed_at);
+    if (Number.isFinite(at.getTime())) agreedAt = at;
+  }
+  return { minutes, agreedAt };
+}
+
+/** A plain receipt line, as checkout hands it over before writing it. */
+export interface PhoneSaleLine {
+  variantId: number;
+  quantity: number;
+  modifiers: readonly LineModifierSnapshot[];
+  note: string | null | undefined;
+}
+
+/** A till clock is believed within a day back and never ahead of the server. */
+const PHONE_CLOCK_SLACK_MS = 24 * 60 * 60 * 1000;
+
+function phoneAgreedAt(agreement: PhoneAgreement, now: number): Date {
+  const at = agreement.agreedAt?.getTime();
+  if (at == null || !Number.isFinite(at)) return new Date(now);
+  return new Date(Math.min(now, Math.max(now - PHONE_CLOCK_SLACK_MS, at)));
+}
+
+/**
+ * Checkout's half of a sale the cashier agreed with the kitchen by phone
+ * while the till had no network (§8): the receipt's lines the kitchen cooks
+ * become an order of this cafe, already named a time «по телефону», and their
+ * lines come back for checkout to match exactly as a paid order's do — they
+ * skip the cafe's shelf. Null when nothing on the receipt is the kitchen's
+ * (or the cafe has no kitchen any more): then it is an ordinary sale.
+ *
+ * Nothing is asked of the kitchen and nothing is refused: the kitchen said yes
+ * on the phone, and the receipt is already in the guest's hand. A stop-listed
+ * or paused dish still goes; only a dish no longer linked stays the cafe's.
+ * Its own savepoint, so whatever goes wrong here costs the kitchen's record,
+ * never the receipt.
+ */
+export async function phoneOrderForSaleTx(
+  client: DbClient,
+  actor: Actor,
+  agreement: PhoneAgreement,
+  lines: readonly PhoneSaleLine[]
+): Promise<{ orderId: number; lines: RemoteSaleLine[] } | null> {
+  if (lines.length === 0) return null;
+  await client.query('SAVEPOINT remote_phone');
+  try {
+    const result = await phoneOrderInside(client, actor, agreement, lines);
+    await client.query('RELEASE SAVEPOINT remote_phone');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK TO SAVEPOINT remote_phone');
+    logger.warn('Phone-agreed remote-kitchen order not recorded', {
+      storeId: actor.storeId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+async function phoneOrderInside(
+  client: DbClient,
+  actor: Actor,
+  agreement: PhoneAgreement,
+  lines: readonly PhoneSaleLine[]
+): Promise<{ orderId: number; lines: RemoteSaleLine[] } | null> {
+  const link = await findLinkForCafe(actor.storeId, client);
+  if (!link) return null;
+  const rows = await client.query(
+    `SELECT li.cafe_variant_id, li.kitchen_variant_id, cp.name AS cafe_name, cv.label AS cafe_label
+       FROM pos_kitchen_link_items li
+       JOIN pos_variants cv ON cv.id = li.cafe_variant_id
+       JOIN pos_products cp ON cp.id = cv.product_id
+      WHERE li.link_id = $1 AND li.cafe_variant_id = ANY($2::bigint[])`,
+    [link.id, lines.map((line) => line.variantId)]
+  );
+  const byCafe = new Map<number, Record<string, unknown>>();
+  for (const row of rows.rows) byCafe.set(Number(row.cafe_variant_id), row);
+  const resolved: ResolvedLine[] = [];
+  for (const line of lines) {
+    const row = byCafe.get(line.variantId);
+    if (!row) continue;
+    resolved.push({
+      cafeVariantId: line.variantId,
+      quantity: line.quantity,
+      modifiers: [...line.modifiers],
+      note: (line.note ?? '').trim().slice(0, 120),
+      kitchenVariantId: Number(row.kitchen_variant_id),
+      productName: String(row.cafe_name),
+      variantLabel: String(row.cafe_label ?? ''),
+      prepMinutes: null,
+    });
+  }
+  if (resolved.length === 0) return null;
+
+  const quoted = roundUpToFive(agreement.minutes);
+  const agreedAt = phoneAgreedAt(agreement, Date.now());
+  const inserted = await client.query(
+    `INSERT INTO pos_remote_orders
+       (link_id, cafe_store_id, kitchen_store_id, client_uuid, requested_by,
+        status, quote_source, quoted_minutes, quoted_at, transit_minutes)
+     VALUES ($1, $2, $3, $4, $5, 'quoted', 'phone', $6, $7, $8)
+     RETURNING id`,
+    [link.id, actor.storeId, link.kitchen_store_id, randomUUID(), actor.staffId, quoted, agreedAt, link.transit_minutes]
+  );
+  const orderId = Number(inserted.rows[0].id);
+  await writeItems(client, orderId, resolved);
+  await logEvent(client, orderId, actor, 'phone_quoted', { minutes: quoted, offline: true });
+  const items = await client.query(
+    `SELECT id, cafe_variant_id, quantity, modifiers
+       FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
+    [orderId]
+  );
+  return {
+    orderId,
+    lines: items.rows.map((row) => ({
+      id: Number(row.id),
+      cafeVariantId: Number(row.cafe_variant_id),
+      quantity: Number(row.quantity),
+      modifierIds: modifierIdsOf(row.modifiers),
+    })),
+  };
+}
+
+/**
+ * The phone order's state when it is filed: still `cooking` while its promise
+ * may be ahead, and closed straight away once it is `LATE_ARRIVAL_MINUTES`
+ * past it — an outage longer than the promise ends with the pizza long eaten,
+ * and a «cooking» card on the kitchen's board would be a second dinner.
+ */
+export function phoneFiledStatus(agreedAt: Date, quotedMinutes: number, now: number): 'cooking' | 'handed_over' {
+  const settledAt = agreedAt.getTime() + (quotedMinutes + LATE_ARRIVAL_MINUTES) * 60_000;
+  return settledAt <= now ? 'handed_over' : 'cooking';
+}
+
+/**
+ * The receipt is written: the phone order is paid by it and goes straight to
+ * `cooking` — the kitchen has been cooking since the call — or, filed after
+ * its promise and the cafe's 20 minutes, straight to `handed_over` with no
+ * times of its own (`phoneFiledStatus`; the report counts it as reached but
+ * not as on time or late: nobody measured it). Its number and the kitchen's
+ * stock as `markPaidTx`; no ticket is queued for the kitchen's printer (it
+ * wrote the order down on the phone, and a second paper would be a second
+ * dinner), and the promise counts from the call, not from the sync.
+ *
+ * Its own savepoint, like the order's: whatever goes wrong here costs the
+ * kitchen's record, never the receipt in the guest's hand. Then the order is
+ * still marked paid by the receipt — unnumbered, nothing written off — so the
+ * kitchen sees it and the cafe can void it.
+ */
+export async function markPhonePaidTx(
+  client: DbClient,
+  actor: Actor,
+  orderId: number,
+  saleId: number,
+  agreement: PhoneAgreement
+): Promise<void> {
+  const agreedAt = phoneAgreedAt(agreement, Date.now());
+  await client.query('SAVEPOINT remote_phone_paid');
+  try {
+    await phonePaidInside(client, actor, orderId, saleId, agreedAt);
+    await client.query('RELEASE SAVEPOINT remote_phone_paid');
+    return;
+  } catch (error) {
+    await client.query('ROLLBACK TO SAVEPOINT remote_phone_paid');
+    logger.warn('Phone-agreed remote-kitchen order not numbered or written off', {
+      storeId: actor.storeId,
+      orderId,
+      saleId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  await client.query('SAVEPOINT remote_phone_paid_bare');
+  try {
+    await client.query(
+      `UPDATE pos_remote_orders
+          SET status = 'cooking', cafe_sale_id = $2, paid_at = NOW(),
+              promised_at = $3::timestamptz + make_interval(mins => quoted_minutes), updated_at = NOW()
+        WHERE id = $1`,
+      [orderId, saleId, agreedAt]
+    );
+    await client.query('RELEASE SAVEPOINT remote_phone_paid_bare');
+  } catch (error) {
+    await client.query('ROLLBACK TO SAVEPOINT remote_phone_paid_bare');
+    logger.warn('Phone-agreed remote-kitchen order left unpaid', {
+      storeId: actor.storeId,
+      orderId,
+      saleId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function phonePaidInside(
+  client: DbClient,
+  actor: Actor,
+  orderId: number,
+  saleId: number,
+  agreedAt: Date
+): Promise<void> {
+  const order = (
+    await client.query(`SELECT kitchen_store_id, quoted_minutes FROM pos_remote_orders WHERE id = $1`, [orderId])
+  ).rows[0];
+  if (!order) return;
+  const quoted = Number(order.quoted_minutes);
+  const kitchenStoreId = Number(order.kitchen_store_id);
+  const status = phoneFiledStatus(agreedAt, quoted, Date.now());
+  const clock = await storeClock(client, kitchenStoreId);
+  const orderNo = await nextCounterValue(client, kitchenStoreId, dailyCounterKey('remote', clock.today));
+  await client.query(
+    `UPDATE pos_remote_orders
+        SET status = $6::text, cafe_sale_id = $2, order_no = $3,
+            paid_at = NOW(), promised_at = $4::timestamptz + make_interval(mins => $5),
+            closed_at = CASE WHEN $6::text = 'handed_over' THEN NOW() ELSE NULL END, updated_at = NOW()
+      WHERE id = $1`,
+    [orderId, saleId, orderNo, agreedAt, quoted, status]
+  );
+  const items = await client.query(
+    `SELECT id, kitchen_variant_id, quantity FROM pos_remote_order_items WHERE remote_order_id = $1 ORDER BY sort_order, id`,
+    [orderId]
+  );
+  for (const item of items.rows) {
+    await consumeStockForLine(client, {
+      storeId: kitchenStoreId,
+      target: 'remote',
+      lineId: Number(item.id),
+      referenceType: 'remote_order',
+      referenceId: orderId,
+      variantId: Number(item.kitchen_variant_id),
+      quantity: Number(item.quantity),
+      staffId: null,
+    });
+  }
+  await logEvent(client, orderId, actor, 'paid', {
+    sale_id: saleId,
+    order_no: orderNo,
+    minutes: quoted,
+    phone: true,
+    ...(status === 'handed_over' ? { filed_late: true } : {}),
+  });
+}
+
 /**
  * The cafe's two taps at the end: the courier came, the guest got it.
  *
@@ -2056,6 +2321,12 @@ export interface RemoteReportRow {
   /** Of `orders`, those the kitchen moved with «+N хв». */
   delayed: number;
   /**
+   * Of `orders`, those nobody timed — agreed by phone offline and filed after
+   * their promise (`phoneFiledStatus`): neither on time nor late, so «N з M
+   * вчасно» counts from `orders - untimed`. Absent on an older server.
+   */
+  untimed: number;
+  /**
    * What the orders the cafe got took off the kitchen's shelf, at TODAY's
    * purchase prices (the snapshot records what left, not what it cost then) —
    * the internal settlement between two points of one ФОП (П1). Lines whose
@@ -2077,8 +2348,13 @@ export interface RemoteReport {
 
 export const REPORT_MAX_DAYS = 90;
 
-/** The orders that reached the cafe — whoever tapped it. */
-const REACHED_CAFE = `(o.dispatched_at IS NOT NULL OR o.arrived_at IS NOT NULL OR o.handed_at IS NOT NULL)`;
+/**
+ * The orders that reached the cafe — whoever tapped it. Or one handed over with
+ * no tap at all: agreed by phone offline and filed only after its promise had
+ * long passed (`phoneFiledStatus`) — it reached the guest, nobody timed it.
+ */
+const REACHED_CAFE = `(o.dispatched_at IS NOT NULL OR o.arrived_at IS NOT NULL OR o.handed_at IS NOT NULL
+  OR o.status = 'handed_over')`;
 
 /** When the order was at the cafe: the cafe's own tap, else out of the kitchen's door plus the road. */
 const AT_CAFE = `COALESCE(o.arrived_at, o.handed_at,
@@ -2134,7 +2410,7 @@ export async function remoteReport(storeId: number, side: 'cafe' | 'kitchen', da
             (SELECT l.kitchen_title FROM pos_kitchen_links l
               WHERE l.cafe_store_id = t.cafe_id AND l.kitchen_store_id = t.kitchen_id
               ORDER BY l.id DESC LIMIT 1) AS kitchen_title,
-            t.orders, t.cancelled, t.cancelled_kitchen, t.on_time, t.on_time_moved, t.delayed
+            t.orders, t.cancelled, t.cancelled_kitchen, t.on_time, t.on_time_moved, t.delayed, t.untimed
        FROM (
          SELECT ${other} AS other_key, MIN(o.cafe_store_id) AS cafe_id, MIN(o.kitchen_store_id) AS kitchen_id,
                 COUNT(*) FILTER (WHERE ${REACHED_CAFE})::int AS orders,
@@ -2149,7 +2425,8 @@ export async function remoteReport(storeId: number, side: 'cafe' | 'kitchen', da
                 COUNT(*) FILTER (
                   WHERE ${REACHED_CAFE} AND o.promised_at IS NOT NULL AND ${AT_CAFE} <= o.promised_at
                 )::int AS on_time_moved,
-                COUNT(*) FILTER (WHERE ${REACHED_CAFE} AND d.times > 0)::int AS delayed
+                COUNT(*) FILTER (WHERE ${REACHED_CAFE} AND d.times > 0)::int AS delayed,
+                COUNT(*) FILTER (WHERE ${REACHED_CAFE} AND ${AT_CAFE} IS NULL)::int AS untimed
            FROM pos_remote_orders o
            CROSS JOIN LATERAL (
              SELECT COUNT(*)::int AS times, COALESCE(SUM((e.payload->>'minutes')::int), 0)::int AS minutes
@@ -2196,6 +2473,7 @@ export async function remoteReport(storeId: number, side: 'cafe' | 'kitchen', da
         on_time: Number(row.on_time),
         on_time_moved: Number(row.on_time_moved),
         delayed: Number(row.delayed),
+        untimed: Number(row.untimed),
         cost_cents: mineDishes.reduce((sum, d) => sum + Number(d.cost_cents), 0),
         unpriced_lines: mineDishes.reduce((sum, d) => sum + Number(d.unpriced_lines), 0),
         dishes: mineDishes.map((d) => ({ name: String(d.name), label: String(d.label), quantity: Number(d.quantity) })),

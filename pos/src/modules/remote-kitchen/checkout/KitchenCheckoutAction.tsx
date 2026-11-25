@@ -14,7 +14,7 @@ import type { CheckoutActionProps } from '@host/modules/types';
 import { ChefHat, Phone } from '@pos/platform/ui';
 import { clampPhoneMinutes, clockOf, defaultPhoneMinutes, dishWord, secondsUntil } from './lib';
 import { remoteCheckout, type RemoteCheckout } from './store';
-import { remoteCartControls } from '../lib/hostPlatform';
+import { onOnlineChange, remoteCartControls } from '../lib/hostPlatform';
 
 const STEP = 5;
 
@@ -31,7 +31,13 @@ function useTick(active: boolean): number {
 
 export function KitchenCheckoutAction({ lines, store = remoteCheckout }: CheckoutActionProps & { store?: RemoteCheckout }) {
   const state = useSyncExternalStore(store.subscribe, store.getState);
-  const supported = remoteCartControls() != null;
+  const controls = remoteCartControls();
+  const supported = controls != null;
+  // Only a till that queues an offline sale (the desktop) takes the kitchen's word by phone.
+  const phoneSupported = store.canPhone();
+
+  // On- or offline: the hold and the screen follow at once (РК5, §8).
+  useEffect(() => onOnlineChange(() => store.connectivityChanged()), [store]);
 
   useEffect(() => {
     if (supported) store.sync(lines);
@@ -58,6 +64,55 @@ export function KitchenCheckoutAction({ lines, store = remoteCheckout }: Checkou
   let body: ReactNode;
   if (!setup.linkActive) {
     body = <p className="text-[14px] text-sq-secondary">Звʼязок з кухнею призупинено. Страви з кухні зараз не продаються.</p>;
+  } else if (phase === 'phone_agreed') {
+    const agreed = state.phone!;
+    const by = clockOf(new Date(new Date(agreed.agreedAt).getTime() + agreed.minutes * 60_000).toISOString());
+    body = (
+      <div className="flex items-center justify-between gap-2" data-testid="remote-checkout-phone-agreed">
+        <p className="text-[15px] text-sq-success-ink">
+          Узгоджено телефоном: <span className="font-bold tabular-nums">{agreed.minutes} хв</span>
+          {by ? <> · буде о <span className="font-bold tabular-nums">{by}</span></> : null}. Можна оплачувати.
+        </p>
+        <button type="button" className="min-h-11 px-2 text-[14px] text-sq-secondary underline" onClick={() => store.phoneUndo()}>
+          Змінити
+        </button>
+      </div>
+    );
+  } else if (phase === 'offline') {
+    body = phoneSupported ? (
+      <div className="space-y-2" data-testid="remote-checkout-offline">
+        <p className="text-[15px] text-sq-text">
+          Немає мережі.{' '}
+          {phone ? (
+            <>
+              Подзвоніть на кухню:{' '}
+              <a className="inline-flex items-center gap-1 font-semibold underline" href={`tel:${phone}`}>
+                <Phone size={16} /> {phone}
+              </a>
+            </>
+          ) : (
+            'Подзвоніть на кухню.'
+          )}
+        </p>
+        <p className="text-[13px] text-sq-secondary">Кухня сказала (разом з дорогою):</p>
+        <div className="flex items-center gap-2">
+          <button type="button" className={quiet} aria-label="Мінус 5 хвилин" onClick={() => setPhoneMinutes(clampPhoneMinutes(minutes - STEP))}>
+            −5
+          </button>
+          <span className="flex-1 text-center text-[18px] font-bold tabular-nums">{minutes} хв</span>
+          <button type="button" className={quiet} aria-label="Плюс 5 хвилин" onClick={() => setPhoneMinutes(clampPhoneMinutes(minutes + STEP))}>
+            +5
+          </button>
+        </div>
+        <button type="button" className={`${primary} w-full`} onClick={() => store.phoneAgree(minutes)}>
+          Узгоджено телефоном · {minutes} хв
+        </button>
+      </div>
+    ) : (
+      <p className="text-[14px] text-sq-secondary" data-testid="remote-checkout-offline">
+        Немає мережі: страви з кухні продаються лише онлайн.
+      </p>
+    );
   } else if (stale && state.busy) {
     body = <p className="text-[14px] text-sq-secondary">Кошик змінився — надсилаємо кухні…</p>;
   } else if (phase === 'idle' || (stale && phase !== 'asking')) {

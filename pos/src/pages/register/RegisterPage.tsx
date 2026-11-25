@@ -171,6 +171,7 @@ export function RegisterPage() {
   // time the guest agreed to. And any module's reason to hold «Оплатити» — the
   // `remote-kitchen` module's while a kitchen dish has no agreed time yet.
   const remoteOrderId = useCartStore((s) => s.remoteOrderId);
+  const remotePhone = useCartStore((s) => s.remotePhone);
   const checkoutHold = useCartStore((s) => firstHold(s.checkoutHolds));
   const online = useOfflineStatus((s) => s.online);
   // What feature modules add to the cart (phase Г2, TechDocs/grocery/PLAN.md
@@ -637,7 +638,7 @@ export function RegisterPage() {
     setPaying(true);
     setCheckoutError(null);
     try {
-      if (splitMode && remoteOrderId != null) {
+      if (splitMode && (remoteOrderId != null || remotePhone != null)) {
         // One receipt pays the kitchen's order; a two-ФОП cart would be two.
         setCheckoutError({ message: 'Страви з кухні — окремим чеком: продайте товари іншого ФОП другим чеком.' });
         return;
@@ -655,6 +656,8 @@ export function RegisterPage() {
           parked_cart_id: fromParkedId,
           preorder_id: preorderId,
           ...(remoteOrderId != null ? { remote_order_id: remoteOrderId } : {}),
+          // Agreed with the kitchen by phone, offline (РК5): queued with the receipt.
+          ...(remoteOrderId == null && remotePhone != null ? { remote_phone: remotePhone } : {}),
           // The step the payment screen rounded the cash part by; the server
           // computes the sum itself and files what the customer was shown.
           ...(cashRounding ? { cash_rounding: cashRounding } : {}),

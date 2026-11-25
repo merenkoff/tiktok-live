@@ -62,10 +62,21 @@ export function posRequest<T>(
   );
 }
 
-/** The two cart members the «З кухні» block writes (platform 25). */
+/** Kitchen dishes agreed by phone offline (the host's `RemotePhoneAgreement`, platform 25). */
+export interface RemotePhoneAgreement {
+  minutes: number;
+  agreed_at: string;
+}
+
+/** The cart members the «З кухні» block writes (platform 25). */
 export interface RemoteCartControls {
   setCheckoutHold: (reason: string | null) => void;
   setRemoteOrderId: (id: number | null) => void;
+  /**
+   * The phone agreement the offline sale carries (РК5, §8); absent on a host
+   * that cannot queue one — there kitchen dishes simply wait for the network.
+   */
+  setRemotePhone?: (agreement: RemotePhoneAgreement | null) => void;
 }
 
 /**
@@ -88,6 +99,12 @@ export function remoteCartControls(): RemoteCartControls | null {
         reason
       ),
     setRemoteOrderId: (id) => (store!.getState!().setRemoteOrderId as (i: number | null) => void)(id),
+    ...(hasFn(state.setRemotePhone)
+      ? {
+          setRemotePhone: (agreement: RemotePhoneAgreement | null) =>
+            (store!.getState!().setRemotePhone as (a: RemotePhoneAgreement | null) => void)(agreement),
+        }
+      : {}),
   };
 }
 
@@ -126,6 +143,26 @@ function browserOnline(): boolean {
 function runtimeTracksOnline(): boolean {
   const enabled = member('isOfflineReadsEnabled');
   return typeof enabled === 'function' && (enabled as () => unknown)() === true;
+}
+
+/**
+ * Whether this till queues a sale it rings without a network — the desktop's
+ * `full` offline mode. Only there can a kitchen time agreed by phone ride with
+ * the receipt (РК5, §8): the web till queues nothing, and the tablet refuses
+ * every write without a network.
+ */
+export function queuesOfflineSales(): boolean {
+  const enabled = member('isOfflinePosEnabled');
+  return typeof enabled === 'function' && (enabled as () => unknown)() === true;
+}
+
+/**
+ * Whether a kitchen dish may be sold offline on the kitchen's word by phone
+ * here: a till that queues offline sales, on a host whose cart carries the
+ * time (`setRemotePhone`, platform 25). Elsewhere, offline, it waits for the network.
+ */
+export function sellsByPhoneOffline(): boolean {
+  return queuesOfflineSales() && remoteCartControls()?.setRemotePhone != null;
 }
 
 /**
@@ -180,7 +217,7 @@ export function isKitchenStore(): boolean {
 /**
  * The signed-in store's id, or null before a login. What a cached answer is
  * kept under, so signing into another store on the same till never reads the
- * first store's answer.
+ * first store's answer, nor the setup another store kept for offline.
  */
 export function currentStoreId(): number | null {
   const store = member('useAuthStore') as { getState?: () => { auth?: { store?: { id?: unknown } } | null } };
