@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from 'react';
 import type { RemoteRequest } from './remoteApi';
-import { STEP_MIN, chipsFor, clampPrep, defaultPrep, formatWait, guestMinutes, secondsToAnswer } from './lib';
+import { STEP_MIN, autoConfirmed, chipsFor, clampPrep, defaultPrep, formatWait, guestMinutes, secondsToAnswer } from './lib';
 import { chime, useRemoteRequests } from './useRemoteRequests';
 import { Check, X } from '@pos/platform/ui';
 
@@ -32,8 +32,11 @@ function useSecondTick(active: boolean): void {
 }
 
 export function RequestsStrip({ hook = useRemoteRequests }: { hook?: typeof useRemoteRequests } = {}) {
-  const { requests, confirmed, offset, banner, busy, answer, decline, declineDishes, clearBanner } = hook(chime);
-  useSecondTick(requests.length > 0);
+  const { requests, confirmed: read, offset, banner, busy, answer, decline, declineDishes, clearBanner } = hook(chime);
+  // The grey cards go the second the guest's time to agree runs out, not at
+  // the next read: a tap after that would meet a refusal for nothing.
+  const confirmed = autoConfirmed(read, offset);
+  useSecondTick(requests.length > 0 || confirmed.length > 0);
   if (requests.length === 0 && confirmed.length === 0 && !banner) return null;
 
   return (
@@ -276,7 +279,7 @@ function AutoCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[15px] text-sq-secondary">
           <span className="font-semibold text-sq-heading">
-            Автопідтверджено {order.quoted_minutes ?? guestMinutes(suggested, order.transit_minutes)} хв
+            Автопідтверджено: гостю {order.quoted_minutes ?? guestMinutes(suggested, order.transit_minutes)} хв
           </span>
           {' · '}
           {order.cafe_name}
@@ -297,7 +300,13 @@ function AutoCard({
       </div>
       {open && (
         <div className="flex flex-wrap items-center gap-2">
+          {/* The chips are the KITCHEN's minutes, like the request card's; the
+              guest's figure, with the road, is said beside them — the header's
+              «30» is the guest's, and tapping «30» here would make it 40. */}
           <Chips chips={chipsFor(suggested)} value={prep} onPick={setPrep} disabled={busy} />
+          <p className="text-[13px] text-sq-muted" data-testid={`remote-requote-guest-${order.id}`}>
+            кухні {prep} хв · гостю: {guestMinutes(prep, order.transit_minutes)} хв з дорогою
+          </p>
           <button
             type="button"
             className="min-h-10 rounded-lg bg-sq-blue px-3 text-[15px] font-semibold text-white disabled:opacity-60"
@@ -305,7 +314,7 @@ function AutoCard({
             disabled={busy}
             data-testid={`remote-requote-${order.id}`}
           >
-            Встигнемо за {prep} хв
+            Встигнемо за {prep} хв (гостю {guestMinutes(prep, order.transit_minutes)})
           </button>
           <button
             type="button"

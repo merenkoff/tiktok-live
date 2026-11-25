@@ -338,6 +338,12 @@ export interface CompleteSaleParams {
    */
   remote_order_id?: number | null;
   /**
+   * The time the guest agreed to for `remote_order_id`, as the till showed it
+   * (РК4): refused when the order's time is another — the kitchen corrected
+   * it in the seconds before the till heard. Null (an older till) checks nothing.
+   */
+  remote_quoted_minutes?: number | null;
+  /**
    * Kitchen dishes sold on the kitchen's word by phone while the till had no
    * network (РК5, POS_REMOTE_KITCHEN.md §8): the receipt's lines the kitchen
    * cooks become a paid kitchen order here, in this transaction, and move no
@@ -1121,7 +1127,12 @@ export async function completeSaleTx(
   // matched ones skip the cafe's shelf below. Locked here, so two tills
   // cannot both pay the same order.
   let remoteUnclaimed = params.remote_order_id
-    ? await remoteKitchen.remoteLinesForSaleTx(client, params.storeId, params.remote_order_id)
+    ? await remoteKitchen.remoteLinesForSaleTx(
+        client,
+        params.storeId,
+        params.remote_order_id,
+        params.remote_quoted_minutes ?? null
+      )
     : [];
   // Agreed by phone offline (РК5, §8): the kitchen's part becomes its order
   // now, and its lines are matched below exactly like a paid order's.

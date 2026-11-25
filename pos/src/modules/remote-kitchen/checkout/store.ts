@@ -156,7 +156,9 @@ export function createRemoteCheckout(
     const fresh = state.order != null && state.askedSignature === state.signature;
     const payable = hasLines && fresh && p === 'agreed';
     controls.setCheckoutHold(hasLines ? (payable ? null : holdReason(fresh ? p : 'idle', true)) : null);
-    controls.setRemoteOrderId(payable ? state.order!.id : null);
+    // With the time the guest agreed to: a receipt rung just as the kitchen
+    // changed it (РК4) is refused by the server rather than paid.
+    controls.setRemoteOrderId(payable ? state.order!.id : null, payable ? state.order!.quoted_minutes : null);
   }
 
   function schedulePoll() {

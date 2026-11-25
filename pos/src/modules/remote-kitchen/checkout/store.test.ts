@@ -55,14 +55,16 @@ function harness(opts: { phone?: boolean } = {}) {
   const cart = {
     hold: null as string | null,
     remoteOrderId: null as number | null,
+    quoted: null as number | null,
     phone: null as { minutes: number; agreed_at: string } | null,
   };
   const controls = {
     setCheckoutHold: (r: string | null) => {
       cart.hold = r;
     },
-    setRemoteOrderId: (id: number | null) => {
+    setRemoteOrderId: (id: number | null, quotedMinutes?: number | null) => {
       cart.remoteOrderId = id;
+      cart.quoted = quotedMinutes ?? null;
     },
     ...(opts.phone === false
       ? {}
@@ -126,6 +128,8 @@ describe('the remote-kitchen checkout', () => {
     await h.store.ask();
     h.store.agree();
     expect(h.cart.remoteOrderId).toBe(5);
+    // The sale carries the time the guest agreed to: the server refuses another.
+    expect(h.cart.quoted).toBe(25);
 
     h.api.readOrder.mockResolvedValueOnce(
       view({ status: 'quoted', quote_source: 'kitchen', quoted_minutes: 40, quote_expires_at: at(300) })

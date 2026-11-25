@@ -33,7 +33,7 @@ const TONE_CLASS = {
 } as const;
 
 export function OrdersTab() {
-  const { orders, offset, loading, error, banner, markReady, markServed, delayRemote, clearBanner } =
+  const { orders, offset, loading, error, banner, markReady, markServed, delayRemote, delaying, clearBanner } =
     useKitchenOrders(true);
   // The waits tick once a second; the list itself comes every five.
   const [, tick] = useReducer((n: number) => n + 1, 0);
@@ -76,6 +76,7 @@ export function OrdersTab() {
               actionTestId={`kitchen-ready-${orderKey(order)}`}
               onAction={() => void markReady(order)}
               onDelay={() => void delayRemote(order)}
+              delayBusy={order.kind === 'remote' && delaying.has(order.id)}
             />
           ))}
         </Column>
@@ -90,6 +91,7 @@ export function OrdersTab() {
               actionTestId={`kitchen-served-${orderKey(order)}`}
               onAction={() => void markServed(order)}
               onDelay={() => void delayRemote(order)}
+              delayBusy={order.kind === 'remote' && delaying.has(order.id)}
             />
           ))}
         </Column>
@@ -137,6 +139,7 @@ function OrderCard({
   actionTestId,
   onAction,
   onDelay,
+  delayBusy = false,
 }: {
   order: KitchenOrder;
   since: string;
@@ -146,6 +149,8 @@ function OrderCard({
   onAction: () => void;
   /** «+10 хв» — shown on a cafe's order only. */
   onDelay: () => void;
+  /** Its «+10 хв» is on the way: the button waits, so a double tap adds ten, not twenty. */
+  delayBusy?: boolean;
 }) {
   const seconds = waitSeconds(since, offset);
   // A cafe's order is late against its promise, not against how long it waited.
@@ -253,7 +258,8 @@ function OrderCard({
           <button
             type="button"
             onClick={onDelay}
-            className="min-h-12 px-4 rounded-xl text-[17px] font-semibold bg-sq-empty text-sq-text hover:brightness-95 shrink-0"
+            disabled={delayBusy}
+            className="min-h-12 px-4 rounded-xl text-[17px] font-semibold bg-sq-empty text-sq-text hover:brightness-95 shrink-0 disabled:opacity-60"
             data-testid={`kitchen-delay-${orderKey(order)}`}
           >
             +{REMOTE_DELAY_MIN} хв
