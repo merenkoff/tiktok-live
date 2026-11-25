@@ -132,6 +132,21 @@ interface CartStore {
    * in the draft, minted once, so a retry cannot refund twice.
    */
   exchange: ExchangeDraft | null;
+  /**
+   * The remote-kitchen order whose time the guest agreed to
+   * (TechDocs/POS_REMOTE_KITCHEN.md §8). Set by the cafe module's «З кухні»
+   * block; the sale sends it, and the server pays the order in the same
+   * transaction — or refuses if the cart's kitchen lines no longer match.
+   */
+  remoteOrderId: number | null;
+  /**
+   * A module's reason the cart cannot be paid yet (a dish from the remote
+   * kitchen with no agreed time). Shown as the banner when «Оплатити» is
+   * pressed; null means nothing holds the payment.
+   */
+  checkoutHold: string | null;
+  setRemoteOrderId: (id: number | null) => void;
+  setCheckoutHold: (reason: string | null) => void;
   cartDiscount: CartDiscount | null;
   customer: PosCustomer | null;
   setBanner: (msg: string | null) => void;
@@ -265,6 +280,10 @@ export const useCartStore = create<CartStore>((set, get) => ({
   banner: null,
   preorderId: null,
   exchange: null,
+  remoteOrderId: null,
+  checkoutHold: null,
+  setRemoteOrderId: (id) => set({ remoteOrderId: id }),
+  setCheckoutHold: (reason) => set({ checkoutHold: reason }),
   cartDiscount: null,
   customer: null,
 
@@ -405,6 +424,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
       cartDiscount: cartDiscount ?? null,
       customer: customer ?? null,
       preorderId: preorderId ?? null,
+      remoteOrderId: null,
+      checkoutHold: null,
       banner: null,
     });
   },
@@ -483,6 +504,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
       customer: null,
       preorderId: null,
       exchange: null,
+      remoteOrderId: null,
+      checkoutHold: null,
     }),
 
   subtotalCents: () => get().lines.reduce((sum, line) => sum + cartLineCents(line), 0),

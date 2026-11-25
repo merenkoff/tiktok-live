@@ -11,6 +11,7 @@ const CafeCatalog = lazyWithRetry(() => import('./CafeCatalog'));
 const KitchenPage = lazyWithRetry(() => import('./kitchen/KitchenPage'));
 const CafePanels = lazyWithRetry(() => import('./panels/CafePanels'));
 const CafeAnalyticsPage = lazyWithRetry(() => import('./pages/CafeAnalyticsPage'));
+const KitchenCheckoutAction = lazyWithRetry(() => import('./remote/KitchenCheckoutAction'));
 
 /**
  * The café sales vertical — the counter's sell screen and the kitchen's board
@@ -37,6 +38,10 @@ export const verticalCafeModule: RemoteModuleDescriptor = {
   // and one that deliberately has NO fallback: a panel that fails contributes
   // nothing and the dashboard stays exactly what it was.
   analytics: { Panels: CafePanels },
+  // «З кухні» above «Оплатити» (РК2, TechDocs/POS_REMOTE_KITCHEN.md §6.1): a
+  // cafe whose dishes a remote kitchen cooks asks it for a time before the
+  // receipt. Draws nothing in a store without such a kitchen.
+  checkout: { Action: KitchenCheckoutAction },
   // Two mounts, as the florist has: the root one is the kitchen's board, the
   // admin one is the owner's menu matrix (К6c). Only the root route needs a
   // `routePath` in `module_remotes` — that entry stands in for the desktop

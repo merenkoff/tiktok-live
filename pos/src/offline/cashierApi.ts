@@ -152,6 +152,12 @@ export const cashierApi = {
      */
     preorder_id?: number | null;
     /**
+     * The remote-kitchen order this receipt pays (TechDocs/POS_REMOTE_KITCHEN.md
+     * §8). Online only: the desktop's repository refuses it
+     * without a connection rather than queueing it.
+     */
+    remote_order_id?: number | null;
+    /**
      * The step the payment screen rounded the cash part by (0, 10, 50; НБУ
      * № 25). Kept on the offline path too: a queued sale replays with it, so
      * the server files the sum the printed receipt shows.

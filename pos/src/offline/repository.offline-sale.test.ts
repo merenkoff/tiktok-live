@@ -367,3 +367,35 @@ describe('completeSale — a weighed line, offline (TechDocs/grocery/G4_WEIGHED.
     expect(db.catalog.put).toHaveBeenCalledWith(expect.objectContaining({ variant_id: 70, quantity: 2000 }));
   });
 });
+
+describe('completeSale — a dish from the remote kitchen (TechDocs/POS_REMOTE_KITCHEN.md §8)', () => {
+  const remote = { ...payload, remote_order_id: 5 };
+
+  it('is refused offline and nothing is queued, in any store', async () => {
+    const { REMOTE_ORDER_OFFLINE } = await import('./repository');
+    vi.mocked(api.loadAuth).mockReturnValue({ staff: { display_name: 'Олена' }, store: {} } as never);
+    await expect(completeSale(remote)).rejects.toThrow(REMOTE_ORDER_OFFLINE);
+    expect(outbox).toHaveLength(0);
+    expect(takeStamp).not.toHaveBeenCalled();
+  });
+
+  it('goes to the server with the order when online', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    vi.mocked(api.hasLiveJwt).mockReturnValue(true);
+    vi.mocked(api.completeSale).mockResolvedValue({ id: 9, items: [], payments: [], refunds: [] } as never);
+    await completeSale(remote);
+    expect(api.completeSale).toHaveBeenCalledWith(expect.objectContaining({ remote_order_id: 5 }));
+  });
+
+  it('never queues a request that went out unanswered, even in a non-fiscal store', async () => {
+    const { isNetworkError } = await import('../services/api');
+    const { FiscalSaleUnknownError } = await import('./errors');
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    vi.mocked(api.hasLiveJwt).mockReturnValue(true);
+    vi.mocked(api.loadAuth).mockReturnValue({ staff: { display_name: 'Олена' }, store: {} } as never);
+    vi.mocked(api.completeSale).mockRejectedValue(new Error('timeout'));
+    vi.mocked(isNetworkError).mockReturnValueOnce(true);
+    await expect(completeSale(remote, { clientUuid: 'k-1' })).rejects.toBeInstanceOf(FiscalSaleUnknownError);
+    expect(outbox).toHaveLength(0);
+  });
+});

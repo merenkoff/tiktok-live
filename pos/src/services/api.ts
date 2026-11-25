@@ -546,6 +546,11 @@ class PosApi {
     parked_cart_id?: number | null;
     /** The pre-order being handed over. Its lines and prices come from the server. */
     preorder_id?: number | null;
+    /**
+     * The remote-kitchen order this receipt pays (TechDocs/POS_REMOTE_KITCHEN.md
+     * §8). Online only: the kitchen's stock and its clock live on the server.
+     */
+    remote_order_id?: number | null;
     /** Cash-rounding step (0, 10, 50 kopecks) the till showed; the server computes the sum. */
     cash_rounding?: number;
     /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
