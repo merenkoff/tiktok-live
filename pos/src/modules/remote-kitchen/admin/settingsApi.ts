@@ -105,3 +105,46 @@ export const listCafes = () =>
 
 export const saveStatus = (body: { accepting?: boolean; pause_minutes?: number | null; load_minutes?: number }) =>
   posRequest<KitchenStatus>('put', '/remote-kitchen/status', body);
+
+/** One line of «Віддано на точки»: the other side, its orders, their cost and dishes. */
+export interface ReportRow {
+  /** The other store's id — two points may share a name. */
+  store_id: number;
+  /** The cafe's name on a kitchen's report, the link's kitchen title on a cafe's. */
+  store_name: string;
+  store_address?: string | null;
+  orders: number;
+  cancelled: number;
+  /** Of `cancelled`, the kitchen's own; the rest are the cafe's voids and «Скасувати». */
+  cancelled_kitchen?: number;
+  /** By the first promise — the time the guest was told. */
+  on_time: number;
+  /** By the promise after every «+N хв». */
+  on_time_moved?: number;
+  delayed: number;
+  /** What it took off the kitchen's shelf at today's purchase prices; unpriced lines left out. */
+  cost_cents?: number;
+  unpriced_lines?: number;
+  dishes: Array<{ name: string; label?: string; quantity: number }>;
+}
+
+export async function readReport(side: 'cafe' | 'kitchen', days: number): Promise<ReportRow[]> {
+  const res = await posRequest<{ rows?: ReportRow[] }>('get', `/remote-kitchen/report?side=${side}&days=${days}`);
+  return Array.isArray(res?.rows) ? res.rows : [];
+}
+
+/**
+ * The sides this store has a report on — every link it was ever part of,
+ * revoked ones too. An older server without the route answers null, and the
+ * page falls back to the live setup.
+ */
+export async function readReportSides(): Promise<Array<'cafe' | 'kitchen'> | null> {
+  try {
+    const res = await posRequest<{ sides?: unknown }>('get', '/remote-kitchen/report/sides');
+    return Array.isArray(res?.sides)
+      ? res.sides.filter((side): side is 'cafe' | 'kitchen' => side === 'cafe' || side === 'kitchen')
+      : null;
+  } catch {
+    return null;
+  }
+}

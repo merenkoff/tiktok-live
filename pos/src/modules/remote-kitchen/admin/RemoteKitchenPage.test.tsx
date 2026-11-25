@@ -20,6 +20,8 @@ const api = {
   importDishes: vi.fn<typeof Api.importDishes>(),
   listCafes: vi.fn<typeof Api.listCafes>(),
   saveStatus: vi.fn<typeof Api.saveStatus>(),
+  readReport: vi.fn<typeof Api.readReport>(async () => []),
+  readReportSides: vi.fn<typeof Api.readReportSides>(async () => null),
 };
 
 vi.mock('./settingsApi', () => ({
@@ -31,6 +33,8 @@ vi.mock('./settingsApi', () => ({
   importDishes: (d: Parameters<typeof Api.importDishes>[0]) => api.importDishes(d),
   listCafes: () => api.listCafes(),
   saveStatus: (b: Parameters<typeof Api.saveStatus>[0]) => api.saveStatus(b),
+  readReport: (side: 'cafe' | 'kitchen', days: number) => api.readReport(side, days),
+  readReportSides: () => api.readReportSides(),
 }));
 
 const { RemoteKitchenPage } = await import('./RemoteKitchenPage');
@@ -47,7 +51,11 @@ const LINK: Api.CafeLink = {
 };
 const OPEN: Api.KitchenStatus = { accepting: true, paused_until: null, load_minutes: 0 };
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  api.readReport.mockImplementation(async () => []);
+  api.readReportSides.mockImplementation(async () => null);
+});
 
 describe('RemoteKitchenPage', () => {
   it('tells a store with no link who links stores, and asks nothing more', async () => {
@@ -215,5 +223,74 @@ describe('RemoteKitchenPage', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('«Віддано на точки»: by cafe, the promises kept, the cost and the dishes by size, for the period picked', async () => {
+    api.readSetup.mockResolvedValue({ as_cafe: null, as_kitchen: { status: OPEN, cafes: [] } } as never);
+    api.listCafes.mockResolvedValue({ cafes: [], status: OPEN });
+    api.readReport.mockImplementation(async (_side, days) => [
+      {
+        store_id: 3,
+        store_name: 'Пульчинелла Парк',
+        orders: days === 30 ? 40 : 10,
+        cancelled: 3,
+        cancelled_kitchen: 1,
+        on_time: 8,
+        on_time_moved: 9,
+        delayed: 2,
+        cost_cents: 123450,
+        unpriced_lines: 1,
+        dishes: [
+          { name: 'Маргарита', label: '30 см', quantity: 9 },
+          { name: 'Маргарита', label: '50 см', quantity: 5 },
+        ],
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<RemoteKitchenPage />);
+    const report = await screen.findByTestId('rk-report-kitchen');
+    expect(api.readReport).toHaveBeenLastCalledWith('kitchen', 7);
+    // By the time the guest was told; what «+N хв» bought is said apart.
+    expect(await within(report).findByText(/8 з 10 вчасно \(80 %\)/)).toBeInTheDocument();
+    expect(report).toHaveTextContent('переносили 2, з переносом вчасно 9');
+    // Whose cancels: the kitchen's one, the cafe's two.
+    expect(report).toHaveTextContent('скасувала кухня 1, кафе 2');
+    expect(report).toHaveTextContent(/Собівартість 1\s?234,50/);
+    expect(report).toHaveTextContent('без ціни закупівлі: 1 поз.');
+    expect(report).toHaveTextContent('Маргарита 30 см × 9, Маргарита 50 см × 5');
+
+    expect(within(report).getByRole('button', { name: 'Сьогодні' })).toBeInTheDocument();
+    await user.click(within(report).getByRole('button', { name: '30 днів' }));
+    expect(api.readReport).toHaveBeenLastCalledWith('kitchen', 30);
+    expect(await within(report).findByText(/8 з 40 вчасно/)).toBeInTheDocument();
+    expect(screen.queryByTestId('rk-report-cafe')).toBeNull();
+  });
+
+  it('tells two points with one name apart, keyed by store', async () => {
+    api.readSetup.mockResolvedValue({ as_cafe: null, as_kitchen: { status: OPEN, cafes: [] } } as never);
+    api.listCafes.mockResolvedValue({ cafes: [], status: OPEN });
+    const row = (id: number, address: string | null) => ({
+      store_id: id,
+      store_name: 'Пульчинелла',
+      store_address: address,
+      orders: 1,
+      cancelled: 0,
+      on_time: 1,
+      delayed: 0,
+      dishes: [],
+    });
+    api.readReport.mockResolvedValue([row(3, 'Вхід 1'), row(4, null)]);
+    render(<RemoteKitchenPage />);
+    expect(await screen.findByTestId('rk-report-row-3')).toHaveTextContent('Пульчинелла (Вхід 1)');
+    expect(screen.getByTestId('rk-report-row-4')).toHaveTextContent('Пульчинелла (№ 4)');
+  });
+
+  it('keeps the report after the link is revoked, and says why there is no link', async () => {
+    api.readSetup.mockResolvedValue({ as_cafe: null, as_kitchen: null });
+    api.readReportSides.mockResolvedValue(['kitchen']);
+    render(<RemoteKitchenPage />);
+    expect(await screen.findByTestId('rk-report-kitchen')).toBeInTheDocument();
+    expect(screen.getByTestId('rk-not-linked')).toHaveTextContent('Звіт за замовлення, що вже були');
+    expect(screen.queryByTestId('rk-report-cafe')).toBeNull();
   });
 });

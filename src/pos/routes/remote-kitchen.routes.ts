@@ -274,6 +274,31 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     return { cafes, status: await rk.getKitchenStatus(auth.storeId) };
   });
 
+  // «Віддано на точки» and the promises kept (РК5): the owner's, either side.
+  // `days` counts this store's calendar days back from today (1 = today).
+  fastify.get('/remote-kitchen/report', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    const query = request.query as { side?: unknown; days?: unknown };
+    if (query.side !== 'cafe' && query.side !== 'kitchen') {
+      return reply.code(400).send({ error: 'side: cafe або kitchen' });
+    }
+    const days = query.days === undefined || query.days === '' ? 7 : Number(query.days);
+    if (!Number.isInteger(days) || days < 1 || days > rk.REPORT_MAX_DAYS) {
+      return reply.code(400).send({ error: `days: ціле число днів від 1 до ${rk.REPORT_MAX_DAYS}` });
+    }
+    return rk.remoteReport(auth.storeId, query.side, days);
+  });
+
+  // Which sides this store has a report on — every link it was ever part of,
+  // revoked ones included: the owner reads the season's settlement after the
+  // super admin has revoked the link, when the setup no longer names it.
+  fastify.get('/remote-kitchen/report/sides', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    return { sides: await rk.reportSides(auth.storeId) };
+  });
+
   // ── the cafe owner's settings (§11 «Налаштування зв'язки») ────────
 
   fastify.patch('/remote-kitchen/link', async (request, reply) => {
