@@ -6,7 +6,7 @@
 // asked how long its order will take; the cook answers with one tap on the
 // suggested time, nudges it by five, or says «Не зможемо».
 //
-// This module's `till.Banner`: the host's till frame draws it over every
+// Half of this module's `till.Banner` (`till/TillBanner.tsx`): the host's till frame draws it over every
 // screen — the kitchen's board above all, which is the café vertical's page
 // and carries none of this code. So it draws NOTHING while nothing waits, and
 // in a store that is not a kitchen it does not even poll (`useRemoteRequests`).
@@ -63,11 +63,6 @@ export function RequestsStrip({ hook = useRemoteRequests }: { hook?: typeof useR
       </div>
     </section>
   );
-}
-
-/** What the till frame draws (`till.Banner` takes no props). */
-export default function RemoteKitchenBanner() {
-  return <RequestsStrip />;
 }
 
 function RequestCard({

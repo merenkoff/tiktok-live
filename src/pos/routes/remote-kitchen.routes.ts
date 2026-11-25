@@ -66,6 +66,9 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
   // Everything a screen needs to know before the first order: am I a cafe with
   // a kitchen (and which of my dishes go there), am I a kitchen (and is it
   // accepting). Both null = the feature is not set up for this store.
+  // `cafe_orders`: this store still has paid orders on their way or a
+  // kitchen's cancel to answer — true even after the link was revoked, so the
+  // cafe's tracker keeps showing them while «З кухні» is gone (РК5).
   fastify.get('/remote-kitchen/setup', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
@@ -88,7 +91,11 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
             cafes: kitchenLinks.map((l) => ({ link_id: l.id, cafe_store_id: l.cafe_store_id, status: l.status })),
           }
         : null;
-    return { as_cafe: asCafe, as_kitchen: asKitchen };
+    return {
+      as_cafe: asCafe,
+      as_kitchen: asKitchen,
+      cafe_orders: asCafe != null || (await rk.hasCafeOrdersToFollow(auth.storeId)),
+    };
   });
 
   // The kitchen's «Пауза прийому» and «Черга зараз». Any of the kitchen's people.
@@ -170,6 +177,7 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     { path: 'paid', method: 'POST', run: (a, id, b) => rk.markPaid(a, id, b) },
     { path: 'arrived', method: 'POST', run: (a, id) => rk.markArrived(a, id) },
     { path: 'handed', method: 'POST', run: (a, id) => rk.markHandedOver(a, id) },
+    { path: 'cancel-seen', method: 'POST', run: (a, id) => rk.markCancelSeen(a, id) },
     // the kitchen
     { path: 'quote', method: 'POST', run: (a, id, b) => rk.kitchenQuote(a, id, b) },
     { path: 'decline', method: 'POST', run: (a, id, b) => rk.kitchenDecline(a, id, b) },

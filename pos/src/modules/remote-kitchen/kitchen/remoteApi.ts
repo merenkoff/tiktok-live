@@ -7,6 +7,7 @@
 // shapes: this bundle shares only `@pos/platform` with the host.
 
 import { posRequest } from '../lib/hostPlatform';
+import { readSides } from '../lib/sides';
 
 export interface RemoteRequestItem {
   id: number;
@@ -40,8 +41,7 @@ export interface RemoteRequest {
  * server for a kitchen's requests every three seconds all day.
  */
 export async function isKitchen(): Promise<boolean> {
-  const res = await posRequest<{ as_kitchen?: unknown }>('get', '/remote-kitchen/setup');
-  return res?.as_kitchen != null;
+  return (await readSides()).kitchen;
 }
 
 /**
