@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as kitchenApi from './kitchenApi';
-import { applyPrep, clockOffset, serverMessage } from './lib/kitchen';
+import { applyPrep, clockOffset, REMOTE_DELAY_MIN, serverMessage } from './lib/kitchen';
 import type { KitchenOrder } from './types';
 
 export const POLL_MS = 5000;
@@ -33,6 +33,8 @@ export interface KitchenOrders {
   /** Take the ORDER, not an id: the board has sales and rounds on it. */
   markReady: (order: Pick<KitchenOrder, 'id' | 'kind'>) => Promise<void>;
   markServed: (order: Pick<KitchenOrder, 'id' | 'kind'>) => Promise<void>;
+  /** «+10 хв» on a cafe's order: the promise moves there and here. */
+  delayRemote: (order: Pick<KitchenOrder, 'id'>) => Promise<void>;
   clearBanner: () => void;
 }
 
@@ -103,7 +105,20 @@ export function useKitchenOrders(enabled: boolean): KitchenOrders {
     (order: Pick<KitchenOrder, 'id' | 'kind'>) => tap(order, 'served'),
     [tap]
   );
+  const delayRemote = useCallback(
+    async (order: Pick<KitchenOrder, 'id'>) => {
+      try {
+        await kitchenApi.delayRemote(order.id, REMOTE_DELAY_MIN);
+        if (mountedRef.current) setBanner(null);
+      } catch (err) {
+        if (mountedRef.current) setBanner(serverMessage(err, 'Не вдалося перенести час'));
+      } finally {
+        await refresh();
+      }
+    },
+    [refresh]
+  );
   const clearBanner = useCallback(() => setBanner(null), []);
 
-  return { orders, offset, loading, error, banner, refresh, markReady, markServed, clearBanner };
+  return { orders, offset, loading, error, banner, refresh, markReady, markServed, delayRemote, clearBanner };
 }

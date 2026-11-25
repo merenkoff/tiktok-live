@@ -96,6 +96,24 @@ describe('the remote-kitchen checkout', () => {
     expect(h.cart.remoteOrderId).toBe(5);
   });
 
+  it('takes back the guest’s yes when the kitchen changes a time the server gave by itself', async () => {
+    await ready(h);
+    h.api.createOrder.mockResolvedValueOnce(
+      view({ status: 'quoted', quote_source: 'auto', quoted_minutes: 25, quote_expires_at: at(300) })
+    );
+    await h.store.ask();
+    h.store.agree();
+    expect(h.cart.remoteOrderId).toBe(5);
+
+    h.api.readOrder.mockResolvedValueOnce(
+      view({ status: 'quoted', quote_source: 'kitchen', quoted_minutes: 40, quote_expires_at: at(300) })
+    );
+    await h.store.refresh();
+    expect(h.store.phase()).toBe('quoted');
+    expect(h.cart.remoteOrderId).toBeNull();
+    expect(h.cart.hold).toMatch(/чи згоден/);
+  });
+
   it('says nothing in a store without a remote kitchen', async () => {
     h.api.loadSetup.mockResolvedValueOnce(null as never);
     await ready(h);

@@ -1467,7 +1467,11 @@ export async function kitchenQuote(
   const minutes = minutesOf(input.minutes, 'Час приготування');
   return inTransaction(async (client) => {
     const order = await lockOrder(client, actor.storeId, orderId, 'kitchen');
-    statusIs(order, ['requested'], 'На це замовлення вже відповіли');
+    // «Змінити час» (РК4): a time the server confirmed by itself is the
+    // kitchen's to correct while the guest is still thinking. Its own answer,
+    // or the cafe's phone, is not.
+    const requote = order.status === 'quoted' && order.quote_source === 'auto';
+    if (!requote) statusIs(order, ['requested'], 'На це замовлення вже відповіли');
     if (Number(input.revision) !== Number(order.revision)) {
       throw new RemoteKitchenConflict('Кафе змінило замовлення — подивіться ще раз');
     }
@@ -1482,7 +1486,7 @@ export async function kitchenQuote(
         WHERE id = $1`,
       [orderId, minutes, transit, quoted, actor.staffId, link.quote_ttl_seconds]
     );
-    await logEvent(client, orderId, actor, 'quoted', { prep_minutes: minutes, minutes: quoted });
+    await logEvent(client, orderId, actor, requote ? 'requoted' : 'quoted', { prep_minutes: minutes, minutes: quoted });
     return reread(client, actor.storeId, orderId);
   });
 }

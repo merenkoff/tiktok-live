@@ -108,7 +108,13 @@ export function createRemoteCheckout(
       const next = await api.readOrder(order.id);
       // The cashier may have moved on (a new order, the cart emptied) while this read flew.
       if (state.order?.id !== order.id) return;
-      set({ order: next, agreed: next.status === 'quoted' && next.revision === order.revision ? state.agreed : false });
+      // The kitchen may correct a time the server confirmed by itself (РК4,
+      // «Змінити час»): the guest agreed to the old one, so ask them again.
+      const sameTime = next.quoted_minutes === order.quoted_minutes;
+      set({
+        order: next,
+        agreed: next.status === 'quoted' && next.revision === order.revision && sameTime ? state.agreed : false,
+      });
     } catch {
       // No answer: try again on the next tick, the screen keeps what it had.
       schedulePoll();

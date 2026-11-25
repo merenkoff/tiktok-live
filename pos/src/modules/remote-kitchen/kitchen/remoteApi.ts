@@ -31,6 +31,12 @@ export interface RemoteRequest {
   suggested_minutes: number | null;
   answer_deadline_at: string | null;
   requested_at: string;
+  /** For a time already given: who gave it — the server by itself (`auto`), the kitchen, the cafe's phone. */
+  quote_source?: 'kitchen' | 'auto' | 'phone' | null;
+  /** The whole promise, road included. */
+  quoted_minutes?: number | null;
+  /** Until when the cafe's guest may still agree to it. */
+  quote_expires_at?: string | null;
   items: RemoteRequestItem[];
 }
 
@@ -69,6 +75,21 @@ export function answerWithTime(order: Pick<RemoteRequest, 'id' | 'revision'>, mi
 export function decline(order: Pick<RemoteRequest, 'id' | 'revision'>, reason: string): Promise<unknown> {
   return posRequest<unknown>('post', `/remote-kitchen/orders/${order.id}/decline`, {
     reason,
+    revision: order.revision,
+  });
+}
+
+/** «Немає» by a dish: the cafe gets the lines back marked, and asks again without them. */
+export function declineDishes(
+  order: Pick<RemoteRequest, 'id' | 'revision' | 'items'>,
+  itemIds: number[]
+): Promise<unknown> {
+  // The cafe's till shows the reason, not the item list: name the dishes in it.
+  const names = order.items.filter((i) => itemIds.includes(i.id)).map((i) => i.product_name);
+  const reason = names.length > 0 ? `Немає: ${names.join(', ')}`.slice(0, 160) : undefined;
+  return posRequest<unknown>('post', `/remote-kitchen/orders/${order.id}/decline`, {
+    reason,
+    problems: itemIds.map((item_id) => ({ item_id, problem: 'unavailable' })),
     revision: order.revision,
   });
 }

@@ -214,6 +214,23 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     expect(again.json().id).toBe(order.id);
   });
 
+  it('the kitchen corrects a time the server confirmed by itself, once; its own answer stands', async () => {
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    expect(order.quote_source).toBe('auto');
+    const changed = await step(kitchen.sellerToken, order.id, 'quote', { minutes: 30, revision: order.revision });
+    expect(changed.statusCode, changed.body).toBe(200);
+    expect(changed.json()).toMatchObject({ status: 'quoted', quote_source: 'kitchen', quoted_minutes: 40 });
+    const again = await step(kitchen.sellerToken, order.id, 'quote', { minutes: 20, revision: order.revision });
+    expect(again.statusCode).toBe(409);
+    const events = await app.inject({
+      method: 'GET',
+      url: `/api/pos/remote-kitchen/orders/${order.id}/events`,
+      headers: auth(kitchen.sellerToken),
+    });
+    expect(events.json().events.map((e: { kind: string }) => e.kind)).toContain('requoted');
+    await step(cafe.sellerToken, order.id, 'guest-declined');
+  });
+
   it('a long order waits for the kitchen, which answers only the revision it saw', async () => {
     const res = await ask([
       { variant_id: cafePizza, quantity: 1 },
@@ -620,6 +637,9 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     expect(card.prep_status).toBe('new');
     expect(card.title).toMatch(/П-\d+$/);
     expect(card.promised_at).not.toBeNull();
+    // Due at the kitchen one road earlier than at the guest.
+    const transit = (await orderView(order.id)).transit_minutes ?? 0;
+    expect(Date.parse(card.promised_at) - Date.parse(card.cook_by)).toBe(transit * 60_000);
     expect(card.items).toEqual([expect.objectContaining({ quantity: 2 })]);
 
     await step(kitchen.sellerToken, order.id, 'ready');
@@ -753,6 +773,22 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     expect(ready.json()).toMatchObject({ id: order.id, prep_status: 'ready' });
     // A slow tablet repeating the tap gets the same answer.
     expect((await tap(kitchen.sellerToken, 'ready')).json().prep_status).toBe('ready');
+
+    // «+10 хв» from the board: the promise moves at the cafe too.
+    const delay = (token: string, minutes: unknown) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/pos/kitchen/remote-orders/${order.id}/delay`,
+        headers: auth(token),
+        payload: { minutes },
+      });
+    const before = Date.parse((await orderView(order.id)).promised_at as string);
+    expect((await delay(kitchen.sellerToken, 0)).statusCode).toBe(409);
+    expect((await delay(cafe.sellerToken, 10)).statusCode).toBe(409);
+    expect((await delay(stranger.sellerToken, 10)).statusCode).toBe(404);
+    const late = await delay(kitchen.sellerToken, 10);
+    expect(late.statusCode, late.body).toBe(200);
+    expect(Date.parse(late.json().promised_at) - before).toBe(10 * 60_000);
 
     const handed = await tap(kitchen.sellerToken, 'served');
     expect(handed.statusCode, handed.body).toBe(200);

@@ -14,6 +14,8 @@ import {
   orderKey,
   orderLabel,
   orderSubLabel,
+  REMOTE_DELAY_MIN,
+  remoteDue,
   splitColumns,
   waitSeconds,
   waitTone,
@@ -31,7 +33,7 @@ const TONE_CLASS = {
 } as const;
 
 export function OrdersTab() {
-  const { orders, offset, loading, error, banner, markReady, markServed, clearBanner } =
+  const { orders, offset, loading, error, banner, markReady, markServed, delayRemote, clearBanner } =
     useKitchenOrders(true);
   // The waits tick once a second; the list itself comes every five.
   const [, tick] = useReducer((n: number) => n + 1, 0);
@@ -73,6 +75,7 @@ export function OrdersTab() {
               action="ready"
               actionTestId={`kitchen-ready-${orderKey(order)}`}
               onAction={() => void markReady(order)}
+              onDelay={() => void delayRemote(order)}
             />
           ))}
         </Column>
@@ -86,6 +89,7 @@ export function OrdersTab() {
               action="served"
               actionTestId={`kitchen-served-${orderKey(order)}`}
               onAction={() => void markServed(order)}
+              onDelay={() => void delayRemote(order)}
             />
           ))}
         </Column>
@@ -113,9 +117,7 @@ function Column({
   return (
     <section className="space-y-3 min-w-0" data-testid={testId}>
       <h2 className="flex items-baseline gap-2 pb-1 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
-        <span className={`text-[15px] font-bold ${tone === 'blue' ? 'text-sq-blue' : 'text-sq-success'}`}>
-          {title}
-        </span>
+        <span className={`text-[15px] font-bold ${tone === 'blue' ? 'text-sq-blue' : 'text-sq-success'}`}>{title}</span>
         <span className="text-[13px] text-sq-muted tabular-nums">{children.length}</span>
       </h2>
       {children.length === 0 ? (
@@ -134,6 +136,7 @@ function OrderCard({
   action,
   actionTestId,
   onAction,
+  onDelay,
 }: {
   order: KitchenOrder;
   since: string;
@@ -141,9 +144,13 @@ function OrderCard({
   action: 'ready' | 'served';
   actionTestId: string;
   onAction: () => void;
+  /** «+10 хв» — shown on a cafe's order only. */
+  onDelay: () => void;
 }) {
   const seconds = waitSeconds(since, offset);
-  const tone = waitTone(seconds);
+  // A cafe's order is late against its promise, not against how long it waited.
+  const due = remoteDue(order, offset);
+  const tone = due ? due.tone : waitTone(seconds);
   const stations = new Set<Station>();
   for (const item of order.items) for (const s of item.stations) stations.add(s);
   const sub = orderSubLabel(order);
@@ -172,6 +179,11 @@ function OrderCard({
             </p>
           ) : (
             <p className="text-[13px] text-sq-secondary">за стійкою</p>
+          )}
+          {due && due.lateMinutes > 0 && (
+            <p className="text-[13px] font-semibold text-sq-danger" data-testid="kitchen-order-late">
+              Запізнюємось на {due.lateMinutes} хв
+            </p>
           )}
           {carried && (
             <p className="text-[13px] font-semibold text-sq-success" data-testid="kitchen-order-carried">
@@ -236,23 +248,35 @@ function OrderCard({
 
       {order.note && <p className="text-sm text-sq-secondary -mt-1">Замовлення: {order.note}</p>}
 
-      <button
-        type="button"
-        onClick={onAction}
-        className={`w-full min-h-12 rounded-xl text-[17px] font-semibold text-white inline-flex items-center justify-center gap-2 ${
-          action === 'ready' ? 'bg-sq-blue hover:bg-sq-blue-press' : 'bg-sq-success hover:brightness-95'
-        }`}
-        data-testid={actionTestId}
-      >
-        {action === 'ready' && <Check size={20} aria-hidden />}
-        {action === 'ready'
-          ? 'Готово'
-          : order.kind === 'remote'
-            ? 'Віддали курʼєру'
-            : carried
-              ? `Видати решту (${carried.left})`
-              : 'Видано'}
-      </button>
+      <div className="flex gap-2">
+        {due && (
+          <button
+            type="button"
+            onClick={onDelay}
+            className="min-h-12 px-4 rounded-xl text-[17px] font-semibold bg-sq-empty text-sq-text hover:brightness-95 shrink-0"
+            data-testid={`kitchen-delay-${orderKey(order)}`}
+          >
+            +{REMOTE_DELAY_MIN} хв
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onAction}
+          className={`flex-1 min-h-12 rounded-xl text-[17px] font-semibold text-white inline-flex items-center justify-center gap-2 ${
+            action === 'ready' ? 'bg-sq-blue hover:bg-sq-blue-press' : 'bg-sq-success hover:brightness-95'
+          }`}
+          data-testid={actionTestId}
+        >
+          {action === 'ready' && <Check size={20} aria-hidden />}
+          {action === 'ready'
+            ? 'Готово'
+            : order.kind === 'remote'
+              ? 'Віддали курʼєру'
+              : carried
+                ? `Видати решту (${carried.left})`
+                : 'Видано'}
+        </button>
+      </div>
     </article>
   );
 }

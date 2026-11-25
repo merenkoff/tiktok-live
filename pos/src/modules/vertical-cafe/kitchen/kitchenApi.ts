@@ -43,6 +43,14 @@ export function setPrep(
   return posRequest<PrepStatusRow>('patch', path, { prep_status: status });
 }
 
+/**
+ * «+10 хв» on a cafe's order (РК4): the kitchen will be late and says so first.
+ * The promise moves at the cafe too. The kitchen's own route, like the tap.
+ */
+export function delayRemote(orderId: number, minutes: number): Promise<{ id: number; promised_at: string | null }> {
+  return posRequest('post', `/kitchen/remote-orders/${orderId}/delay`, { minutes });
+}
+
 /** «Сьогодні не робимо» — on or off for the store's day. */
 export function setStopListed(productId: number, on: boolean): Promise<StopListRow> {
   return posRequest<StopListRow>('post', `/kitchen/stop-list/${productId}`, { stop_listed: on });
