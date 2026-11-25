@@ -1145,6 +1145,22 @@ export async function completeSaleTx(
       remoteUnclaimed = phone.lines;
     }
   }
+  // A dish the remote kitchen cooks is sold only with the kitchen's order
+  // (РК5): rung as an ordinary cafe dish, no kitchen would ever hear of it —
+  // a cashier the owner kept off «Віддалена кухня», a till older than the
+  // module, a scan. Judged for what the till rings now; never for an offline
+  // replay (the goods left hours ago: record, do not judge), a table's or a
+  // debt's locked lines, a pre-order handed over, or a receipt the kitchen
+  // agreed to by phone (its lines are the kitchen's order above; if that order
+  // could not be written, the receipt still stands — the call was the yes).
+  const kitchenDishes =
+    !params.offline_replay && !params.remote_phone && !params.bill_part && !params.debt_part && !params.preorder_id
+      ? await remoteKitchen.linkedCafeVariantsTx(
+          client,
+          params.storeId,
+          lineItems.filter((line) => !line.bill_item_id && !line.debt_item_id).map((line) => line.variant_id)
+        )
+      : new Map<number, string>();
 
   for (const line of lineItems) {
     const itemResult = await client.query(
@@ -1230,6 +1246,12 @@ export async function completeSaleTx(
         await remoteKitchen.claimRemoteLineTx(client, saleItemId, remote.id, lineModifiers);
         continue;
       }
+    }
+    const kitchenDish = !line.bill_item_id && !line.debt_item_id ? kitchenDishes.get(line.variant_id) : undefined;
+    if (kitchenDish !== undefined) {
+      throw new remoteKitchen.RemoteKitchenConflict(
+        `«${kitchenDish}» готує віддалена кухня — спершу запитайте кухню («З кухні»)`
+      );
     }
 
     // A line of a table bill: its round already took the stock, so moving it

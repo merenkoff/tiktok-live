@@ -517,14 +517,23 @@ export interface LinkItemView {
   kitchen_name: string;
   kitchen_label: string;
   prep_minutes: number | null;
+  /**
+   * Whether the kitchen would cook it today: its dish is live and not on the
+   * kitchen's stop list for the KITCHEN's day — the same test `resolveLines`
+   * refuses a request by. The cafe's tile says «немає на кухні» otherwise (РК5).
+   */
+  available: boolean;
 }
 
 export async function listLinkItems(linkId: number): Promise<LinkItemView[]> {
   const rows = await pool.query(
     `SELECT li.cafe_variant_id, li.kitchen_variant_id,
             cp.name AS cafe_name, cv.label AS cafe_label,
-            kp.name AS kitchen_name, kv.label AS kitchen_label, kp.prep_minutes
+            kp.name AS kitchen_name, kv.label AS kitchen_label, kp.prep_minutes,
+            kp.stop_listed_on::text AS stop_listed_on, kp.is_active AS kp_active, kv.is_active AS kv_active,
+            l.kitchen_store_id
        FROM pos_kitchen_link_items li
+       JOIN pos_kitchen_links l ON l.id = li.link_id
        JOIN pos_variants cv ON cv.id = li.cafe_variant_id
        JOIN pos_products cp ON cp.id = cv.product_id
        JOIN pos_variants kv ON kv.id = li.kitchen_variant_id
@@ -533,6 +542,8 @@ export async function listLinkItems(linkId: number): Promise<LinkItemView[]> {
       ORDER BY cp.name, cv.label`,
     [linkId]
   );
+  const kitchenToday =
+    rows.rows.length > 0 ? (await storeClock(pool, Number(rows.rows[0].kitchen_store_id))).today : null;
   return rows.rows.map((row) => ({
     cafe_variant_id: Number(row.cafe_variant_id),
     kitchen_variant_id: Number(row.kitchen_variant_id),
@@ -541,7 +552,37 @@ export async function listLinkItems(linkId: number): Promise<LinkItemView[]> {
     kitchen_name: String(row.kitchen_name),
     kitchen_label: String(row.kitchen_label ?? ''),
     prep_minutes: numOrNull(row.prep_minutes),
+    available:
+      row.kp_active === true &&
+      row.kv_active === true &&
+      !(row.stop_listed_on != null && row.stop_listed_on === kitchenToday),
   }));
+}
+
+/**
+ * This cafe's dishes the remote kitchen cooks, among `variantIds` — under any
+ * link that is not revoked (a paused one included: the kitchen is only off for
+ * now). By variant id, with the dish's name for the refusal.
+ */
+export async function linkedCafeVariantsTx(
+  client: DbClient,
+  cafeStoreId: number,
+  variantIds: readonly number[]
+): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  if (variantIds.length === 0) return out;
+  const rows = await client.query(
+    `SELECT DISTINCT li.cafe_variant_id, p.name
+       FROM pos_kitchen_link_items li
+       JOIN pos_kitchen_links l ON l.id = li.link_id
+       JOIN pos_variants v ON v.id = li.cafe_variant_id
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE l.cafe_store_id = $1 AND l.status <> 'revoked'
+        AND li.cafe_variant_id = ANY($2::bigint[])`,
+    [cafeStoreId, [...new Set(variantIds)]]
+  );
+  for (const row of rows.rows) out.set(Number(row.cafe_variant_id), String(row.name));
+  return out;
 }
 
 export interface KitchenDishView {

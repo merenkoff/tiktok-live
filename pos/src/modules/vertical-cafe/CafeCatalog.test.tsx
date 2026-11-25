@@ -90,4 +90,39 @@ describe('the café catalog and the scanner', () => {
     await user.click(screen.getByRole('button', { name: /Маргарита/ }));
     expect(useCartStore.getState().lines).toHaveLength(0);
   });
+
+  it('refuses a scan of a dish its tile would refuse, in the tile’s word', async () => {
+    const pizza = makeCatalogItem({ variant_id: 7, product_id: 3, product_name: 'Маргарита', label: '', attributes: {}, barcode: '2900000000071' });
+    lookupBarcode.mockResolvedValueOnce([pizza]);
+    useCartStore.getState().setTileMarks('remote-kitchen', { 7: { text: 'пауза', blocked: true } });
+    const user = userEvent.setup();
+    render(<CafeCatalog active stockEpoch={0} />);
+    await user.keyboard('2900000000071{Enter}');
+    await vi.waitFor(() => expect(useCartStore.getState().banner).toBe('«Маргарита» — пауза'));
+    expect(useCartStore.getState().lines).toHaveLength(0);
+  });
+
+  it('keeps a pizza live while one size still sells, and offers only that size', async () => {
+    // 30 см from the cafe's own oven, 50 см from the paused kitchen.
+    const small = makeCatalogItem({ variant_id: 8, product_id: 4, product_name: 'Піца', label: '30 см', attributes: { size: '30 см' } });
+    const large = makeCatalogItem({ variant_id: 9, product_id: 4, product_name: 'Піца', label: '50 см', attributes: { size: '50 см' } });
+    rows.splice(0, rows.length, small, large);
+    useCartStore.getState().setTileMarks('remote-kitchen', { 9: { text: 'пауза', blocked: true } });
+    const user = userEvent.setup();
+    render(<CafeCatalog active stockEpoch={0} />);
+    const tile = screen.getByRole('button', { name: /Піца/ });
+    expect(tile).toBeEnabled();
+    expect(tile).not.toHaveTextContent('пауза');
+    await user.click(tile);
+    expect(useCartStore.getState().lines).toHaveLength(1);
+    expect(useCartStore.getState().lines[0]).toMatchObject({ variant_id: 8 });
+
+    // Both sizes blocked: the tile is grey and says why.
+    useCartStore.getState().setTileMarks('remote-kitchen', {
+      8: { text: 'пауза', blocked: true },
+      9: { text: 'пауза', blocked: true },
+    });
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /Піца/ })).toBeDisabled());
+    expect(screen.getByRole('button', { name: /Піца/ })).toHaveTextContent('пауза');
+  });
 });

@@ -4,8 +4,8 @@
 
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useCartStore, useOfflineStatus } from '@pos/platform';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { enableOfflineReads, useCartStore, useOfflineStatus } from '@pos/platform';
 import type { CartLine } from '@host/hooks/useCart';
 import { KitchenCheckoutAction } from './KitchenCheckoutAction';
 import { createRemoteCheckout } from './store';
@@ -53,6 +53,11 @@ function line(variant_id: number, quantity: number, name: string): CartLine {
 }
 
 const props = { customer: null, cartDiscount: null, totalCents: 0, onCompleted: () => undefined };
+
+beforeAll(() => {
+  // A till whose offline runtime keeps the store's `online` current (desktop/tablet).
+  enableOfflineReads();
+});
 
 afterEach(() => {
   useCartStore.getState().clear();

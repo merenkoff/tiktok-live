@@ -4,7 +4,7 @@
 
 // What other modules say on this catalog's tiles (platform 25,
 // `useCartStore.tileMarks`): the remote kitchen's «≈30 хв» on a dish it cooks
-// for this cafe, «пауза» while it takes nothing, «потрібна мережа» offline.
+// for this cafe, «пауза» while it takes nothing, «дзвінок на кухню» offline.
 // The catalog draws the word and knows nothing of the kitchen — a module that
 // reaches into another module's screen is what this keeps out.
 
@@ -16,22 +16,43 @@ export interface TileMark {
 
 export type TileMarks = Readonly<Record<string, Readonly<Record<number, TileMark>>>>;
 
+/** The variants a module said cannot be sold right now (`blocked`). */
+export function blockedVariantIds(
+  variants: ReadonlyArray<{ variant_id: number }>,
+  marks: TileMarks | undefined
+): Set<number> {
+  const out = new Set<number>();
+  if (!marks) return out;
+  for (const byVariant of Object.values(marks)) {
+    for (const v of variants) {
+      const mark = byVariant?.[v.variant_id];
+      if (mark?.blocked && typeof mark.text === 'string' && mark.text) out.add(v.variant_id);
+    }
+  }
+  return out;
+}
+
 /**
- * The mark a product's tile shows: a blocked one first (the tile must say why
- * it is grey), else the first word any module put on any of its variants.
- * Null when nobody said anything — or the host is older than platform 25 and
- * has no marks at all.
+ * The mark a product's tile shows. A blocked word only when EVERY variant is
+ * blocked — then the tile is grey and says why; a size the cafe still sells
+ * keeps the tile live, the blocked size simply left out of what a tap offers
+ * (`blockedVariantIds`). Otherwise the first neutral word any module put on a
+ * variant that sells. Null when nobody said anything — or the host is older
+ * than platform 25 and has no marks at all.
  */
 export function tileMarkOf(variants: ReadonlyArray<{ variant_id: number }>, marks: TileMarks | undefined): TileMark | null {
-  if (!marks) return null;
-  let first: TileMark | null = null;
+  if (!marks || variants.length === 0) return null;
+  const blocked = blockedVariantIds(variants, marks);
+  let firstBlocked: TileMark | null = null;
+  let firstWord: TileMark | null = null;
   for (const byVariant of Object.values(marks)) {
     for (const v of variants) {
       const mark = byVariant?.[v.variant_id];
       if (!mark || typeof mark.text !== 'string' || !mark.text) continue;
-      if (mark.blocked) return mark;
-      first ??= mark;
+      if (mark.blocked) firstBlocked ??= mark;
+      else if (!blocked.has(v.variant_id)) firstWord ??= mark;
     }
   }
-  return first;
+  if (blocked.size === variants.length) return firstBlocked;
+  return firstWord;
 }

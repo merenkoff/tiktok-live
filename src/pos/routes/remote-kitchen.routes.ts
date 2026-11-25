@@ -80,6 +80,7 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
           items: (await rk.listLinkItems(link.id)).map((item) => ({
             cafe_variant_id: item.cafe_variant_id,
             prep_minutes: item.prep_minutes,
+            available: item.available,
           })),
         }
       : null;

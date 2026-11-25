@@ -6,16 +6,19 @@
 // (РК5, TechDocs/POS_REMOTE_KITCHEN.md §8): «кухня ≈30 хв» — the promise the
 // kitchen's own numbers suggest for that dish alone, road included, rounded
 // up to five as the server rounds it; «пауза» while the kitchen takes nothing;
-// «кухня вимкнена» while the link is paused — those two grey the tile. Offline
+// «кухня вимкнена» while the link is paused; «немає на кухні» for a dish the
+// kitchen has on today's stop list or retired (`available: false`, the same
+// test the server refuses a request by) — those three grey the tile. Offline
 // the dish still sells, on the kitchen's word by phone (§8): «дзвінок на
-// кухню», and the till's «З кухні» block takes the time the kitchen names.
+// кухню», and the till's «З кухні» block takes the time the kitchen names; a
+// stop list read before the network went is not trusted over that call.
 
 import type { TileMark } from '../lib/hostPlatform';
 
 interface CafeHalf {
   link?: { status?: unknown; transit_minutes?: unknown };
   kitchen?: { accepting?: unknown; load_minutes?: unknown };
-  items?: Array<{ cafe_variant_id?: unknown; prep_minutes?: unknown }>;
+  items?: Array<{ cafe_variant_id?: unknown; prep_minutes?: unknown; available?: unknown }>;
 }
 
 function num(value: unknown): number | null {
@@ -61,7 +64,9 @@ export function cafeTileMarks(asCafe: unknown, online: boolean): Record<number, 
       ? { text: blockedWord, blocked: true }
       : !online
         ? { text: OFFLINE_WORD, blocked: false }
-        : { text: dishWord(num(item.prep_minutes), load, transit), blocked: false };
+        : item.available === false
+          ? { text: 'немає на кухні', blocked: true }
+          : { text: dishWord(num(item.prep_minutes), load, transit), blocked: false };
   }
   return Object.keys(marks).length > 0 ? marks : null;
 }

@@ -64,6 +64,8 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
   let cafePizza = 0;
   let kitchenPizza = 0;
   let cafeRoll = 0;
+  // The cafe's own dish, never linked to the kitchen: what a mixed receipt sells beside a kitchen order.
+  let cafeLatte = 0;
   let kitchenRoll = 0;
   let kitchenPizzaProduct = 0;
   let kitchenRollProduct = 0;
@@ -88,6 +90,7 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
       quantity: 5,
     }));
     ({ variantId: cafeRoll } = await seedProduct(cafe.storeId, { name: 'Філадельфія', quantity: 5 }));
+    ({ variantId: cafeLatte } = await seedProduct(cafe.storeId, { name: 'Лате', quantity: 5 }));
     const kp = await seedProduct(kitchen.storeId, { name: 'Маргарита (кухня)', quantity: 20 });
     const kr = await seedProduct(kitchen.storeId, { name: 'Філадельфія (кухня)', quantity: 20 });
     kitchenPizza = kp.variantId;
@@ -420,7 +423,15 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     const stopped = await ask([{ variant_id: cafeRoll, quantity: 1 }]);
     expect(stopped.statusCode).toBe(409);
     expect(stopped.json()).toMatchObject({ cafe_variant_id: cafeRoll, problem: 'stop' });
+    // The cafe's setup says so too, so the roll's tile reads «немає на кухні» before anyone asks.
+    const setupItems = async () =>
+      (
+        await app.inject({ method: 'GET', url: '/api/pos/remote-kitchen/setup', headers: auth(cafe.sellerToken) })
+      ).json().as_cafe.items as Array<{ cafe_variant_id: number; available: boolean }>;
+    expect((await setupItems()).find((i) => i.cafe_variant_id === cafeRoll)?.available).toBe(false);
+    expect((await setupItems()).find((i) => i.cafe_variant_id === cafePizza)?.available).toBe(true);
     await pool.query(`UPDATE pos_products SET stop_listed_on = NULL WHERE id = $1`, [kitchenRollProduct]);
+    expect((await setupItems()).find((i) => i.cafe_variant_id === cafeRoll)?.available).toBe(true);
 
     // A cafe dish nobody marked is not the kitchen's.
     const { variantId: tea } = await seedProduct(cafe.storeId, { name: 'Чай' });
@@ -649,7 +660,7 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     expect(order.status).toBe('quoted');
     const kitchenBefore = await stockOf(kitchenPizza);
     const pizzaBefore = await stockOf(cafePizza);
-    const rollBefore = await stockOf(cafeRoll);
+    const latteBefore = await stockOf(cafeLatte);
 
     // Not an id, someone else's order, a cart that does not match: refused, nothing moves.
     expect((await checkout([{ variant_id: cafePizza, quantity: 2 }], 'abc')).statusCode).toBe(400);
@@ -664,7 +675,7 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     const res = await checkout(
       [
         { variant_id: cafePizza, quantity: 2 },
-        { variant_id: cafeRoll, quantity: 1 },
+        { variant_id: cafeLatte, quantity: 1 },
       ],
       order.id
     );
@@ -672,21 +683,54 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     const saleId = Number(res.json().id);
     expect(await stockOf(kitchenPizza)).toBe(kitchenBefore - 2);
     expect(await stockOf(cafePizza)).toBe(pizzaBefore);
-    expect(await stockOf(cafeRoll)).toBe(rollBefore - 1);
+    expect(await stockOf(cafeLatte)).toBe(latteBefore - 1);
 
     const paid = await orderView(order.id);
     expect(paid.status).toBe('cooking');
     expect(paid.cafe_sale_id).toBe(saleId);
     expect(paid.order_no).toBeGreaterThanOrEqual(1);
 
-    // The cafe's board shows its own roll, not the kitchen's pizza.
+    // The cafe's board shows its own latte, not the kitchen's pizza.
     const board = await listOpenOrders(cafe.storeId);
     const onBoard = board.orders.find((o) => o.kind === 'sale' && o.id === saleId);
-    expect(onBoard?.items.map((i) => i.product_name)).toEqual(['Філадельфія']);
+    expect(onBoard?.items.map((i) => i.product_name)).toEqual(['Лате']);
 
     // The same order cannot be paid by a second receipt.
     expect((await checkout([{ variant_id: cafePizza, quantity: 2 }], order.id)).statusCode).toBe(409);
     expect(await stockOf(kitchenPizza)).toBe(kitchenBefore - 2);
+  });
+
+  it('never sells a dish the kitchen cooks without the kitchen’s order — the receipt says so in words', async () => {
+    const pizzaBefore = await stockOf(cafePizza);
+    const plain = await checkout([{ variant_id: cafePizza, quantity: 1 }], null);
+    expect(plain.statusCode).toBe(409);
+    expect(plain.json()).toMatchObject({ error: 'remote_order_conflict' });
+    expect(plain.json().message).toContain('«Маргарита» готує віддалена кухня');
+    expect(await stockOf(cafePizza)).toBe(pizzaBefore);
+    // The cafe's own dish sells as ever.
+    expect((await checkout([{ variant_id: cafeLatte, quantity: 1 }], null)).statusCode).toBe(201);
+    // A paused link still owns the dish: the kitchen is only off for now.
+    await rk.updateLink(linkId, { status: 'paused' });
+    try {
+      expect((await checkout([{ variant_id: cafePizza, quantity: 1 }], null)).statusCode).toBe(409);
+    } finally {
+      await rk.updateLink(linkId, { status: 'active' });
+    }
+  });
+
+  it('records, never judges, a kitchen dish a till sold offline hours ago', async () => {
+    const replay = await app.inject({
+      method: 'POST',
+      url: '/api/pos/sales/complete',
+      headers: auth(cafe.sellerToken),
+      payload: {
+        items: [{ variant_id: cafePizza, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: 10000 }],
+        client_uuid: randomUUID(),
+        offline_replay: true,
+      },
+    });
+    expect(replay.statusCode, replay.body).toBe(201);
   });
 
   it('a receipt of kitchen dishes only stays off the cafe’s board', async () => {
@@ -817,11 +861,11 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     const order = (await ask([{ variant_id: cafePizza, quantity: 2 }])).json();
     const kitchenBefore = await stockOf(kitchenPizza);
     const pizzaBefore = await stockOf(cafePizza);
-    const rollBefore = await stockOf(cafeRoll);
+    const latteBefore = await stockOf(cafeLatte);
     const res = await checkout(
       [
         { variant_id: cafePizza, quantity: 2 },
-        { variant_id: cafeRoll, quantity: 1 },
+        { variant_id: cafeLatte, quantity: 1 },
       ],
       order.id
     );
@@ -836,7 +880,7 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     expect(voided.statusCode, voided.body).toBe(200);
     expect(await stockOf(kitchenPizza)).toBe(kitchenBefore);
     expect(await stockOf(cafePizza)).toBe(pizzaBefore);
-    expect(await stockOf(cafeRoll)).toBe(rollBefore);
+    expect(await stockOf(cafeLatte)).toBe(latteBefore);
     const after = await orderView(order.id);
     expect(after.status).toBe('cancelled');
     expect(after.decline_reason).toBe('Чек кафе скасовано');
@@ -985,7 +1029,7 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
       payload: {
         items: [
           { variant_id: cafePizza, quantity: 1 },
-          { variant_id: cafeRoll, quantity: 1 },
+          { variant_id: cafeLatte, quantity: 1 },
         ],
         payments: [{ method: 'cash', amount_cents: 20000 }],
         remote_order_id: order.id,
@@ -995,7 +1039,7 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     const sale = await app.inject({ method: 'GET', url: `/api/pos/sales/${res.json().id}`, headers: auth(cafe.sellerToken) });
     const items = sale.json().items as Array<{ variant_id: number; remote_order_item_id?: number }>;
     expect(items.find((i) => i.variant_id === cafePizza)?.remote_order_item_id).toEqual(expect.any(Number));
-    expect(items.find((i) => i.variant_id === cafeRoll)).not.toHaveProperty('remote_order_item_id');
+    expect(items.find((i) => i.variant_id === cafeLatte)).not.toHaveProperty('remote_order_item_id');
   });
 
   it('the board taps a cafe’s order through the KITCHEN’s own route, never the module’s', async () => {
