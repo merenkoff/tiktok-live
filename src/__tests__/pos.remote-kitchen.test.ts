@@ -445,6 +445,57 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     expect(await stockOf(kitchenPizza)).toBe(before);
   });
 
+  it('the cafe’s tracker keeps a kitchen’s cancel until a cashier says the guest got the money back', async () => {
+    const cafeSide = async () =>
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/api/pos/remote-kitchen/orders?side=cafe',
+          headers: auth(cafe.sellerToken),
+        })
+      ).json().orders as Array<{ id: number; status: string; cancelled_by: string | null; cancel_seen_at: string | null; delayed_minutes: number }>;
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    await step(cafe.sellerToken, order.id, 'paid', { sale_id: await sale(cafe.storeId, cafe.sellerId) });
+
+    // «+10 хв» twice: the cafe reads one sum, and the promise moved with it.
+    const promised = Date.parse((await orderView(order.id)).promised_at);
+    await step(kitchen.sellerToken, order.id, 'delay', { minutes: 10 });
+    await step(kitchen.sellerToken, order.id, 'delay', { minutes: 5 });
+    const late = (await cafeSide()).find((o) => o.id === order.id)!;
+    expect(late.delayed_minutes).toBe(15);
+    expect(Date.parse((await orderView(order.id)).promised_at) - promised).toBe(15 * 60_000);
+
+    await step(kitchen.sellerToken, order.id, 'cancel', { reason: 'Згоріла піч' });
+    const cancelled = (await cafeSide()).find((o) => o.id === order.id)!;
+    expect(cancelled).toMatchObject({ status: 'cancelled', cancelled_by: 'kitchen', cancel_seen_at: null });
+
+    // Hours later, unanswered, it is still on the cafe's till — and only there.
+    await pool.query(`UPDATE pos_remote_orders SET updated_at = NOW() - interval '5 hours' WHERE id = $1`, [order.id]);
+    expect((await cafeSide()).some((o) => o.id === order.id)).toBe(true);
+    const kitchenSide = await app.inject({
+      method: 'GET',
+      url: '/api/pos/remote-kitchen/orders?side=kitchen',
+      headers: auth(kitchen.sellerToken),
+    });
+    expect(kitchenSide.json().orders.some((o: { id: number }) => o.id === order.id)).toBe(false);
+
+    // Only the cafe answers it.
+    expect((await step(kitchen.sellerToken, order.id, 'cancel-seen')).statusCode).toBe(409);
+    expect((await step(stranger.sellerToken, order.id, 'cancel-seen')).statusCode).toBe(404);
+    const seen = await step(cafe.sellerToken, order.id, 'cancel-seen');
+    expect(seen.statusCode, seen.body).toBe(200);
+    expect(seen.json().cancel_seen_at).not.toBeNull();
+    expect((await step(cafe.sellerToken, order.id, 'cancel-seen')).json().cancel_seen_at).toBe(seen.json().cancel_seen_at);
+    await pool.query(`UPDATE pos_remote_orders SET updated_at = NOW() - interval '5 hours' WHERE id = $1`, [order.id]);
+    expect((await cafeSide()).some((o) => o.id === order.id)).toBe(false);
+
+    // The cafe's own cancel is no news to the cafe.
+    const own = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    await step(cafe.sellerToken, own.id, 'paid', { sale_id: await sale(cafe.storeId, cafe.sellerId) });
+    expect((await step(cafe.sellerToken, own.id, 'cancel', { reason: 'Гість передумав' })).json().cancelled_by).toBe('cafe');
+    expect((await step(cafe.sellerToken, own.id, 'cancel-seen')).statusCode).toBe(409);
+  });
+
   it('the owner changes the link’s timers, within limits', async () => {
     const bad = await app.inject({
       method: 'PATCH',

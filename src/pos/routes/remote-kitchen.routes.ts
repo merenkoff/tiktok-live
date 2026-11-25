@@ -170,6 +170,7 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     { path: 'paid', method: 'POST', run: (a, id, b) => rk.markPaid(a, id, b) },
     { path: 'arrived', method: 'POST', run: (a, id) => rk.markArrived(a, id) },
     { path: 'handed', method: 'POST', run: (a, id) => rk.markHandedOver(a, id) },
+    { path: 'cancel-seen', method: 'POST', run: (a, id) => rk.markCancelSeen(a, id) },
     // the kitchen
     { path: 'quote', method: 'POST', run: (a, id, b) => rk.kitchenQuote(a, id, b) },
     { path: 'decline', method: 'POST', run: (a, id, b) => rk.kitchenDecline(a, id, b) },

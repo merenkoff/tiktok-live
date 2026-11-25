@@ -164,6 +164,10 @@ test('the cafe asks the kitchen, the guest agrees, and the receipt pays the kitc
     asked.push(route.request().postDataJSON());
     await route.fulfill({ status: 201, json: quoted() });
   });
+  // The cafe's tracker over the till (РК5): nothing paid is on its way yet.
+  await page.route('**/api/pos/remote-kitchen/orders?side=cafe', async (route) =>
+    route.fulfill({ json: { orders: [], now: new Date().toISOString() } })
+  );
   await page.route('**/api/pos/remote-kitchen/orders/5', async (route) => route.fulfill({ json: quoted() }));
   const completed: Array<Record<string, unknown>> = [];
   await page.route('**/api/pos/sales/complete', async (route) => {
@@ -267,6 +271,58 @@ test('the kitchen’s requests stand over the board, and one tap answers', async
   await page.getByTestId('remote-answer-7').click();
   await expect.poll(() => answers).toEqual([{ minutes: 20, revision: 1 }]);
   await expect(page.getByTestId('remote-requests')).toHaveCount(0);
+});
+
+test('the cafe’s till follows a paid kitchen order, and keeps the kitchen’s cancel until the guest is paid back', async ({
+  page,
+}) => {
+  await signIn(page, { 'vertical-cafe': CAFE_REMOTE, 'remote-kitchen': KITCHEN_REMOTE });
+  await page.route('**/api/pos/remote-kitchen/setup', async (route) => route.fulfill({ json: SETUP }));
+  const tracked = (over: Record<string, unknown>) => ({
+    id: 5,
+    status: 'dispatched',
+    order_no: 12,
+    guest_label: 'Стіл 3',
+    kitchen_title: 'Кухня Пульчинелли',
+    kitchen_phone: '+380671112233',
+    promised_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+    paid_at: new Date().toISOString(),
+    arrived_at: null,
+    decline_reason: null,
+    cancelled_by: null,
+    cancel_seen_at: null,
+    delayed_minutes: 0,
+    items: [{ id: 1, product_name: 'Маргарита', variant_label: '32 см', quantity: 1 }],
+    ...over,
+  });
+  let orders = [tracked({}), tracked({ id: 6, order_no: 13, status: 'cancelled', cancelled_by: 'kitchen', decline_reason: 'Згоріла піч' })];
+  const taps: string[] = [];
+  await page.route('**/api/pos/remote-kitchen/orders?side=cafe', async (route) =>
+    route.fulfill({ json: { orders, now: new Date().toISOString() } })
+  );
+  await page.route('**/api/pos/remote-kitchen/orders/5/arrived', async (route) => {
+    taps.push('arrived 5');
+    orders = orders.map((o) => (o.id === 5 ? { ...o, status: 'arrived', arrived_at: new Date().toISOString() } : o));
+    await route.fulfill({ json: orders.find((o) => o.id === 5) });
+  });
+  await page.route('**/api/pos/remote-kitchen/orders/6/cancel-seen', async (route) => {
+    taps.push('cancel-seen 6');
+    orders = orders.map((o) => (o.id === 6 ? { ...o, cancel_seen_at: new Date().toISOString() } : o));
+    await route.fulfill({ json: orders.find((o) => o.id === 6) });
+  });
+
+  await page.goto('/register');
+  await expect(page.getByTestId('cafe-catalog')).toBeVisible();
+  const tracker = page.getByTestId('remote-tracker');
+  await expect(tracker).toContainText('Замовлення з кухні · 2');
+  await expect(page.getByTestId('remote-tracker-cancel-6')).toContainText('скасовано кухнею — поверніть гостю');
+  await expect(page.getByTestId('remote-tracker-5')).toContainText('П-12 · Стіл 3');
+
+  await page.getByTestId('remote-tracker-step-5').click();
+  await expect(page.getByTestId('remote-tracker-step-5')).toHaveText('Видали гостю');
+  await page.getByTestId('remote-tracker-seen-6').click();
+  await expect(page.getByTestId('remote-tracker-cancel-6')).toHaveCount(0);
+  expect(taps).toEqual(['arrived 5', 'cancel-seen 6']);
 });
 
 test('a café without the module: no block, no strip, and nothing asked of the remote kitchen', async ({ page }) => {

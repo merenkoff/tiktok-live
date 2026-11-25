@@ -166,6 +166,12 @@ export interface RemoteOrderView {
   arrived_at: string | null;
   handed_at: string | null;
   closed_at: string | null;
+  /** Which side cancelled a paid order (migration 118); null for anything else. */
+  cancelled_by: 'cafe' | 'kitchen' | null;
+  /** When the cafe's till said the guest got the money back for a kitchen's cancel. */
+  cancel_seen_at: string | null;
+  /** Every «+N хв» the kitchen gave, summed: the cafe says the pizza is late by this much. */
+  delayed_minutes: number;
   items: RemoteOrderItemView[];
 }
 
@@ -786,7 +792,10 @@ export async function expireStaleQuotes(storeId: number, client: DbClient = pool
 }
 
 const ORDER_SELECT = `
-  SELECT o.*, l.kitchen_title, l.kitchen_phone, cs.name AS cafe_name
+  SELECT o.*, l.kitchen_title, l.kitchen_phone, cs.name AS cafe_name,
+         (SELECT COALESCE(SUM((e.payload->>'minutes')::int), 0)
+            FROM pos_remote_order_events e
+           WHERE e.remote_order_id = o.id AND e.kind = 'delayed') AS delayed_minutes
     FROM pos_remote_orders o
     JOIN pos_kitchen_links l ON l.id = o.link_id
     JOIN pos_stores cs ON cs.id = o.cafe_store_id`;
@@ -866,6 +875,9 @@ async function viewsOf(
       arrived_at: isoOrNull(row.arrived_at),
       handed_at: isoOrNull(row.handed_at),
       closed_at: isoOrNull(row.closed_at),
+      cancelled_by: (row.cancelled_by as RemoteOrderView['cancelled_by']) ?? null,
+      cancel_seen_at: isoOrNull(row.cancel_seen_at),
+      delayed_minutes: Number(row.delayed_minutes ?? 0),
       items: items.get(id) ?? [],
     };
   });
@@ -882,9 +894,15 @@ export async function getOrder(storeId: number, orderId: number): Promise<Remote
   return (await viewsOf(pool, row.rows, storeId))[0]!;
 }
 
+/** How long a kitchen's cancel stays on the cafe's till unanswered. */
+export const UNSEEN_CANCEL_HOURS = 24;
+
 /**
  * The orders a screen shows: everything still going, plus what finished in the
  * last `recentHours` (so a «Видано» does not vanish the very second it is tapped).
+ * The cafe also gets every order the KITCHEN cancelled that no cashier has
+ * answered yet, up to a day back: the guest paid, and someone must give the
+ * money back (РК5).
  */
 export async function listOrders(
   storeId: number,
@@ -897,10 +915,13 @@ export async function listOrders(
   const rows = await pool.query(
     `${ORDER_SELECT}
       WHERE ${column} = $1
-        AND (o.status = ANY($2::text[]) OR o.updated_at > NOW() - make_interval(hours => $3))
+        AND (o.status = ANY($2::text[])
+             OR o.updated_at > NOW() - make_interval(hours => $3)
+             OR ($4::boolean AND o.status = 'cancelled' AND o.cancelled_by = 'kitchen' AND o.cancel_seen_at IS NULL
+                 AND o.updated_at > NOW() - make_interval(hours => $5)))
       ORDER BY o.requested_at ASC, o.id ASC
       LIMIT 200`,
-    [storeId, LIVE_STATUSES as unknown as string[], recent]
+    [storeId, LIVE_STATUSES as unknown as string[], recent, side === 'cafe', UNSEEN_CANCEL_HOURS]
   );
   return viewsOf(pool, rows.rows, storeId);
 }
@@ -1452,6 +1473,26 @@ export async function markHandedOver(actor: Actor, orderId: number): Promise<Rem
   });
 }
 
+/**
+ * «Гостю повернули»: the cafe answered a kitchen's cancel, and its till stops
+ * showing the red line. Only for an order the kitchen cancelled; a second tap
+ * is the same answer.
+ */
+export async function markCancelSeen(actor: Actor, orderId: number): Promise<RemoteOrderView> {
+  return inTransaction(async (client) => {
+    const order = await lockOrder(client, actor.storeId, orderId, 'cafe');
+    if (order.status !== 'cancelled' || order.cancelled_by !== 'kitchen') {
+      throw new RemoteKitchenConflict('Кухня це замовлення не скасовувала');
+    }
+    if (order.cancel_seen_at != null) return reread(client, actor.storeId, orderId);
+    await client.query(`UPDATE pos_remote_orders SET cancel_seen_at = NOW(), updated_at = NOW() WHERE id = $1`, [
+      orderId,
+    ]);
+    await logEvent(client, orderId, actor, 'cancel_seen');
+    return reread(client, actor.storeId, orderId);
+  });
+}
+
 // ── the kitchen answers ─────────────────────────────────────────────
 
 /**
@@ -1658,9 +1699,9 @@ async function cancelLockedTx(
   }
   await client.query(
     `UPDATE pos_remote_orders
-        SET status = 'cancelled', decline_reason = $2, closed_at = NOW(), updated_at = NOW()
+        SET status = 'cancelled', decline_reason = $2, cancelled_by = $3, closed_at = NOW(), updated_at = NOW()
       WHERE id = $1`,
-    [orderId, reason]
+    [orderId, reason, actor.storeId === kitchenStoreId ? 'kitchen' : 'cafe']
   );
   await queueRemoteCancelTx(client, kitchenStoreId, orderId);
   await logEvent(client, orderId, actor, 'cancelled', {
