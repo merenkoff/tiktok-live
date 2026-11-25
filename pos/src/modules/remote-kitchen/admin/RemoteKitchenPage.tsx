@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@pos/platform/ui';
 import { serverMessage } from '../lib/hostPlatform';
-import { readSetup, type Setup } from './settingsApi';
+import { readReportSides, readSetup, type Setup } from './settingsApi';
 import { CafeKitchenSection } from './CafeKitchenSection';
 import { KitchenPointsSection } from './KitchenPointsSection';
 import { ReportSection } from './ReportSection';
@@ -20,6 +20,10 @@ import { ReportSection } from './ReportSection';
 export function RemoteKitchenPage(): JSX.Element {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The sides this store has a report on — revoked links included, so the
+  // season's «Віддано на точки» stays readable after the link is gone. Null
+  // until read, or on a server without the route: the live setup decides then.
+  const [reportSides, setReportSides] = useState<Array<'cafe' | 'kitchen'> | null>(null);
 
   const reload = useCallback(() => {
     readSetup()
@@ -32,7 +36,17 @@ export function RemoteKitchenPage(): JSX.Element {
 
   useEffect(() => {
     reload();
+    let live = true;
+    void readReportSides().then((sides) => {
+      if (live) setReportSides(sides);
+    });
+    return () => {
+      live = false;
+    };
   }, [reload]);
+
+  const reportOn = (side: 'cafe' | 'kitchen') =>
+    (side === 'kitchen' ? !!setup?.as_kitchen : !!setup?.as_cafe) || (reportSides?.includes(side) ?? false);
 
   return (
     <div className="max-w-4xl text-sq-text">
@@ -48,14 +62,16 @@ export function RemoteKitchenPage(): JSX.Element {
       {!setup && !error && <p className="text-[15px] text-sq-muted">Завантажую…</p>}
       {setup && !setup.as_cafe && !setup.as_kitchen && (
         <p className="text-[15px] text-sq-secondary" data-testid="rk-not-linked">
-          Цей магазин ще не зв’язаний з кухнею. Зв’язку кафе й кухні створює адміністратор The Live Shop.
+          {reportSides && reportSides.length > 0
+            ? 'Зв’язку з кухнею зараз немає. Звіт за замовлення, що вже були, — нижче.'
+            : 'Цей магазин ще не зв’язаний з кухнею. Зв’язку кафе й кухні створює адміністратор The Live Shop.'}
         </p>
       )}
       <div className="space-y-10">
         {setup?.as_cafe && <CafeKitchenSection link={setup.as_cafe.link} kitchen={setup.as_cafe.kitchen} />}
         {setup?.as_kitchen && <KitchenPointsSection />}
-        {setup?.as_kitchen && <ReportSection side="kitchen" />}
-        {setup?.as_cafe && <ReportSection side="cafe" />}
+        {setup && reportOn('kitchen') && <ReportSection side="kitchen" />}
+        {setup && reportOn('cafe') && <ReportSection side="cafe" />}
       </div>
     </div>
   );
