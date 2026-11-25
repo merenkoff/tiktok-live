@@ -102,3 +102,18 @@ export const listCafes = () =>
 
 export const saveStatus = (body: { accepting?: boolean; pause_minutes?: number | null; load_minutes?: number }) =>
   posRequest<KitchenStatus>('put', '/remote-kitchen/status', body);
+
+/** One line of «Віддано на точки»: the other side, its orders and dishes. */
+export interface ReportRow {
+  store_name: string;
+  orders: number;
+  cancelled: number;
+  on_time: number;
+  delayed: number;
+  dishes: Array<{ name: string; quantity: number }>;
+}
+
+export async function readReport(side: 'cafe' | 'kitchen', days: number): Promise<ReportRow[]> {
+  const res = await posRequest<{ rows?: ReportRow[] }>('get', `/remote-kitchen/report?side=${side}&days=${days}`);
+  return Array.isArray(res?.rows) ? res.rows : [];
+}

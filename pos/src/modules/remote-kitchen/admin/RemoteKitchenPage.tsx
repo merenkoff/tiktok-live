@@ -15,6 +15,7 @@ import { serverMessage } from '../lib/hostPlatform';
 import { readSetup, type Setup } from './settingsApi';
 import { CafeKitchenSection } from './CafeKitchenSection';
 import { KitchenPointsSection } from './KitchenPointsSection';
+import { ReportSection } from './ReportSection';
 
 export function RemoteKitchenPage(): JSX.Element {
   const [setup, setSetup] = useState<Setup | null>(null);
@@ -53,6 +54,8 @@ export function RemoteKitchenPage(): JSX.Element {
       <div className="space-y-10">
         {setup?.as_cafe && <CafeKitchenSection link={setup.as_cafe.link} kitchen={setup.as_cafe.kitchen} />}
         {setup?.as_kitchen && <KitchenPointsSection />}
+        {setup?.as_kitchen && <ReportSection side="kitchen" />}
+        {setup?.as_cafe && <ReportSection side="cafe" />}
       </div>
     </div>
   );

@@ -247,6 +247,17 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
     return { cafes, status: await rk.getKitchenStatus(auth.storeId) };
   });
 
+  // «Віддано на точки» and the promises kept (РК5): the owner's, either side.
+  fastify.get('/remote-kitchen/report', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    const query = request.query as { side?: unknown; days?: unknown };
+    if (query.side !== 'cafe' && query.side !== 'kitchen') {
+      return reply.code(400).send({ error: 'side: cafe або kitchen' });
+    }
+    return rk.remoteReport(auth.storeId, query.side, Number(query.days ?? 7));
+  });
+
   // ── the cafe owner's settings (§11 «Налаштування зв'язки») ────────
 
   fastify.patch('/remote-kitchen/link', async (request, reply) => {

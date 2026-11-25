@@ -857,6 +857,72 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
   });
 
   // РК4-мінімум: the module switched on without a hand-written API call.
+  it('«Віддано на точки»: what the kitchen handed to each cafe, by dish, and how many promises it kept', async () => {
+    // Written straight in, so the numbers are the test's own: paid an hour ago.
+    const handed = async (opts: { lateBy?: number; cancelled?: boolean; delayed?: boolean; qty?: number }) => {
+      const row = await pool.query(
+        `INSERT INTO pos_remote_orders
+           (link_id, cafe_store_id, kitchen_store_id, client_uuid, status, transit_minutes,
+            paid_at, promised_at, dispatched_at, arrived_at)
+         VALUES ($1, $2, $3, $4, $5, 10,
+                 NOW() - INTERVAL '1 hour',
+                 NOW() - INTERVAL '20 minutes',
+                 CASE WHEN $6 THEN NULL ELSE NOW() - INTERVAL '35 minutes' END,
+                 CASE WHEN $6 THEN NULL ELSE NOW() - INTERVAL '20 minutes' + make_interval(mins => $7) END)
+         RETURNING id`,
+        [linkId, cafe.storeId, kitchen.storeId, randomUUID(), opts.cancelled ? 'cancelled' : 'handed_over',
+         Boolean(opts.cancelled), opts.lateBy ?? -5]
+      );
+      const id = Number(row.rows[0].id);
+      await pool.query(
+        `INSERT INTO pos_remote_order_items (remote_order_id, cafe_variant_id, kitchen_variant_id, quantity, product_name)
+         VALUES ($1, $2, $3, $4, 'Маргарита')`,
+        [id, cafePizza, kitchenPizza, opts.qty ?? 1]
+      );
+      if (opts.delayed) {
+        await pool.query(
+          `INSERT INTO pos_remote_order_events (remote_order_id, kind, payload) VALUES ($1, 'delayed', '{"minutes":10}')`,
+          [id]
+        );
+      }
+      return id;
+    };
+    const ids = [
+      await handed({ qty: 2 }),
+      await handed({ delayed: true }),
+      await handed({ lateBy: 7 }),
+      await handed({ cancelled: true }),
+    ];
+    const report = (token: string, side: string, days = 1) =>
+      app.inject({ method: 'GET', url: `/api/pos/remote-kitchen/report?side=${side}&days=${days}`, headers: auth(token) });
+
+    const nameOf = async (id: number) =>
+      String((await pool.query(`SELECT name FROM pos_stores WHERE id = $1`, [id])).rows[0].name);
+    const [cafeName, kitchenName] = [await nameOf(cafe.storeId), await nameOf(kitchen.storeId)];
+
+    const atKitchen = await report(kitchen.ownerToken, 'kitchen');
+    expect(atKitchen.statusCode, atKitchen.body).toBe(200);
+    const row = atKitchen.json().rows.find((r: { store_name: string }) => r.store_name === cafeName);
+    // Earlier tests paid orders too; ours are the only ones handed over with these numbers.
+    expect(row).toMatchObject({ orders: expect.any(Number), cancelled: expect.any(Number) });
+    expect(row.orders).toBeGreaterThanOrEqual(3);
+    expect(row.on_time).toBeGreaterThanOrEqual(2);
+    expect(row.orders - row.on_time).toBeGreaterThanOrEqual(1);
+    expect(row.delayed).toBeGreaterThanOrEqual(1);
+    expect(row.cancelled).toBeGreaterThanOrEqual(1);
+    expect(row.dishes.find((d: { name: string }) => d.name === 'Маргарита').quantity).toBeGreaterThanOrEqual(4);
+
+    // The cafe reads the same orders from its side, under the kitchen's name.
+    const atCafe = (await report(cafe.ownerToken, 'cafe')).json();
+    expect(atCafe.rows.map((r: { store_name: string }) => r.store_name)).toEqual([kitchenName]);
+    expect(atCafe.rows[0].orders).toBe(row.orders);
+
+    expect((await report(kitchen.sellerToken, 'kitchen')).statusCode).toBe(403);
+    expect((await report(kitchen.ownerToken, 'both')).statusCode).toBe(400);
+    expect((await report(stranger.ownerToken, 'kitchen')).json().rows).toEqual([]);
+    await pool.query(`DELETE FROM pos_remote_orders WHERE id = ANY($1::bigint[])`, [ids]);
+  });
+
   describe('setting it up from the screens', () => {
     const PASSWORD = 'rk4-super-password';
     let saved: string | undefined;

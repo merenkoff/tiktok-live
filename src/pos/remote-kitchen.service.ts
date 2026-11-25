@@ -1715,3 +1715,86 @@ export async function listEvents(
     payload: row.payload,
   }));
 }
+
+// ── the report (РК5, §12) ───────────────────────────────────────────
+
+export interface RemoteReportRow {
+  /** The other side: the cafe on a kitchen's report, the kitchen on a cafe's. */
+  store_name: string;
+  /** Paid orders that left the kitchen in the period. */
+  orders: number;
+  /** Paid orders cancelled before they left. */
+  cancelled: number;
+  /** Of `orders`, at the cafe by the promise (`arrived_at`, else out of the door plus the road). */
+  on_time: number;
+  /** Of `orders`, those the kitchen moved with «+N хв». */
+  delayed: number;
+  dishes: Array<{ name: string; quantity: number }>;
+}
+
+export interface RemoteReport {
+  side: 'cafe' | 'kitchen';
+  days: number;
+  rows: RemoteReportRow[];
+}
+
+/**
+ * «Віддано на точки» (РК5): what the kitchen handed over to each cafe in the
+ * last `days`, by dish, and how many of those promises it kept — or, read by
+ * the cafe, what it got from its kitchen. Paid orders only; an order counts in
+ * the period it was paid. «Вчасно» is against the promise as it stood, after
+ * any «+10 хв», and `delayed` says how many were moved.
+ */
+export async function remoteReport(storeId: number, side: 'cafe' | 'kitchen', days: number): Promise<RemoteReport> {
+  const span = Math.min(Math.max(Math.floor(days) || 7, 1), 90);
+  const mine = side === 'kitchen' ? 'o.kitchen_store_id' : 'o.cafe_store_id';
+  const other = side === 'kitchen' ? 'o.cafe_store_id' : 'o.kitchen_store_id';
+  const heads = await pool.query(
+    `SELECT ${other} AS other_id, s.name AS store_name,
+            COUNT(*) FILTER (WHERE o.dispatched_at IS NOT NULL)::int AS orders,
+            COUNT(*) FILTER (WHERE o.status = 'cancelled' AND o.dispatched_at IS NULL)::int AS cancelled,
+            COUNT(*) FILTER (
+              WHERE o.dispatched_at IS NOT NULL AND o.promised_at IS NOT NULL
+                AND COALESCE(o.arrived_at, o.dispatched_at + make_interval(mins => COALESCE(o.transit_minutes, 0)))
+                    <= o.promised_at
+            )::int AS on_time,
+            COUNT(*) FILTER (
+              WHERE o.dispatched_at IS NOT NULL
+                AND EXISTS (SELECT 1 FROM pos_remote_order_events e WHERE e.remote_order_id = o.id AND e.kind = 'delayed')
+            )::int AS delayed
+       FROM pos_remote_orders o
+       JOIN pos_stores s ON s.id = ${other}
+      WHERE ${mine} = $1
+        AND o.paid_at IS NOT NULL
+        AND o.paid_at > NOW() - make_interval(days => $2)
+      GROUP BY ${other}, s.name
+      ORDER BY s.name`,
+    [storeId, span]
+  );
+  const dishes = await pool.query(
+    `SELECT ${other} AS other_id, i.product_name AS name, SUM(i.quantity)::int AS quantity
+       FROM pos_remote_orders o
+       JOIN pos_remote_order_items i ON i.remote_order_id = o.id
+      WHERE ${mine} = $1
+        AND o.paid_at IS NOT NULL
+        AND o.paid_at > NOW() - make_interval(days => $2)
+        AND o.dispatched_at IS NOT NULL
+      GROUP BY ${other}, i.product_name
+      ORDER BY quantity DESC, i.product_name`,
+    [storeId, span]
+  );
+  return {
+    side,
+    days: span,
+    rows: heads.rows.map((row) => ({
+      store_name: String(row.store_name),
+      orders: Number(row.orders),
+      cancelled: Number(row.cancelled),
+      on_time: Number(row.on_time),
+      delayed: Number(row.delayed),
+      dishes: dishes.rows
+        .filter((d) => Number(d.other_id) === Number(row.other_id))
+        .map((d) => ({ name: String(d.name), quantity: Number(d.quantity) })),
+    })),
+  };
+}

@@ -20,6 +20,7 @@ const api = {
   importDishes: vi.fn<typeof Api.importDishes>(),
   listCafes: vi.fn<typeof Api.listCafes>(),
   saveStatus: vi.fn<typeof Api.saveStatus>(),
+  readReport: vi.fn<typeof Api.readReport>(async () => []),
 };
 
 vi.mock('./settingsApi', () => ({
@@ -31,6 +32,7 @@ vi.mock('./settingsApi', () => ({
   importDishes: (d: Parameters<typeof Api.importDishes>[0]) => api.importDishes(d),
   listCafes: () => api.listCafes(),
   saveStatus: (b: Parameters<typeof Api.saveStatus>[0]) => api.saveStatus(b),
+  readReport: (side: 'cafe' | 'kitchen', days: number) => api.readReport(side, days),
 }));
 
 const { RemoteKitchenPage } = await import('./RemoteKitchenPage');
@@ -47,7 +49,10 @@ const LINK: Api.CafeLink = {
 };
 const OPEN: Api.KitchenStatus = { accepting: true, paused_until: null, load_minutes: 0 };
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  api.readReport.mockImplementation(async () => []);
+});
 
 describe('RemoteKitchenPage', () => {
   it('tells a store with no link who links stores, and asks nothing more', async () => {
@@ -210,5 +215,33 @@ describe('RemoteKitchenPage', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('«Віддано на точки»: by cafe, the promises kept and the dishes, for the period picked', async () => {
+    api.readSetup.mockResolvedValue({ as_cafe: null, as_kitchen: { status: OPEN, cafes: [] } } as never);
+    api.listCafes.mockResolvedValue({ cafes: [], status: OPEN });
+    api.readReport.mockImplementation(async (_side, days) => [
+      {
+        store_name: 'Пульчинелла Парк',
+        orders: days === 30 ? 40 : 10,
+        cancelled: 1,
+        on_time: 9,
+        delayed: 2,
+        dishes: [{ name: 'Маргарита', quantity: 14 }],
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<RemoteKitchenPage />);
+    const report = await screen.findByTestId('rk-report-kitchen');
+    expect(api.readReport).toHaveBeenLastCalledWith('kitchen', 7);
+    expect(await within(report).findByText(/9 з 10 вчасно \(90 %\)/)).toBeInTheDocument();
+    expect(report).toHaveTextContent('переносили 2');
+    expect(report).toHaveTextContent('скасовано 1');
+    expect(report).toHaveTextContent('Маргарита × 14');
+
+    await user.click(within(report).getByRole('button', { name: 'Місяць' }));
+    expect(api.readReport).toHaveBeenLastCalledWith('kitchen', 30);
+    expect(await within(report).findByText(/9 з 40 вчасно/)).toBeInTheDocument();
+    expect(screen.queryByTestId('rk-report-cafe')).toBeNull();
   });
 });
