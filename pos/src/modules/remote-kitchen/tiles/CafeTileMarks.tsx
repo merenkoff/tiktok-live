@@ -4,46 +4,80 @@
 
 // Draws nothing. Lives in the till's banner (always mounted on the till) and
 // keeps the words on the cafe's kitchen-dish tiles current: re-reads the setup
-// every half minute while the tab is visible, and at once when the till goes
-// on- or offline. The catalog is `vertical-cafe`'s; this module only hands
-// the host its marks (`setTileMarks`, platform 25), and the catalog draws them.
+// every half minute while the tab is visible and the store is a cafe of some
+// kitchen — every ten minutes otherwise, the strips' own pace — and at once
+// when the till goes on- or offline or the tab comes back. The catalog is
+// `vertical-cafe`'s; this module only hands the host its marks
+// (`setTileMarks`, platform 25), and the catalog draws them.
+//
+// ONE loop: a refresh asked for while another is reading runs once more after
+// it rather than beside it, and only the loop sets the next timer — two
+// overlapping refreshes used to leave two timers, and the loops multiplied.
 
 import { useEffect } from 'react';
-import { isOnline, onOnlineChange, tileMarkSetter } from '../lib/hostPlatform';
-import { readSetupShared, SIDES_FRESH_MS } from '../lib/sides';
+import { currentStoreId, isOnline, onOnlineChange, tileMarkSetter } from '../lib/hostPlatform';
+import { readSetupShared } from '../lib/sides';
 import { cafeTileMarks } from './marks';
+import { rememberCafe, rememberedCafe } from './remembered';
 
-export const TILE_MARKS_REFRESH_MS = SIDES_FRESH_MS;
+export const TILE_MARKS_REFRESH_MS = 30_000;
+/** A store that is no cafe of any kitchen asks again this rarely — as the banner's strips do. */
+export const TILE_MARKS_NOT_CAFE_MS = 10 * 60_000;
+/**
+ * The tiles never take a shared setup older than this: with the half-minute
+ * refresh a pause reaches them within about 35 s, not a minute.
+ */
+export const TILE_MARKS_MAX_AGE_MS = 5_000;
 
 export function CafeTileMarks(): null {
   useEffect(() => {
     const setMarks = tileMarkSetter();
     if (!setMarks) return undefined;
+    const store = currentStoreId();
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    // The last answer the server gave: going offline needs no new read — the
-    // offline words come from what is already known.
-    let lastCafe: unknown = undefined;
+    let running = false;
+    let again = false;
+    // The last cafe half the server gave — before the first answer, the one
+    // this device kept from its last session, so a till that starts offline
+    // still greys the kitchen's dishes. Undefined = nothing known yet.
+    let lastCafe: unknown = rememberedCafe(store);
 
     const publish = () => {
       if (!alive || lastCafe === undefined) return;
       setMarks(cafeTileMarks(lastCafe, isOnline()));
     };
 
-    const refresh = async () => {
+    const schedule = (ms: number) => {
       if (timer) clearTimeout(timer);
-      timer = null;
-      const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
-      if (visible && isOnline()) {
-        try {
-          const setup = await readSetupShared();
-          lastCafe = setup.as_cafe ?? null;
-        } catch {
-          // A failed read keeps the last words: the till's offline banner says the rest.
-        }
+      timer = alive ? setTimeout(() => void refresh(), ms) : null;
+    };
+
+    const refresh = async () => {
+      if (running) {
+        again = true;
+        return;
       }
-      publish();
-      if (alive) timer = setTimeout(() => void refresh(), TILE_MARKS_REFRESH_MS);
+      running = true;
+      try {
+        do {
+          again = false;
+          const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+          if (visible && isOnline()) {
+            try {
+              const setup = await readSetupShared(Date.now(), store, TILE_MARKS_MAX_AGE_MS);
+              lastCafe = setup.as_cafe ?? null;
+              rememberCafe(store, lastCafe);
+            } catch {
+              // A failed read keeps the last words: the till's offline banner says the rest.
+            }
+          }
+          publish();
+        } while (again && alive);
+      } finally {
+        running = false;
+      }
+      schedule(lastCafe === null ? TILE_MARKS_NOT_CAFE_MS : TILE_MARKS_REFRESH_MS);
     };
 
     const offOnline = onOnlineChange(() => void refresh());

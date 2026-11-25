@@ -49,9 +49,17 @@ export function readSides(now: number = Date.now(), store: number | null = curre
   return sides;
 }
 
-/** The same read, whole — shared with `readSides`, fresh for half a minute, for the same store only. */
-export function readSetupShared(now: number = Date.now(), store: number | null = currentStoreId()): Promise<RawSetup> {
-  if (cached && cached.store === store && now - cached.at < SIDES_FRESH_MS) return cached.read;
+/**
+ * The same read, whole — shared with `readSides`, for the same store only.
+ * Reused while younger than `maxAgeMs` (half a minute); the tiles ask for a
+ * fresher one, so a pause reaches them within one of their refreshes.
+ */
+export function readSetupShared(
+  now: number = Date.now(),
+  store: number | null = currentStoreId(),
+  maxAgeMs: number = SIDES_FRESH_MS
+): Promise<RawSetup> {
+  if (cached && cached.store === store && now - cached.at < maxAgeMs) return cached.read;
   const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => res ?? {});
   const entry: NonNullable<typeof cached> = { at: now, store, read };
   cached = entry;

@@ -45,6 +45,26 @@ describe('the words on the cafe’s kitchen-dish tiles', () => {
     });
   });
 
+  it('says «немає на кухні» on a dish the kitchen stopped or retired, and only on it', () => {
+    const marks = cafeTileMarks(
+      cafe({
+        items: [
+          { cafe_variant_id: 10, prep_minutes: 12, available: false },
+          { cafe_variant_id: 11, prep_minutes: 12, available: true },
+        ],
+      }),
+      true
+    );
+    expect(marks?.[10]).toEqual({ text: 'немає на кухні', blocked: true });
+    expect(marks?.[11]).toEqual({ text: 'кухня ≈35 хв', blocked: false });
+    // An older server says nothing of it: the dish reads as available.
+    expect(cafeTileMarks(cafe(), true)?.[10]?.blocked).toBe(false);
+    // Offline still wins: the till cannot ask either way.
+    expect(
+      cafeTileMarks(cafe({ items: [{ cafe_variant_id: 10, prep_minutes: 12, available: false }] }), false)?.[10]
+    ).toEqual({ text: 'потрібна мережа', blocked: true });
+  });
+
   it('marks nothing in a store that asks no kitchen, or marked no dish', () => {
     expect(cafeTileMarks(null, true)).toBeNull();
     expect(cafeTileMarks(cafe({ items: [] }), true)).toBeNull();

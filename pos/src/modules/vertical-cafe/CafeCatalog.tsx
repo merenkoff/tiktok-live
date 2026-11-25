@@ -49,7 +49,7 @@ const BarcodeScanner = lazy(() =>
 );
 import { HostTooOldError, missingHostApi } from './lib/hostPlatform';
 import { isStopListed } from './lib/stopList';
-import { tileMarkOf, type TileMarks } from './lib/tileMarks';
+import { blockedVariantIds, tileMarkOf, type TileMarks } from './lib/tileMarks';
 import { stationOf } from './lib/station';
 
 export default function CafeCatalog({ active, stockEpoch }: SalesCatalogProps) {
@@ -105,10 +105,19 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
       setBanner('Штрихкод не знайдено');
       return;
     }
+    // What the tile would refuse, a scan refuses too: a dish on the stop
+    // list, or one another module says cannot be sold now («пауза»).
+    const blocked = blockedVariantIds(items, tileMarks);
+    const sellable = items.filter((item) => !isStopListed(item) && !blocked.has(item.variant_id));
+    if (sellable.length === 0) {
+      const why = items.some((item) => isStopListed(item)) ? 'стоп' : (tileMarkOf(items, tileMarks)?.text ?? 'не продається');
+      setBanner(`«${items[0].product_name}» — ${why}`);
+      return;
+    }
     // A scanned bottle is one variant and rings at once; a drink with sizes
     // asks, exactly as a tap on its tile would. The folder, the tiles and the
     // search stay as they were: a scan rings, it does not browse.
-    ring(items);
+    ring(sellable);
   }
 
   return (
@@ -182,8 +191,12 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
             // may well be in the case — «немає» would be a lie.
             const stopped = isStopListed(first);
             // «≈30 хв» from the remote kitchen, or «пауза» / «потрібна мережа»
-            // while the dish cannot be sold — the module says which.
+            // while the dish cannot be sold — the module says which. A size
+            // it blocks is left out of what a tap offers; the tile greys only
+            // when no size is left.
             const mark = stopped ? null : tileMarkOf(variants, tileMarks);
+            const blocked = stopped ? null : blockedVariantIds(variants, tileMarks);
+            const sellable = blocked && blocked.size > 0 ? variants.filter((v) => !blocked.has(v.variant_id)) : variants;
             const subtitle =
               variants.length > 1
                 ? variants.map((v) => v.label).filter(Boolean).join(' / ')
@@ -196,11 +209,11 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
                 priceCents={minPrice}
                 imageUrl={first.image_url}
                 stock={stock}
-                disabled={stock <= 0 || stopped || mark?.blocked === true}
+                disabled={stock <= 0 || stopped || sellable.length === 0}
                 badge={stopped ? 'стоп' : mark?.blocked ? mark.text : undefined}
                 note={mark && !mark.blocked ? mark.text : undefined}
-                onClick={() => ring(variants)}
-                onMore={groups.length > 0 ? () => ring(variants, { ask: true }) : undefined}
+                onClick={() => ring(sellable)}
+                onMore={groups.length > 0 ? () => ring(sellable, { ask: true }) : undefined}
               />
             );
           })}

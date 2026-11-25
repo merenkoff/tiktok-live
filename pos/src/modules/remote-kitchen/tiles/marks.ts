@@ -7,14 +7,16 @@
 // kitchen's own numbers suggest for that dish alone, road included, rounded
 // up to five as the server rounds it; «пауза» while the kitchen takes nothing;
 // «кухня вимкнена» while the link is paused; «потрібна мережа» offline, since a
-// request the kitchen never gets is no request. The last three grey the tile.
+// request the kitchen never gets is no request; «немає на кухні» for a dish the
+// kitchen has on today's stop list or retired (`available: false`, the same
+// test the server refuses a request by). The last four grey the tile.
 
 import type { TileMark } from '../lib/hostPlatform';
 
 interface CafeHalf {
   link?: { status?: unknown; transit_minutes?: unknown };
   kitchen?: { accepting?: unknown; load_minutes?: unknown };
-  items?: Array<{ cafe_variant_id?: unknown; prep_minutes?: unknown }>;
+  items?: Array<{ cafe_variant_id?: unknown; prep_minutes?: unknown; available?: unknown }>;
 }
 
 function num(value: unknown): number | null {
@@ -55,7 +57,9 @@ export function cafeTileMarks(asCafe: unknown, online: boolean): Record<number, 
     if (id == null) continue;
     marks[id] = blockedWord
       ? { text: blockedWord, blocked: true }
-      : { text: dishWord(num(item.prep_minutes), load, transit), blocked: false };
+      : item.available === false
+        ? { text: 'немає на кухні', blocked: true }
+        : { text: dishWord(num(item.prep_minutes), load, transit), blocked: false };
   }
   return Object.keys(marks).length > 0 ? marks : null;
 }

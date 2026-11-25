@@ -113,28 +113,58 @@ export function tileMarkSetter(): ((marks: Readonly<Record<number, TileMark>> | 
     );
 }
 
-/**
- * Is the till online, as its own offline banner says (`useOfflineStatus`), read
- * once; `navigator.onLine` on a host without it. Subscribe with `onOnlineChange`.
- */
-export function isOnline(): boolean {
-  const store = member('useOfflineStatus') as { getState?: () => { online?: unknown } } | undefined;
-  const online = typeof store?.getState === 'function' ? store.getState().online : undefined;
-  if (typeof online === 'boolean') return online;
+/** The browser's own word: the only one the web shell has. */
+function browserOnline(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine !== false;
 }
 
-/** Calls `listener` whenever the till goes on- or offline; returns the unsubscribe. */
+/**
+ * Whether the till's offline runtime keeps `useOfflineStatus.online` moving —
+ * the desktop and the tablet. The web shell starts no runtime: there the store
+ * is seeded once from `navigator.onLine` and never moves again.
+ */
+function runtimeTracksOnline(): boolean {
+  const enabled = member('isOfflineReadsEnabled');
+  return typeof enabled === 'function' && (enabled as () => unknown)() === true;
+}
+
+/**
+ * Is the till online: what its own offline banner says (`useOfflineStatus`)
+ * where a runtime keeps that current, the browser's `navigator.onLine`
+ * everywhere else. Subscribe with `onOnlineChange`.
+ */
+export function isOnline(): boolean {
+  if (!runtimeTracksOnline()) return browserOnline();
+  const store = member('useOfflineStatus') as { getState?: () => { online?: unknown } } | undefined;
+  const online = typeof store?.getState === 'function' ? store.getState().online : undefined;
+  return typeof online === 'boolean' ? online : browserOnline();
+}
+
+/**
+ * Calls `listener` when the till goes on- or offline — only on a CHANGE of
+ * `isOnline()`, never on every update of the offline store (its pending
+ * counts move after every sale and sync pass). Returns the unsubscribe.
+ */
 export function onOnlineChange(listener: () => void): () => void {
-  const store = member('useOfflineStatus') as { subscribe?: (l: () => void) => () => void } | undefined;
-  if (typeof store?.subscribe === 'function') return store.subscribe(listener);
-  if (typeof window === 'undefined') return () => undefined;
-  window.addEventListener('online', listener);
-  window.addEventListener('offline', listener);
-  return () => {
-    window.removeEventListener('online', listener);
-    window.removeEventListener('offline', listener);
+  let last = isOnline();
+  const check = () => {
+    const now = isOnline();
+    if (now === last) return;
+    last = now;
+    listener();
   };
+  const stops: Array<() => void> = [];
+  const store = member('useOfflineStatus') as { subscribe?: (l: () => void) => () => void } | undefined;
+  if (typeof store?.subscribe === 'function') stops.push(store.subscribe(check));
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', check);
+    window.addEventListener('offline', check);
+    stops.push(() => {
+      window.removeEventListener('online', check);
+      window.removeEventListener('offline', check);
+    });
+  }
+  return () => stops.forEach((stop) => stop());
 }
 
 /**
