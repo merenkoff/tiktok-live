@@ -63,6 +63,12 @@ interface Props {
    * over the stock-driven «немає»: the dish may well be in the case.
    */
   badge?: string;
+  /**
+   * A neutral word on the photo that does not grey the tile — «≈30 хв» on a
+   * dish another kitchen cooks (platform 25, a module's tile mark). A `badge`
+   * wins over it: a greyed tile says why it is greyed.
+   */
+  note?: string;
   /** Test id of the tile button; its «⋯» gets `<testId>-more`. */
   testId?: string;
 }
@@ -81,6 +87,7 @@ export const ProductTile = memo(function ProductTile({
   count,
   onMore,
   badge,
+  note,
   testId,
 }: Props) {
   const sources = tileSources(imageUrl, thumbUrl);
@@ -144,6 +151,15 @@ export const ProductTile = memo(function ProductTile({
               немає
             </span>
           )
+        )}
+
+        {note && !badge && (
+          <span
+            className="absolute bottom-2 left-2 text-[12px] font-semibold bg-black/65 text-white px-2 py-0.5 rounded-md pointer-events-none"
+            data-testid="tile-note"
+          >
+            {note}
+          </span>
         )}
       </div>
 
