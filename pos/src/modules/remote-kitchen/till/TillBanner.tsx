@@ -7,9 +7,12 @@
 // «Запити з точок» (РК3); a cafe gets «Замовлення з кухні» (РК5); a store
 // that is both gets both. Each draws nothing while it has nothing to say, and
 // both learn the store's side from one read of the setup (`lib/sides.ts`).
+// The same read keeps the words on the cafe's kitchen-dish tiles (РК5,
+// `tiles/`), which draw nothing here.
 
 import { RequestsStrip } from '../kitchen/RequestsStrip';
 import { CafeTracker } from '../tracker/CafeTracker';
+import { CafeTileMarks } from '../tiles/CafeTileMarks';
 
 /** `till.Banner` takes no props. */
 export default function RemoteKitchenBanner() {
@@ -17,6 +20,7 @@ export default function RemoteKitchenBanner() {
     <>
       <RequestsStrip />
       <CafeTracker />
+      <CafeTileMarks />
     </>
   );
 }

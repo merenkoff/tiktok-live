@@ -91,6 +91,82 @@ export function remoteCartControls(): RemoteCartControls | null {
   };
 }
 
+/** One word on a catalog tile — the host's `TileMark` (platform 25), mirrored. */
+export interface TileMark {
+  text: string;
+  blocked: boolean;
+}
+
+/**
+ * Puts this module's words on the store's catalog tiles by variant id, or
+ * null on a host older than platform 25 (it has no marks, and the tiles stay
+ * as they were). Null marks take them all off.
+ */
+export function tileMarkSetter(): ((marks: Readonly<Record<number, TileMark>> | null) => void) | null {
+  const store = member('useCartStore') as { getState?: () => Record<string, unknown> } | undefined;
+  const state = typeof store?.getState === 'function' ? store.getState() : null;
+  if (!state || !hasFn(state.setTileMarks)) return null;
+  return (marks) =>
+    (store!.getState!().setTileMarks as (moduleId: string, m: Readonly<Record<number, TileMark>> | null) => void)(
+      REMOTE_KITCHEN_MODULE_ID,
+      marks
+    );
+}
+
+/** The browser's own word: the only one the web shell has. */
+function browserOnline(): boolean {
+  return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+/**
+ * Whether the till's offline runtime keeps `useOfflineStatus.online` moving —
+ * the desktop and the tablet. The web shell starts no runtime: there the store
+ * is seeded once from `navigator.onLine` and never moves again.
+ */
+function runtimeTracksOnline(): boolean {
+  const enabled = member('isOfflineReadsEnabled');
+  return typeof enabled === 'function' && (enabled as () => unknown)() === true;
+}
+
+/**
+ * Is the till online: what its own offline banner says (`useOfflineStatus`)
+ * where a runtime keeps that current, the browser's `navigator.onLine`
+ * everywhere else. Subscribe with `onOnlineChange`.
+ */
+export function isOnline(): boolean {
+  if (!runtimeTracksOnline()) return browserOnline();
+  const store = member('useOfflineStatus') as { getState?: () => { online?: unknown } } | undefined;
+  const online = typeof store?.getState === 'function' ? store.getState().online : undefined;
+  return typeof online === 'boolean' ? online : browserOnline();
+}
+
+/**
+ * Calls `listener` when the till goes on- or offline — only on a CHANGE of
+ * `isOnline()`, never on every update of the offline store (its pending
+ * counts move after every sale and sync pass). Returns the unsubscribe.
+ */
+export function onOnlineChange(listener: () => void): () => void {
+  let last = isOnline();
+  const check = () => {
+    const now = isOnline();
+    if (now === last) return;
+    last = now;
+    listener();
+  };
+  const stops: Array<() => void> = [];
+  const store = member('useOfflineStatus') as { subscribe?: (l: () => void) => () => void } | undefined;
+  if (typeof store?.subscribe === 'function') stops.push(store.subscribe(check));
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', check);
+    window.addEventListener('offline', check);
+    stops.push(() => {
+      window.removeEventListener('online', check);
+      window.removeEventListener('offline', check);
+    });
+  }
+  return () => stops.forEach((stop) => stop());
+}
+
 /**
  * Whether the login says this store cooks for a linked cafe (`store.remote_kitchen`,
  * read at login and `/me`). Draws the kitchen's «Прийом запитів» on the till;
