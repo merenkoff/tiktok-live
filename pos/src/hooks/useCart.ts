@@ -132,6 +132,23 @@ interface CartStore {
    * in the draft, minted once, so a retry cannot refund twice.
    */
   exchange: ExchangeDraft | null;
+  /**
+   * The remote-kitchen order whose time the guest agreed to
+   * (TechDocs/POS_REMOTE_KITCHEN.md §8). Set by the cafe module's «З кухні»
+   * block; the sale sends it, and the server pays the order in the same
+   * transaction — or refuses if the cart's kitchen lines no longer match.
+   */
+  remoteOrderId: number | null;
+  /**
+   * Why the cart cannot be paid yet, per module that says so (a dish from the
+   * remote kitchen with no agreed time). Keyed by the module's id, so one
+   * module lifting its hold never lifts another's. The first one is shown as
+   * the banner when «Оплатити» is pressed; empty means nothing holds it.
+   */
+  checkoutHolds: Readonly<Record<string, string>>;
+  setRemoteOrderId: (id: number | null) => void;
+  /** `reason` null lifts this module's hold and leaves every other one. */
+  setCheckoutHold: (moduleId: string, reason: string | null) => void;
   cartDiscount: CartDiscount | null;
   customer: PosCustomer | null;
   setBanner: (msg: string | null) => void;
@@ -265,6 +282,17 @@ export const useCartStore = create<CartStore>((set, get) => ({
   banner: null,
   preorderId: null,
   exchange: null,
+  remoteOrderId: null,
+  checkoutHolds: {},
+  setRemoteOrderId: (id) => set({ remoteOrderId: id }),
+  setCheckoutHold: (moduleId, reason) =>
+    set((state) => {
+      if ((state.checkoutHolds[moduleId] ?? null) === reason) return state;
+      const next = { ...state.checkoutHolds };
+      if (reason) next[moduleId] = reason;
+      else delete next[moduleId];
+      return { checkoutHolds: next };
+    }),
   cartDiscount: null,
   customer: null,
 
@@ -405,6 +433,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
       cartDiscount: cartDiscount ?? null,
       customer: customer ?? null,
       preorderId: preorderId ?? null,
+      remoteOrderId: null,
+      checkoutHolds: {},
       banner: null,
     });
   },
@@ -483,6 +513,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
       customer: null,
       preorderId: null,
       exchange: null,
+      remoteOrderId: null,
+      checkoutHolds: {},
     }),
 
   subtotalCents: () => get().lines.reduce((sum, line) => sum + cartLineCents(line), 0),

@@ -25,8 +25,8 @@ import * as passApi from './passApi';
 import { hasAnswer, serverMessage } from './hostPlatform';
 import { carriedWords, dishTitle, withCarrying } from './feed';
 import type { ServingFeed, ServingHistoryRow, ServingLine } from './types';
-import { useVisiblePoll } from '../../tables/lib/usePolling';
-import { newUuid } from '../../tables/lib/uuid';
+import { useVisiblePoll } from './usePolling';
+import { newUuid } from './uuid';
 
 /** How often the room is read while the screen is in view. */
 export const PASS_POLL_MS = 5000;

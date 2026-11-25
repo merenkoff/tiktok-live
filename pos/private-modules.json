@@ -9,7 +9,8 @@
     "vertical-grocery",
     "tables",
     "debts",
-    "pass"
+    "pass",
+    "remote-kitchen"
   ],
   "libraries": ["fiscal-core"]
 }

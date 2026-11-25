@@ -1,0 +1,514 @@
+<title>Віддалена кухня Пульчинелли</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: two POS screens side by side (cafe till | kitchen tablet), stacked with tabs on a phone.
+   Device screens use the POS's own light tokens (pos/src/styles/tokens.css); only the page around them themes. */
+:root{
+  --page:#e9edf1; --page-ink:#2c3138; --page-muted:#5f6b78; --page-line:#d3d9e0; --page-card:#f7f9fb;
+  --sq-blue:#006aff; --sq-blue-press:#0058d6; --sq-bg:#f2f5f7; --sq-surface:#fff; --sq-sidebar:#f4f5f7;
+  --sq-selected:#dfe2e7; --sq-text:#303336; --sq-heading:#2c3138; --sq-secondary:#55606e; --sq-muted:#8e9196;
+  --sq-divider:#dfe3e8; --sq-empty:#eceef0; --sq-success:#43ae59; --sq-success-ink:#2f7d40;
+  --sq-danger:#f4386a; --sq-warning:#f4891f; --amber-bg:#fff4e5; --amber-ink:#8a4b08; --blue-bg:#e8f1ff;
+  --green-bg:#e9f6ec; --red-bg:#feecf1;
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--page:#16191d;--page-ink:#e7eaee;--page-muted:#9aa5b1;--page-line:#2c3239;--page-card:#1e2227;color-scheme:dark}}
+:root[data-theme="dark"]{--page:#16191d;--page-ink:#e7eaee;--page-muted:#9aa5b1;--page-line:#2c3239;--page-card:#1e2227;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--page);color:var(--page-ink);font-family:var(--font);font-size:14px;line-height:1.4;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+button:focus-visible{outline:2px solid var(--sq-blue);outline-offset:2px}
+.wrap{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+header.top h1{margin:0;font-size:22px;letter-spacing:-.01em;text-wrap:balance}
+header.top p{margin:4px 0 0;color:var(--page-muted);max-width:70ch}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--page-line);background:var(--page-card);font-weight:600;font-size:13px}
+.pill[aria-pressed="true"]{background:var(--sq-blue);border-color:var(--sq-blue);color:#fff}
+.pill.ghost{font-weight:500}
+.tabs{display:none;gap:6px}
+.stage{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
+.device{background:#20252b;border-radius:22px;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);min-width:0}
+.cap{display:flex;justify-content:space-between;color:#c8d0d8;font-size:12px;padding:2px 8px 8px;gap:8px}
+.cap b{color:#fff;font-weight:600}
+.screen{background:var(--sq-bg);color:var(--sq-text);border-radius:14px;overflow:hidden;height:720px;display:flex;flex-direction:column}
+.bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--sq-surface);box-shadow:0 1px 0 var(--sq-divider)}
+.bar .store{font-weight:700;color:var(--sq-heading)}
+.bar .nav{display:flex;gap:4px;margin-left:8px;overflow:auto}
+.bar .nav span{padding:6px 10px;border-radius:8px;color:var(--sq-secondary);font-weight:600;font-size:13px;white-space:nowrap}
+.bar .nav span.on{background:var(--sq-selected);color:var(--sq-heading)}
+.bar .clock{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--sq-secondary);font-weight:600}
+/* cafe */
+.till{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px}
+.cat{min-width:0;display:flex;flex-direction:column;padding:12px;gap:10px;overflow:auto}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tags span{height:30px;display:inline-flex;align-items:center;padding:0 12px;border-radius:10px;background:var(--sq-surface);font-weight:600;font-size:13px;color:var(--sq-secondary)}
+.tags span.on{background:var(--sq-heading);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px}
+.tile{position:relative;background:var(--sq-surface);border-radius:10px;min-height:92px;padding:10px;text-align:left;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.tile:active{transform:scale(.98)}
+.tile .n{font-weight:600;color:var(--sq-heading);font-size:14px;line-height:1.2}
+.tile .p{font-weight:700;font-variant-numeric:tabular-nums}
+.tile .rk{position:absolute;top:8px;right:8px;font-size:11px;font-weight:700;color:var(--sq-blue);background:var(--blue-bg);border-radius:6px;padding:2px 6px}
+.tile.off{opacity:.55}
+.tile.off .rk{color:var(--sq-secondary);background:var(--sq-empty)}
+.sect{font-size:12px;font-weight:700;color:var(--sq-muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+.cart{background:var(--sq-surface);box-shadow:-1px 0 0 var(--sq-divider);display:flex;flex-direction:column;min-height:0}
+.cart h3{margin:0;padding:12px 14px 6px;font-size:15px}
+.lines{flex:1;overflow:auto;padding:0 14px;display:flex;flex-direction:column;gap:2px}
+.ln{display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:14px}
+.ln .q{font-weight:700;margin-right:4px}
+.ln .x{color:var(--sq-muted);font-size:16px;padding:0 4px}
+.ln.gone .nm{text-decoration:line-through;color:var(--sq-muted)}
+.rkbox{margin:6px 0;border-radius:12px;background:var(--sq-bg);padding:8px 10px 10px;display:flex;flex-direction:column;gap:6px}
+.rkbox .hd{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--sq-heading)}
+.rkbox .hd svg{flex:none}
+.st{border-radius:10px;padding:8px 10px;font-size:13px;display:flex;flex-direction:column;gap:6px}
+.st.wait{background:var(--blue-bg);color:#123a7a}
+.st.ok{background:var(--green-bg);color:var(--sq-success-ink)}
+.st.warn{background:var(--amber-bg);color:var(--amber-ink)}
+.st.bad{background:var(--red-bg);color:#9b1c40}
+.st .big{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.st .row{display:flex;gap:6px;flex-wrap:wrap}
+.btn{min-height:40px;border-radius:10px;padding:0 12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.pri{background:var(--sq-blue);color:#fff}
+.btn.pri:disabled{background:var(--sq-selected);color:var(--sq-muted);cursor:not-allowed}
+.btn.sec{background:var(--sq-surface);color:var(--sq-heading);box-shadow:inset 0 0 0 1px var(--sq-divider)}
+.btn.ok{background:var(--sq-success);color:#fff}
+.btn.danger{background:var(--sq-surface);color:#c4204f;box-shadow:inset 0 0 0 1px #f6c1cf}
+.btn.full{width:100%}
+.btn.lg{min-height:50px;font-size:16px}
+.tot{padding:10px 14px 14px;box-shadow:0 -1px 0 var(--sq-divider);display:flex;flex-direction:column;gap:8px}
+.tot .sum{display:flex;justify-content:space-between;font-weight:700;font-size:17px}
+.hint{font-size:12px;color:var(--sq-muted)}
+.tracker{padding:0 14px 8px;display:flex;flex-direction:column;gap:6px}
+.trk{border-radius:10px;background:var(--sq-bg);padding:8px 10px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.trk .top{display:flex;justify-content:space-between;gap:6px;font-weight:700}
+.steps{display:flex;gap:3px}
+.steps i{flex:1;height:4px;border-radius:2px;background:var(--sq-selected)}
+.steps i.on{background:var(--sq-blue)}
+.steps i.done{background:var(--sq-success)}
+.overlay{position:absolute;inset:0;background:rgba(20,24,30,.35);display:flex;align-items:center;justify-content:center;padding:16px}
+.sheet{background:var(--sq-surface);border-radius:18px;padding:18px;width:min(420px,100%);display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.sheet h4{margin:0;font-size:18px}
+.bigno{font-size:64px;font-weight:700;letter-spacing:-.02em;color:var(--sq-heading);line-height:1;font-variant-numeric:tabular-nums}
+.rel{position:relative}
+/* kitchen */
+.kitchen{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto;padding:12px;gap:12px}
+.status{background:var(--sq-surface);border-radius:14px;padding:10px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:13px}
+.status b{color:var(--sq-heading)}
+.seg{display:inline-flex;background:var(--sq-bg);border-radius:10px;padding:2px}
+.seg button{min-height:30px;padding:0 10px;border-radius:8px;font-weight:600;font-size:13px;color:var(--sq-secondary)}
+.seg button[aria-pressed="true"]{background:var(--sq-surface);color:var(--sq-heading);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.req{background:var(--sq-surface);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 0 0 2px var(--sq-blue)}
+.req.auto{box-shadow:0 0 0 1px var(--sq-divider)}
+.req .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.req .h b{font-size:16px;color:var(--sq-heading)}
+.timer{font-variant-numeric:tabular-nums;font-weight:700;color:var(--sq-blue)}
+.timer.low{color:var(--sq-danger)}
+.items{display:flex;flex-direction:column;gap:4px}
+.it{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:15px}
+.it .tog{font-size:12px;font-weight:600;padding:4px 8px;border-radius:8px;background:var(--sq-bg);color:var(--sq-secondary)}
+.it .tog[aria-pressed="true"]{background:var(--red-bg);color:#9b1c40}
+.it.no .nm{text-decoration:line-through;color:var(--sq-muted)}
+.calc{font-size:12px;color:var(--sq-secondary);background:var(--sq-bg);border-radius:8px;padding:6px 8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{min-width:52px;min-height:44px;border-radius:10px;background:var(--sq-bg);font-weight:700;font-size:15px;color:var(--sq-heading)}
+.chips button[aria-pressed="true"]{background:var(--sq-blue);color:#fff}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.col h5{margin:0 0 6px;font-size:14px;display:flex;gap:6px;align-items:baseline}
+.col h5 span{color:var(--sq-muted);font-weight:500;font-size:12px}
+.kcard{background:var(--sq-surface);border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.kcard .t{display:flex;gap:8px;align-items:flex-start}
+.kcard .no{font-size:28px;font-weight:700;line-height:1;color:var(--sq-heading);font-variant-numeric:tabular-nums}
+.kcard .meta{font-size:12px;color:var(--sq-secondary);flex:1;min-width:0}
+.kcard .meta .src{display:inline-block;font-weight:700;color:var(--sq-blue);background:var(--blue-bg);border-radius:6px;padding:1px 6px;margin-bottom:2px}
+.kcard .due{font-weight:700;font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap}
+.kcard .due.late{color:var(--sq-danger)}
+.kcard ul{margin:0;padding:6px 0 0;list-style:none;box-shadow:0 -1px 0 var(--sq-divider);font-size:14px;display:flex;flex-direction:column;gap:2px}
+.empty{background:rgba(255,255,255,.6);border-radius:14px;padding:16px;text-align:center;color:var(--sq-muted);font-size:13px}
+.banner{border-radius:10px;padding:8px 10px;font-size:13px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+/* notes */
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.note{background:var(--page-card);border:1px solid var(--page-line);border-radius:14px;padding:12px 14px;min-width:0}
+.note h3{margin:0 0 6px;font-size:14px}
+.note p,.note li{color:var(--page-muted);margin:0;font-size:13px}
+.note ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.log{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--page-muted);max-height:140px;overflow:auto;white-space:pre-wrap}
+@media (max-width:1000px){
+  .stage{grid-template-columns:minmax(0,1fr)}
+  .tabs{display:flex}
+  .stage[data-show="cafe"] .dev-kitchen{display:none}
+  .stage[data-show="kitchen"] .dev-cafe{display:none}
+}
+@media (max-width:640px){
+  .till{grid-template-columns:minmax(0,1fr)}
+  .screen{height:auto;min-height:640px}
+  .cart{box-shadow:0 -1px 0 var(--sq-divider)}
+  .cols{grid-template-columns:minmax(0,1fr)}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@keyframes ping{0%{box-shadow:0 0 0 2px var(--sq-blue)}50%{box-shadow:0 0 0 6px rgba(0,106,255,.25)}100%{box-shadow:0 0 0 2px var(--sq-blue)}}
+.req.new{animation:ping 1.2s ease-in-out 3}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Віддалена кухня: каса в парку ↔ кухня Пульчинелли</h1>
+      <p>Клікабельний макет двох екранів на затвердження. Набирайте страви на касі ліворуч і відповідайте за кухню праворуч. Ціни умовні («приклад»), назви страв справжні.</p>
+    </div>
+    <div class="ctl" role="group" aria-label="Режим кухні">
+      <button class="pill" id="optAuto" aria-pressed="false">Автопідтвердження до 40 хв</button>
+      <button class="pill" id="optSilent" aria-pressed="false">Кухня мовчить</button>
+      <button class="pill" id="optPause" aria-pressed="false">Кухня на паузі</button>
+      <button class="pill ghost" id="fast">⏩ +30 с</button>
+      <button class="pill ghost" id="reset">Почати спочатку</button>
+    </div>
+  </header>
+  <div class="tabs" role="tablist" aria-label="Екран">
+    <button class="pill" id="tabCafe" aria-pressed="true">Каса в парку</button>
+    <button class="pill" id="tabKitchen" aria-pressed="false">Кухня <span id="tabBadge"></span></button>
+  </div>
+
+  <div class="stage" id="stage" data-show="cafe">
+    <section class="device dev-cafe" aria-label="Каса кафе в парку">
+      <div class="cap"><span><b>Pulcinella Park</b> · каса, вул. Паркова, 3</span><span>планшет 11″, альбомна</span></div>
+      <div class="screen rel" id="cafe"></div>
+    </section>
+    <section class="device dev-kitchen" aria-label="Кухня">
+      <div class="cap"><span><b>Pulcinella</b> · кухня, вул. Степана Бандери, 11</span><span>планшет на кухні</span></div>
+      <div class="screen rel" id="kitchen"></div>
+    </section>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h3>Що спробувати</h3><ul>
+      <li>Хот-дог + «Пульчінелла» → «Запитати час» → на кухні 25 хв → «Гість згоден».</li>
+      <li>Увімкніть автопідтвердження: кухня відповідає сама, кухар лише бачить.</li>
+      <li>«Кухня мовчить» і ⏩ двічі: каса пропонує подзвонити й записати час.</li>
+      <li>На кухні позначте «Немає» біля страви: каса продасть без неї.</li>
+      <li>Після оплати: «Готово» → «Віддали кур'єру» → на касі «Привезли» → «Видали».</li>
+    </ul></div>
+    <div class="note"><h3>Правила, які показує макет</h3><ul>
+      <li>Кухня нічого не готує, поки гість не погодився й не заплатив.</li>
+      <li>Названий час діє 3 хв. Змінили кошик — потрібен новий запит.</li>
+      <li>Один чек на хот-дог і піцу. Хот-дог іде на кухню парку одразу.</li>
+      <li>Без мережі чи без відповіді (60 с, налаштовується в адмінці) — номер кухні й «Записати час з телефону». Продажу без часу від кухні немає.</li>
+    </ul></div>
+    <div class="note"><h3>Журнал подій</h3><div class="log" id="log" aria-live="polite"></div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+const PREP={pizza:18,roll:20,set:25,box:15};
+const TRANSIT=10;
+const MENU=[
+ {id:'hd',n:'Хот-дог',p:65,local:true,tag:'Парк'},
+ {id:'ng',n:'Нагетси, 6 шт',p:85,local:true,tag:'Парк'},
+ {id:'ff',n:'Картопля фрі',p:60,local:true,tag:'Парк'},
+ {id:'lm',n:'Лимонад 0,5',p:45,local:true,tag:'Парк'},
+ {id:'pp',n:'Піца «Пульчінелла» 30 см',p:245,k:'pizza',tag:'Піца'},
+ {id:'p4',n:'Піца «4 сири» 30 см',p:235,k:'pizza',tag:'Піца'},
+ {id:'pc',n:'Піца «Панчетта» 30 см',p:239,k:'pizza',tag:'Піца'},
+ {id:'ph',n:'Рол «Філадельфія»',p:215,k:'roll',tag:'Суші'},
+ {id:'mi',n:'Рол «Мідорі»',p:189,k:'roll',tag:'Суші'},
+ {id:'sp',n:'Сет «Преміум»',p:629,k:'set',tag:'Суші'},
+ {id:'fb',n:'Фрі-бокс ≈1 кг',p:390,k:'box',tag:'Закуски'}
+];
+const byId=Object.fromEntries(MENU.map(m=>[m.id,m]));
+let S;
+function init(){
+  S={t0:Date.now(),base:new Date(2026,10,24,19,10,0).getTime(),offset:0,
+     cart:[],order:null,orderSeq:12,localSeq:41,trackers:[],board:[],
+     opt:{auto:false,silent:false,pause:false},load:0,chosen:null,
+     sheet:null,kitchenBanner:null,cafeBanner:null,log:[]};
+}
+const now=()=>S.base+(Date.now()-S.t0)+S.offset;
+const hm=ms=>{const d=new Date(ms);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+const mmss=s=>{s=Math.max(0,Math.ceil(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+const money=c=>c.toLocaleString('uk-UA')+' ₴';
+function log(m){S.log.unshift(hm(now())+'  '+m);document.getElementById('log').textContent=S.log.join('\n')}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ICON='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11h18M5 11V7a7 7 0 0 1 14 0v4M4 11l1 8h14l1-8"/></svg>';
+
+const remoteLines=()=>S.cart.filter(l=>!byId[l.id].local);
+const localLines=()=>S.cart.filter(l=>byId[l.id].local);
+function suggest(lines){
+  const live=lines.filter(l=>!l.no);
+  const prep=Math.max(0,...live.map(l=>PREP[byId[l.id].k]));
+  const raw=prep+S.load+TRANSIT;
+  return {prep,load:S.load,transit:TRANSIT,total:Math.ceil(raw/5)*5};
+}
+function postedWait(){return S.opt.pause?null:Math.ceil((PREP.pizza+S.load+TRANSIT)/5)*5}
+
+/* ---------- actions ---------- */
+function add(id){
+  const m=byId[id];
+  if(!m.local&&S.opt.pause){S.cafeBanner={kind:'warn',text:'Кухня на паузі до 20:30. Піцу й суші зараз не приймають.'};render();return}
+  if(S.order&&(S.order.status==='paid')) S.order=null;
+  const l=S.cart.find(x=>x.id===id&&!x.no);
+  if(l)l.q++;else S.cart.push({id,q:1});
+  if(!m.local&&S.order&&['requested','quoted','expired','declined'].includes(S.order.status)){
+    if(S.order.status!=='declined'){S.order.status='stale';log('Касир змінив кошик: потрібен новий запит часу')}
+  }
+  render();
+}
+function removeLine(i){
+  const l=S.cart[i];S.cart.splice(i,1);
+  if(!byId[l.id].local&&S.order&&['requested','quoted'].includes(S.order.status)){S.order.status='stale';log('Касир змінив кошик: потрібен новий запит часу')}
+  if(remoteLines().length===0)S.order=null;
+  render();
+}
+function request(){
+  const lines=remoteLines().map(l=>({...l,no:false}));
+  S.cart.forEach(l=>l.no=false);
+  const sg=suggest(lines);
+  S.order={status:'requested',lines,sg,deadline:now()+60000,rev:(S.order?.rev||0)+1};
+  S.chosen=sg.total;S.kitchenBanner=null;
+  log('Каса → кухня: запит часу ('+lines.map(l=>l.q+'× '+byId[l.id].n).join(', ')+')');
+  if(S.opt.auto&&sg.total<=40){
+    setTimeout(()=>{if(S.order&&S.order.status==='requested'){quote(sg.total,'auto')}},900);
+  }
+  render();
+}
+function quote(min,src){
+  const o=S.order;if(!o)return;
+  o.status='quoted';o.min=min;o.src=src;o.expires=now()+180000;o.promised=now()+min*60000;
+  o.problems=o.lines.filter(l=>l.no).map(l=>l.id);
+  S.cart.forEach(l=>{if(o.problems.includes(l.id)&&!byId[l.id].local)l.no=true});
+  log((src==='auto'?'Сервер (автопідтвердження)':src==='phone'?'Касир записав з телефону':'Кухня')+': '+min+' хв, буде о '+hm(o.promised)+(o.problems.length?' · немає: '+o.problems.map(i=>byId[i].n).join(', '):''));
+  render();
+}
+function refuse(reason){S.order.status='declined';S.order.reason=reason;log('Кухня відмовила: '+reason);render()}
+function guestDeclined(){log('Гість відмовився від страв кухні');S.cart=localLines();S.order=null;render()}
+function dropProblems(){S.cart=S.cart.filter(l=>!l.no);render()}
+function pay(){S.sheet='pay';render()}
+function doPay(method){
+  const o=S.order, local=localLines(), remote=remoteLines().filter(l=>!l.no);
+  const total=[...local,...remote].reduce((a,l)=>a+byId[l.id].p*l.q,0);
+  const no=remote.length?'П-'+(++S.orderSeq):null;
+  const lno=local.length?String(++S.localSeq):null;
+  if(remote.length){
+    const tr={no,lines:remote.map(l=>({...l})),promised:o.promised,status:'cooking',min:o.min,src:o.src,delay:0};
+    S.trackers.unshift(tr);S.board.push(tr);
+  }
+  S.sheet={kind:'done',no,lno,total,method,promised:o?.promised};
+  log('Оплата '+method+' '+money(total)+' · один чек ПРРО кафе'+(no?' · кухня отримала '+no+', тікет на друк, склад кухні списано':''));
+  S.cart=[];S.order=null;render();
+}
+function kReady(no){const t=S.trackers.find(x=>x.no===no);t.status='ready';log('Кухня: '+no+' готово');render()}
+function kSent(no){const t=S.trackers.find(x=>x.no===no);t.status='dispatched';S.board=S.board.filter(x=>x.no!==no);log('Кухня: '+no+' віддали кур\'єру');render()}
+function kDelay(no){const t=S.trackers.find(x=>x.no===no);t.delay+=10;t.promised+=600000;S.cafeBanner={kind:'warn',text:'Кухня: '+no+' запізнюється на 10 хв, буде о '+hm(t.promised)+'. Скажіть гостю.'};log('Кухня: '+no+' +10 хв');render()}
+function cArrived(no){const t=S.trackers.find(x=>x.no===no);t.status='arrived';log('Каса: '+no+' привезли');render()}
+function cHanded(no){S.trackers=S.trackers.filter(x=>x.no!==no);log('Каса: '+no+' видали гостю, замовлення закрите');render()}
+
+/* ---------- tick ---------- */
+function tick(){
+  const o=S.order;
+  if(o&&o.status==='requested'&&now()>=o.deadline){o.status='expired';o.why='silent';log('Кухня не відповіла за 60 с');render();return}
+  if(o&&o.status==='quoted'&&now()>=o.expires){o.status='expired';o.why='ttl';log('Час дії відповіді минув');render();return}
+  renderClockOnly();
+}
+
+/* ---------- render cafe ---------- */
+function tileHtml(m){
+  if(m.local)return `<button class="tile" data-add="${m.id}"><span class="n">${esc(m.n)}</span><span class="p">${money(m.p)}</span></button>`;
+  const w=postedWait();
+  const badge=S.opt.pause?'пауза':'кухня · ≈'+w+' хв';
+  return `<button class="tile ${S.opt.pause?'off':''}" data-add="${m.id}" aria-label="${esc(m.n)}, готує кухня"><span class="rk">${badge}</span><span class="n" style="padding-top:16px">${esc(m.n)}</span><span class="p">${money(m.p)} <span class="hint" style="font-weight:500">приклад</span></span></button>`;
+}
+function remoteStateHtml(){
+  const o=S.order, rl=remoteLines();
+  if(!rl.length)return '';
+  if(S.opt.pause)return `<div class="st warn">Кухня на паузі до 20:30. Приберіть страви кухні або запропонуйте гостю інше.</div>`;
+  if(!o||o.status==='stale')return `<div class="st wait"><span>${o?'Кошик змінився, попередній час уже не діє.':'Кухня готує ці страви. Спершу узнайте час.'}</span><button class="btn pri full" data-act="request">Запитати час у кухні</button><span class="hint">Зараз кухня пише «≈${postedWait()} хв»</span></div>`;
+  if(o.status==='requested'){
+    const left=(o.deadline-now())/1000;
+    return `<div class="st wait"><span>Чекаємо відповідь кухні…</span><span class="big" data-tick="req">${mmss(left)}</span><span class="hint">Скажіть гостю: «Уточнюю час, хвилинку».</span></div>`;
+  }
+  if(o.status==='quoted'){
+    const left=(o.expires-now())/1000;
+    const prob=o.problems.length;
+    return `<div class="st ok"><span>${o.src==='auto'?'Кухня (автоматично)':o.src==='phone'?'Час з телефону':'Кухня відповіла'}</span>
+      <span class="big">${o.min} хв · о ${hm(o.promised)}</span>
+      <span class="hint" style="color:inherit">${o.src==='phone'?'записано касиром':'готування '+o.sg.prep+' + дорога '+o.sg.transit+(o.sg.load?' + черга '+o.sg.load:'')+' хв'} · відповідь діє ще <b data-tick="ttl">${mmss(left)}</b></span>
+      ${prob?`<div class="st bad" style="padding:6px 8px">Кухня: немає ${o.problems.map(i=>'«'+esc(byId[i].n)+'»').join(', ')}. <button class="btn sec" data-act="drop" style="min-height:32px">Продати без ${prob>1?'них':'неї'}</button></div>`:''}
+      <div class="row"><button class="btn danger" data-act="gdecline">Гість відмовився</button></div></div>`;
+  }
+  if(o.status==='declined')return `<div class="st bad"><span>Кухня не може: ${esc(o.reason)}</span><div class="row"><button class="btn sec" data-act="gdecline">Прибрати страви кухні</button></div></div>`;
+  if(o.status==='expired'){
+    if(o.why==='ttl')return `<div class="st warn"><span>Названий час уже не діє: минуло 3 хв.</span><button class="btn pri full" data-act="request">Запитати знову</button></div>`;
+    return `<div class="st warn"><span><b>Кухня не відповідає.</b> Подзвоніть: <span style="user-select:all;font-weight:700">073 000 00 00</span> <span class="hint">(номер з налаштувань зв'язки)</span></span>
+      <span>Кухня сказала по телефону:</span><div class="row">${[20,30,40,50].map(m=>`<button class="btn sec" data-phone="${m}">${m} хв</button>`).join('')}</div>
+      <button class="btn sec" data-act="request">Запитати ще раз</button></div>`;
+  }
+  return '';
+}
+function canPay(){
+  if(!S.cart.length)return false;
+  if(!remoteLines().length)return true;
+  return S.order&&S.order.status==='quoted';
+}
+function renderCafe(){
+  const el=document.getElementById('cafe');
+  const local=localLines(), remote=remoteLines();
+  const total=S.cart.filter(l=>!l.no).reduce((a,l)=>a+byId[l.id].p*l.q,0);
+  const lineHtml=l=>{const i=S.cart.indexOf(l);const m=byId[l.id];return `<div class="ln ${l.no?'gone':''}"><span class="nm"><span class="q">${l.q}×</span>${esc(m.n)}${l.no?' <span class="hint">немає</span>':''}</span><span>${money(m.p*l.q)} <button class="x" data-rm="${i}" aria-label="Прибрати">×</button></span></div>`};
+  const groups=['Парк','Піца','Суші','Закуски'];
+  el.innerHTML=`
+  <div class="bar"><span class="store">Pulcinella Park</span><nav class="nav"><span class="on">Каса</span><span>Кухня парку</span><span>Чеки</span></nav><span class="clock" data-clock>${hm(now())}</span></div>
+  <div class="till">
+    <div class="cat">
+      <div class="tags"><span class="on">Усе</span>${groups.map(g=>`<span>${g}</span>`).join('')}</div>
+      ${S.cafeBanner?`<div class="banner st ${S.cafeBanner.kind}" style="flex-direction:row">${esc(S.cafeBanner.text)}<button class="btn sec" data-act="cbclose" style="min-height:30px">Зрозуміло</button></div>`:''}
+      ${groups.map(g=>`<div class="sect">${g==='Парк'?'Готуємо тут':g+' · з кухні'}</div><div class="grid">${MENU.filter(m=>m.tag===g).map(tileHtml).join('')}</div>`).join('')}
+    </div>
+    <aside class="cart">
+      <h3>Чек</h3>
+      <div class="lines">
+        ${!S.cart.length?'<p class="hint">Порожньо. Торкніться страви.</p>':''}
+        ${local.map(lineHtml).join('')}
+        ${remote.length?`<div class="rkbox"><div class="hd">${ICON} З кухні Пульчинелли</div>${remote.map(lineHtml).join('')}${remoteStateHtml()}</div>`:''}
+      </div>
+      ${S.trackers.length?`<div class="tracker"><div class="sect">Замовлення з кухні</div>${S.trackers.map(trackerHtml).join('')}</div>`:''}
+      <div class="tot"><div class="sum"><span>Разом</span><span>${money(total)}</span></div>
+        <button class="btn pri lg full" data-act="pay" ${canPay()?'':'disabled'}>${remote.length&&!canPay()?'Спершу час від кухні':(remote.length?'Гість згоден · Сплатити':'Сплатити')}</button>
+      </div>
+    </aside>
+  </div>
+  ${sheetHtml()}`;
+}
+function trackerHtml(t){
+  const idx={cooking:1,ready:2,dispatched:3,arrived:4}[t.status];
+  const label={cooking:'Готується',ready:'Готово на кухні',dispatched:'Їде до вас',arrived:'Привезли'}[t.status];
+  const late=t.status!=='arrived'&&now()>t.promised;
+  return `<div class="trk"><div class="top"><span>${t.no} · ${esc(label)}</span><span style="color:${late?'var(--sq-danger)':'inherit'}">до ${hm(t.promised)}</span></div>
+   <div class="steps">${[1,2,3,4].map(i=>`<i class="${i<idx?'done':i===idx?'on':''}"></i>`).join('')}</div>
+   <span class="hint">${t.lines.map(l=>l.q+'× '+esc(byId[l.id].n)).join(', ')}</span>
+   ${t.status==='dispatched'?`<button class="btn pri" data-arr="${t.no}">Привезли</button>`:''}
+   ${t.status==='arrived'?`<button class="btn ok" data-hand="${t.no}">Видали гостю</button>`:''}</div>`;
+}
+function sheetHtml(){
+  if(S.sheet==='pay'){
+    const total=S.cart.filter(l=>!l.no).reduce((a,l)=>a+byId[l.id].p*l.q,0);
+    return `<div class="overlay"><div class="sheet" role="dialog" aria-label="Оплата"><h4>Оплата ${money(total)}</h4>
+      <p class="hint">Один фіскальний чек каси кафе. ${remoteLines().length?'Після оплати кухня отримає замовлення й почне готувати.':''}</p>
+      <div class="row" style="display:flex;gap:8px"><button class="btn pri lg" style="flex:1" data-paym="готівкою">Готівка</button><button class="btn pri lg" style="flex:1" data-paym="карткою">Картка</button></div>
+      <button class="btn sec" data-act="close">Назад</button></div></div>`;
+  }
+  if(S.sheet&&S.sheet.kind==='done'){
+    const d=S.sheet;
+    return `<div class="overlay"><div class="sheet" role="dialog" aria-label="Оплачено"><span class="hint" style="color:var(--sq-success-ink);font-weight:700">Оплачено ${d.method} · ${money(d.total)}</span>
+      <div style="display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap">
+        ${d.lno?`<div><div class="bigno">${d.lno}</div><span class="hint">хот-дог тощо — кухня парку</span></div>`:''}
+        ${d.no?`<div><div class="bigno" style="color:var(--sq-blue)">${d.no}</div><span class="hint">з кухні, буде о <b>${hm(d.promised)}</b></span></div>`:''}
+      </div>
+      ${d.no?`<p class="hint">На чеку гостя: «Піца ${d.no} — орієнтовно о ${hm(d.promised)}. Ми покличемо».</p>`:''}
+      <button class="btn pri lg" data-act="close">Новий чек</button></div></div>`;
+  }
+  return '';
+}
+
+/* ---------- render kitchen ---------- */
+function renderKitchen(){
+  const el=document.getElementById('kitchen');
+  const o=S.order;
+  let inbox='';
+  if(o&&o.status==='requested'){
+    const left=(o.deadline-now())/1000;
+    const sg=suggest(o.lines);
+    if(S.opt.silent){inbox=`<div class="req new" style="opacity:.75"><div class="h"><b>Парк просить час</b><span class="timer ${left<20?'low':''}" data-tick="kreq">${mmss(left)}</span></div><p class="hint">Режим «Кухня мовчить»: ніхто не підходить до планшета. Натисніть ⏩ угорі.</p></div>`}
+    else inbox=`<div class="req new" role="region" aria-label="Запит часу від парку">
+      <div class="h"><b>Парк просить час</b><span class="timer ${left<20?'low':''}" data-tick="kreq">${mmss(left)}</span></div>
+      <div class="items">${o.lines.map((l,i)=>`<div class="it ${l.no?'no':''}"><span class="nm"><b>${l.q}×</b> ${esc(byId[l.id].n)}</span><button class="tog" data-no="${i}" aria-pressed="${l.no?'true':'false'}">${l.no?'Немає':'Є'}</button></div>`).join('')}</div>
+      <div class="calc">Пропозиція ${sg.total} хв = готування ${sg.prep} + черга ${sg.load} + дорога ${sg.transit}</div>
+      <div class="chips" role="group" aria-label="Час">${[15,20,25,30,40,50].map(m=>`<button data-min="${m}" aria-pressed="${S.chosen===m?'true':'false'}">${m}</button>`).join('')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri lg" style="flex:1" data-act="kquote" ${o.lines.every(l=>l.no)?'disabled':''}>Відповісти: ${S.chosen} хв</button><button class="btn danger lg" data-act="krefuse">Не можемо</button></div>
+      ${S.refuseOpen?`<div class="chips">${['Піч не працює','Закрились на сьогодні','Немає продуктів'].map(r=>`<button data-reason="${r}" style="min-width:auto;padding:0 10px;font-size:13px">${r}</button>`).join('')}</div>`:''}
+    </div>`;
+  } else if(o&&o.status==='quoted'){
+    inbox=`<div class="req auto"><div class="h"><b>Парк: відповідь ${o.min} хв ${o.src==='auto'?'(автоматично)':o.src==='phone'?'(з телефону)':''}</b><span class="timer" data-tick="kttl">${mmss((o.expires-now())/1000)}</span></div><p class="hint" style="margin:0">Чекаємо, чи погодиться гість. Нічого не готуйте, поки не прийде оплачене замовлення.</p>${o.src==='auto'?`<div class="chips">${[30,40,50].map(m=>`<button data-rem="${m}">${m}</button>`).join('')}<span class="hint" style="align-self:center">змінити час</span></div>`:''}</div>`;
+  }
+  const cooking=S.board.filter(t=>t.status==='cooking'), ready=S.board.filter(t=>t.status==='ready');
+  const card=t=>{const late=now()>t.promised-5*60000;return `<div class="kcard"><div class="t"><span class="no">${t.no}</span><div class="meta"><span class="src">Парк · кур'єр</span><br>обіцяли до ${hm(t.promised)}${t.delay?' (+'+t.delay+')':''}</div><span class="due ${late?'late':''}" data-due="${t.no}">${mmss((t.promised-now())/1000)}</span></div>
+    <ul>${t.lines.map(l=>`<li><b>${l.q}×</b> ${esc(byId[l.id].n)}</li>`).join('')}</ul>
+    ${t.status==='cooking'?`<div style="display:flex;gap:6px"><button class="btn ok lg" style="flex:1" data-kready="${t.no}">Готово</button><button class="btn sec lg" data-kdelay="${t.no}">+10 хв</button></div>`:`<button class="btn pri lg full" data-ksent="${t.no}">Віддали кур'єру</button>`}</div>`};
+  el.innerHTML=`
+  <div class="bar"><span class="store">Pulcinella</span><nav class="nav"><span class="on">Кухня</span><span>Запити точок</span><span>Стоп-лист</span></nav><span class="clock" data-clock>${hm(now())}</span></div>
+  <div class="kitchen">
+    <div class="status"><span><b>Прийом:</b></span>
+      <span class="seg"><button data-acc="1" aria-pressed="${!S.opt.pause}">Приймаємо</button><button data-acc="0" aria-pressed="${S.opt.pause}">Пауза 30 хв</button></span>
+      <span><b>Черга:</b></span><span class="seg">${[0,10,20].map(v=>`<button data-load="${v}" aria-pressed="${S.load===v}">+${v}</button>`).join('')}</span>
+      <span class="hint">точки бачать «≈${postedWait()??'—'} хв»${S.opt.auto?' · автопідтвердження до 40 хв':''}</span></div>
+    ${inbox||'<div class="empty">Запитів від точок немає. Тут з\'явиться картка зі звуком, щойно парк попросить час.</div>'}
+    <div class="cols">
+      <div class="col"><h5 style="color:var(--sq-blue)">В роботі <span>${cooking.length}</span></h5>${cooking.map(card).join('')||'<div class="empty">—</div>'}</div>
+      <div class="col"><h5 style="color:var(--sq-success)">Видача <span>${ready.length}</span></h5>${ready.map(card).join('')||'<div class="empty">—</div>'}</div>
+    </div>
+  </div>`;
+  const b=document.getElementById('tabBadge');b.textContent=(o&&o.status==='requested')?'●':'';
+}
+function render(){renderCafe();renderKitchen();syncOpts()}
+function renderClockOnly(){
+  document.querySelectorAll('[data-clock]').forEach(e=>e.textContent=hm(now()));
+  const o=S.order;
+  document.querySelectorAll('[data-tick="req"],[data-tick="kreq"]').forEach(e=>{if(o)e.textContent=mmss((o.deadline-now())/1000)});
+  document.querySelectorAll('[data-tick="ttl"],[data-tick="kttl"]').forEach(e=>{if(o&&o.expires)e.textContent=mmss((o.expires-now())/1000)});
+  document.querySelectorAll('[data-due]').forEach(e=>{const t=S.board.find(x=>x.no===e.dataset.due);if(t){e.textContent=mmss((t.promised-now())/1000);e.classList.toggle('late',now()>t.promised-5*60000)}});
+}
+function syncOpts(){
+  for(const k of ['auto','silent','pause'])document.getElementById('opt'+k[0].toUpperCase()+k.slice(1)).setAttribute('aria-pressed',S.opt[k]);
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  const d=t.dataset;
+  if(d.add)return add(d.add);
+  if(d.rm!==undefined)return removeLine(+d.rm);
+  if(d.phone)return quote(+d.phone,'phone');
+  if(d.paym)return doPay(d.paym);
+  if(d.min){S.chosen=+d.min;return render()}
+  if(d.no!==undefined){const l=S.order.lines[+d.no];l.no=!l.no;S.chosen=suggest(S.order.lines).total;return render()}
+  if(d.reason){S.refuseOpen=false;return refuse(d.reason)}
+  if(d.rem){S.order.min=+d.rem;S.order.promised=now()+S.order.min*60000;log('Кухня змінила час на '+d.rem+' хв');return render()}
+  if(d.kready)return kReady(d.kready);
+  if(d.ksent)return kSent(d.ksent);
+  if(d.kdelay)return kDelay(d.kdelay);
+  if(d.arr)return cArrived(d.arr);
+  if(d.hand)return cHanded(d.hand);
+  if(d.load!==undefined){S.load=+d.load;log('Кухня: черга +'+S.load+' хв');return render()}
+  if(d.acc!==undefined){S.opt.pause=d.acc==='0';log(S.opt.pause?'Кухня поставила паузу':'Кухня знову приймає');return render()}
+  switch(d.act){
+    case 'request':return request();
+    case 'kquote':return quote(S.chosen,'kitchen');
+    case 'krefuse':S.refuseOpen=!S.refuseOpen;return render();
+    case 'gdecline':return guestDeclined();
+    case 'drop':return dropProblems();
+    case 'pay':return pay();
+    case 'close':S.sheet=null;return render();
+    case 'cbclose':S.cafeBanner=null;return render();
+  }
+});
+document.getElementById('optAuto').onclick=()=>{S.opt.auto=!S.opt.auto;render()};
+document.getElementById('optSilent').onclick=()=>{S.opt.silent=!S.opt.silent;render()};
+document.getElementById('optPause').onclick=()=>{S.opt.pause=!S.opt.pause;render()};
+document.getElementById('fast').onclick=()=>{S.offset+=30000;tick();render()};
+document.getElementById('reset').onclick=()=>{init();document.getElementById('log').textContent='';render()};
+const stage=document.getElementById('stage');
+document.getElementById('tabCafe').onclick=()=>{stage.dataset.show='cafe';tabState()};
+document.getElementById('tabKitchen').onclick=()=>{stage.dataset.show='kitchen';tabState()};
+function tabState(){document.getElementById('tabCafe').setAttribute('aria-pressed',stage.dataset.show==='cafe');document.getElementById('tabKitchen').setAttribute('aria-pressed',stage.dataset.show==='kitchen')}
+
+/* opening state: a realistic cart already on the till */
+init();
+S.cart=[{id:'hd',q:2},{id:'pp',q:1}];
+render();
+setInterval(tick,1000);
+})();
+</script>

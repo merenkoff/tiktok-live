@@ -136,6 +136,35 @@ describe('buildKitchenTickets', () => {
   it('produces nothing for a sale with no lines', () => {
     expect(buildKitchenTickets(makeSaleDetail({ items: [] }), { catalog: CATALOG, tags: TAGS })).toEqual([]);
   });
+
+  // Track РК: a pizza the remote kitchen bakes is printed on THAT kitchen's
+  // printer (`remoteTicketOf`, its print queue). On the cafe's own printer it
+  // would send the hot-dog cook to bake it.
+  describe('a dish a remote kitchen cooks', () => {
+    const withPizza = makeSaleDetail({
+      ...sale,
+      items: [
+        line({ variant_id: 20, product_name: 'Круасан' }),
+        line({ variant_id: 50, product_name: 'Маргарита', remote_order_item_id: 901 }),
+      ],
+    });
+
+    it('is left off the store’s own ticket, with stations or without', () => {
+      const routed = buildKitchenTickets(withPizza, { catalog: CATALOG, tags: TAGS, formatTime: fixed });
+      expect(routed.flatMap((r) => r.ticket.items.map((i) => i.name))).toEqual(['Круасан']);
+      const plain = buildKitchenTickets(withPizza, { catalog: CATALOG, tags: [], formatTime: fixed });
+      expect(plain.flatMap((r) => r.ticket.items.map((i) => i.name))).toEqual(['Круасан']);
+    });
+
+    it('a receipt of nothing but kitchen dishes prints no ticket here at all', () => {
+      const onlyPizza = makeSaleDetail({
+        ...sale,
+        items: [line({ variant_id: 50, product_name: 'Маргарита', remote_order_item_id: 901 })],
+      });
+      expect(buildKitchenTickets(onlyPizza, { catalog: CATALOG, tags: TAGS })).toEqual([]);
+      expect(buildKitchenTickets(onlyPizza, { catalog: CATALOG, tags: [] })).toEqual([]);
+    });
+  });
 });
 
 describe('formatTicketTime', () => {

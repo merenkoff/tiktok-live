@@ -245,7 +245,13 @@ function OrderCard({
         data-testid={actionTestId}
       >
         {action === 'ready' && <Check size={20} aria-hidden />}
-        {action === 'ready' ? 'Готово' : carried ? `Видати решту (${carried.left})` : 'Видано'}
+        {action === 'ready'
+          ? 'Готово'
+          : order.kind === 'remote'
+            ? 'Віддали курʼєру'
+            : carried
+              ? `Видати решту (${carried.left})`
+              : 'Видано'}
       </button>
     </article>
   );

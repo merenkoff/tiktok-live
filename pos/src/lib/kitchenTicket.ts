@@ -19,7 +19,7 @@
 // - the ticket carries no prices: it is not a receipt.
 
 import type { KitchenTicketData, KitchenTicketItem } from './printer';
-import type { CatalogItem, PosTag, RoundPrintJob, SaleDetail, TagStation } from '../types';
+import type { CatalogItem, PosTag, RemotePrintJob, RoundPrintJob, SaleDetail, TagStation } from '../types';
 import { flattenTags } from '../offline/catalog-filter';
 import { localOrderLabel } from './localOrderNo';
 
@@ -120,7 +120,11 @@ export function buildKitchenTickets(
   sale: SaleDetail,
   opts: { catalog: Array<Pick<CatalogItem, 'variant_id' | 'tag_ids'>>; tags: PosTag[]; formatTime?: (iso: string) => string }
 ): KitchenTicketRoute[] {
-  if (sale.items.length === 0) return [];
+  // A dish a remote kitchen cooks (track РК) is that kitchen's to make, and its
+  // ticket comes out of THAT kitchen's printer (`remoteTicketOf`); on this
+  // store's printer it would send the hot-dog cook to bake a pizza.
+  const items = sale.items.filter((item) => item.remote_order_item_id == null);
+  if (items.length === 0) return [];
   const formatTime = opts.formatTime ?? formatTicketTime;
   const head = {
     order_label: orderLabelOf(sale),
@@ -133,11 +137,11 @@ export function buildKitchenTickets(
   };
   const stations = stationByTag(opts.tags);
   if (stations.size === 0) {
-    return [{ station: null, ticket: { ...head, station: null, items: sale.items.map(ticketItem) } }];
+    return [{ station: null, ticket: { ...head, station: null, items: items.map(ticketItem) } }];
   }
   const byVariant = new Map(opts.catalog.map((c) => [c.variant_id, c]));
   const perStation = new Map<Station, KitchenTicketItem[]>();
-  for (const item of sale.items) {
+  for (const item of items) {
     for (const station of stationsOf(item.variant_id, byVariant, stations)) {
       const list = perStation.get(station) ?? [];
       list.push(ticketItem(item));
@@ -171,6 +175,41 @@ export function roundTicketOf(
     subtitle: where,
     created_at: formatTime(job.fired_at),
     staff_name: job.staff_name,
+    note: job.note,
+    receipt_number: null,
+    ...(job.kind === 'cancel' ? { cancelled: true } : {}),
+    items: job.items.map((item) => ({
+      name: item.product_name,
+      variant_label: bareVariantLabel(item.variant_label, item.modifiers),
+      quantity: item.quantity,
+      modifiers: item.modifiers,
+      note: item.note?.trim() ? item.note.trim() : null,
+    })),
+  };
+}
+
+/**
+ * A cafe's paid order on the remote kitchen's printer (РК3,
+ * TechDocs/POS_REMOTE_KITCHEN.md §7.2). «П-12» is the big label, the number
+ * the kitchen's board shows; under it the cafe, the guest and the time the
+ * guest was promised — what the cook plans the dish by. No station heading
+ * (a dark kitchen cooks everything it is asked) and no prices. A `cancel` job
+ * is the same ticket marked «СКАСОВАНО».
+ */
+export function remoteTicketOf(
+  job: RemotePrintJob,
+  formatTime: (iso: string) => string = formatTicketTime
+): KitchenTicketData {
+  const promised = job.promised_at ? formatTime(job.promised_at) : '';
+  const subtitle = [job.cafe_name.trim(), job.guest_label?.trim() ?? '', promised ? `до ${promised}` : '']
+    .filter(Boolean)
+    .join(' · ');
+  return {
+    order_label: job.order_no != null ? `П-${job.order_no}` : `П · ${job.remote_order_id}`,
+    station: null,
+    subtitle,
+    created_at: formatTime(job.paid_at),
+    staff_name: job.cafe_name.trim(),
     note: job.note,
     receipt_number: null,
     ...(job.kind === 'cancel' ? { cancelled: true } : {}),

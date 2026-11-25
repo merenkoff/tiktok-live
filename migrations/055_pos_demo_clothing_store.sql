@@ -93,6 +93,24 @@ BEGIN
     DELETE FROM pos_sale_item_components WHERE store_id = v_store;
     DELETE FROM pos_sale_items WHERE store_id = v_store;
     DELETE FROM pos_sales WHERE store_id = v_store;
+    -- Orders to or from a remote kitchen (117) write off kitchen components
+    -- that RESTRICT the variants deleted below. Created by a later file,
+    -- hence the guard and the EXECUTE. Items and events go with the order.
+    IF to_regclass('pos_remote_orders') IS NOT NULL THEN
+      EXECUTE 'DELETE FROM pos_remote_order_item_components
+               WHERE remote_order_item_id IN (
+                 SELECT i.id FROM pos_remote_order_items i
+                 JOIN pos_remote_orders o ON o.id = i.remote_order_id
+                 WHERE o.cafe_store_id = $1 OR o.kitchen_store_id = $1)
+                  OR store_id = $1' USING v_store;
+      EXECUTE 'DELETE FROM pos_remote_orders
+               WHERE cafe_store_id = $1 OR kitchen_store_id = $1' USING v_store;
+    END IF;
+    -- Table bills (052) and modifiers (046) hold variants with RESTRICT; a
+    -- visitor may have added either to the boutique. Lines and answers go
+    -- with them (CASCADE). `pos.demo-rebuilds.test.ts` checks this list.
+    DELETE FROM pos_bills WHERE store_id = v_store;
+    DELETE FROM pos_modifier_groups WHERE store_id = v_store;
     -- Otherwise a replayed `client_uuid` answers with a sale that is gone.
     DELETE FROM pos_idempotency_keys WHERE store_id = v_store;
     DELETE FROM pos_stock_reservations WHERE store_id = v_store;

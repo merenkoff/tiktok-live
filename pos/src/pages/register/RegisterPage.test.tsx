@@ -429,3 +429,67 @@ describe('RegisterPage — a weighed line at checkout (TechDocs/grocery/G4_WEIGH
     expect(parkCart.mock.calls[0][0].items).toEqual([{ variant_id: 70, quantity: 350, weight_source: 'manual' }]);
   });
 });
+
+describe('RegisterPage — a dish from the remote kitchen (TechDocs/POS_REMOTE_KITCHEN.md §8)', () => {
+  function ringPizza(): void {
+    useCartStore.getState().restore({
+      lines: [
+        {
+          uid: '10',
+          variant_id: 10,
+          product_name: 'Маргарита',
+          variant_label: '',
+          unit: 'шт',
+          unit_price_cents: 20000,
+          quantity: 1,
+          max_quantity: 99,
+        },
+      ],
+    });
+  }
+
+  it('does not open the payment while a module holds it, and says why', async () => {
+    signIn('clothing');
+    ringPizza();
+    useCartStore.getState().setCheckoutHold('remote-kitchen', 'Страви з кухні: спершу запитайте кухню, коли буде готово.');
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Оплатити 200,00 ₴' })[0]);
+    expect(await screen.findByText('Страви з кухні: спершу запитайте кухню, коли буде готово.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Оплата' })).toBeNull();
+  });
+
+  it('pays the kitchen order with the receipt once the guest agreed', async () => {
+    signIn('clothing');
+    ringPizza();
+    useCartStore.getState().setRemoteOrderId(5);
+    const completeSale = vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(makeSaleDetail());
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Оплатити 200,00 ₴' })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Прийняти/ }));
+
+    await waitFor(() => expect(completeSale).toHaveBeenCalledTimes(1));
+    expect(completeSale.mock.calls[0][0]).toMatchObject({ remote_order_id: 5 });
+    // A new cart starts with no order.
+    await waitFor(() => expect(useCartStore.getState().remoteOrderId).toBeNull());
+  });
+
+  it('sends no order key on an ordinary sale', async () => {
+    signIn('clothing');
+    ringPizza();
+    const completeSale = vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(makeSaleDetail());
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Оплатити 200,00 ₴' })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Прийняти/ }));
+    await waitFor(() => expect(completeSale).toHaveBeenCalledTimes(1));
+    expect(completeSale.mock.calls[0][0]).not.toHaveProperty('remote_order_id');
+  });
+});

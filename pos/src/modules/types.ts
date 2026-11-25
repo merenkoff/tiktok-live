@@ -257,6 +257,20 @@ export interface ModuleHardwareSlot {
   stations?: ModuleStation[];
 }
 
+/**
+ * A strip of the module's own over every till screen (platform 25,
+ * TechDocs/POS_MODULE_SLOTS.md «till.Banner»): the host's `CashierLayout`
+ * draws it under the offline banner, above whatever page is open — the
+ * kitchen's board, the sell screen, «Чеки». For a module whose news cannot
+ * wait until somebody opens its page: a linked cafe asking the remote kitchen
+ * for a time (`remote-kitchen`). Props-less and self-polling, like
+ * `settings.Card`; it must draw NOTHING while it has nothing to say, because
+ * it takes height from every screen. No fallback.
+ */
+export interface ModuleTillSlot {
+  Banner: ComponentType | LazyExoticComponent<ComponentType>;
+}
+
 export interface ModuleDescriptor {
   id: ModuleId;
   /** Shown in the Settings "Модулі магазину" checklist. */
@@ -310,6 +324,8 @@ export interface ModuleDescriptor {
   customer?: ModuleCustomerSlot;
   /** A feature module's station printers on the desktop till's «Обладнання» (Г2). */
   hardware?: ModuleHardwareSlot;
+  /** A feature module's strip over every till screen (platform 25). */
+  till?: ModuleTillSlot;
   routes: RouteDef[];
   nav: NavItem[];
 }

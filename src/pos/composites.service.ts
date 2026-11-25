@@ -871,12 +871,15 @@ function mergeLeaves(a: ComponentInput[], b: ComponentInput[]): ComponentInput[]
  * closed record keyed by a union type and never from a caller's string, so
  * there is nothing here for a value to escape into.
  */
-export type LineStockTarget = 'sale' | 'bill' | 'debt';
+export type LineStockTarget = 'sale' | 'bill' | 'debt' | 'remote';
 
 const LINE_SNAPSHOT: Record<LineStockTarget, { table: string; fk: string }> = {
   sale: { table: 'pos_sale_item_components', fk: 'sale_item_id' },
   bill: { table: 'pos_bill_item_components', fk: 'bill_item_id' },
   debt: { table: 'pos_debt_item_components', fk: 'debt_item_id' },
+  // A remote-kitchen line (117): written in the KITCHEN's store when the cafe
+  // has been paid, and given back from here if the paid order is cancelled.
+  remote: { table: 'pos_remote_order_item_components', fk: 'remote_order_item_id' },
 };
 
 /**
@@ -943,7 +946,7 @@ export async function consumeStockForLine(
       referenceId: params.referenceId,
     });
   }
-  if (params.pour && params.target !== 'debt') {
+  if (params.pour && (params.target === 'sale' || params.target === 'bill')) {
     await pourLine(client, params.pour, {
       target: params.target === 'sale' ? { saleItemId: params.lineId } : { billItemId: params.lineId },
       variantId: params.variantId,
@@ -1026,7 +1029,8 @@ export async function returnStockForLine(
     quantity: number;
     /** `credit` gives back goods returned from an unpaid «під запис» line (073). */
     reason: Extract<StockReason, 'void' | 'refund' | 'credit'>;
-    staffId: number;
+    /** Null when nobody of this store did it (a remote order cancelled from the cafe, 117). */
+    staffId: number | null;
     referenceType: string;
     referenceId: number;
   }

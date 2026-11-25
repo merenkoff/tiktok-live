@@ -23,6 +23,7 @@ import type {
   RefundLineInput,
   RefundOptions,
   RoundPrintJob,
+  RemotePrintJob,
   SaleDetail,
   SkuSeries,
   SplitQuote,
@@ -546,6 +547,11 @@ class PosApi {
     parked_cart_id?: number | null;
     /** The pre-order being handed over. Its lines and prices come from the server. */
     preorder_id?: number | null;
+    /**
+     * The remote-kitchen order this receipt pays (TechDocs/POS_REMOTE_KITCHEN.md
+     * §8). Online only: the kitchen's stock and its clock live on the server.
+     */
+    remote_order_id?: number | null;
     /** Cash-rounding step (0, 10, 50 kopecks) the till showed; the server computes the sum. */
     cash_rounding?: number;
     /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
@@ -644,6 +650,22 @@ class PosApi {
       undefined,
       kind === 'cancel' ? { params: { kind } } : undefined
     );
+  }
+
+  /**
+   * The remote kitchen's tickets for cafes' paid orders (РК3), on the same
+   * two-minute lease. A store that is no kitchen gets an empty list.
+   */
+  async remotePrintQueue(): Promise<{ jobs: RemotePrintJob[] }> {
+    const { data } = await this.client.get<{ jobs: RemotePrintJob[] }>('/remote-kitchen/print-queue', {
+      params: { kinds: 'fire,cancel' },
+    });
+    return data;
+  }
+
+  /** This device printed the remote order's ticket; idempotent. */
+  async markRemotePrinted(orderId: number, kind: 'fire' | 'cancel'): Promise<void> {
+    await this.client.post(`/remote-kitchen/print-queue/${orderId}/printed`, undefined, { params: { kind } });
   }
 
   /** What each receipt of a two-register cart will come to; writes nothing. */

@@ -34,6 +34,13 @@ describe('kitchenApi.setPrep', () => {
     });
   });
 
+  it("sends a cafe's order (РК3) to the kitchen's own route for it, never to the remote-kitchen module's", async () => {
+    await setPrep({ id: 7, kind: 'remote' }, 'ready');
+    expect(posRequest).toHaveBeenLastCalledWith('patch', '/kitchen/remote-orders/7/prep', { prep_status: 'ready' });
+    await setPrep({ id: 7, kind: 'remote' }, 'served');
+    expect(posRequest).toHaveBeenLastCalledWith('patch', '/kitchen/remote-orders/7/prep', { prep_status: 'served' });
+  });
+
   it('treats an order from a pre-К4 server as a sale', async () => {
     await setPrep({ id: 7 }, 'served');
     expect(posRequest).toHaveBeenCalledWith('patch', '/sales/7/prep', { prep_status: 'served' });
@@ -43,7 +50,7 @@ describe('kitchenApi.setPrep', () => {
 describe('kitchenApi', () => {
   it('reads the board and toggles the stop-list where the server expects', async () => {
     await listOrders();
-    expect(posRequest).toHaveBeenLastCalledWith('get', '/kitchen/orders');
+    expect(posRequest).toHaveBeenLastCalledWith('get', '/kitchen/orders?with=remote');
 
     await setStopListed(42, true);
     expect(posRequest).toHaveBeenLastCalledWith('post', '/kitchen/stop-list/42', {

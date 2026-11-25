@@ -37,6 +37,7 @@ import { ExciseError } from '../excise.js';
 import * as printQueue from '../receipt-print.service.js';
 import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
+import { RemoteKitchenConflict, RemoteKitchenNotFound } from '../remote-kitchen.service.js';
 import { errorMessage, readDeviceId } from './_shared.js';
 
 /** `getSale`'s row, non-null. `completeSale` / `refundSale` return the same shape. */
@@ -201,6 +202,12 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        * (TechDocs/POS_PHONE_TILL.md Т2) — ten minutes in the print queue.
        */
       print_on_till?: unknown;
+      /**
+       * The remote-kitchen order this receipt pays (РК2, POS_REMOTE_KITCHEN.md
+       * §9): its dishes come off the kitchen's shelf, not this store's, and
+       * the kitchen starts cooking in the same transaction.
+       */
+      remote_order_id?: unknown;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -216,6 +223,18 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     // replay check, because register 1's receipt of a split cart carries the
     // request's own key and must not answer a repeat on behalf of both.
     const registers = await cartRegisters(auth.storeId, body.items, body.preorder_id);
+    const remoteOrderId = positiveIdOrNull(body.remote_order_id);
+    if (body.remote_order_id != null && remoteOrderId === null) {
+      return reply.code(400).send({ error: 'Невірне замовлення кухні' });
+    }
+    // A kitchen order is paid by one online receipt: the kitchen needs the
+    // answer now, and a split or an offline receipt cannot give it one.
+    if (remoteOrderId !== null && (registers.size > 1 || (body.fiscal_offline !== undefined && body.fiscal_offline !== null))) {
+      return reply.code(409).send({
+        error: 'remote_order_single_receipt',
+        message: 'Замовлення з кухні оплачується одним чеком, коли каса онлайн',
+      });
+    }
     if (registers.size > 1 && body.split_registers === true) {
       return completeSplit(request, reply, auth, body, clientUuid);
     }
@@ -317,9 +336,18 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         open_bottles: body.open_bottles,
         fiscal_register: registerNo,
         age_confirmed: body.age_confirmed,
+        remote_order_id: remoteOrderId,
       });
     } catch (error) {
       logger.error('Complete sale failed', { error: errorMessage(error) });
+      // The kitchen's quote ran out, the cart no longer matches the order, or
+      // the order is not this cafe's: the till re-asks the kitchen.
+      if (error instanceof RemoteKitchenNotFound) {
+        return reply.code(404).send({ error: 'remote_order_not_found', message: error.message });
+      }
+      if (error instanceof RemoteKitchenConflict) {
+        return reply.code(409).send({ error: 'remote_order_conflict', message: error.message });
+      }
       // A stamp missing, not a stamp, or already sold (ДК4-Б): the till's
       // sheet reads `error` as the code and the details to point at the line.
       if (error instanceof ExciseError) {
@@ -1264,4 +1292,10 @@ function sendSplitRefusal(reply: FastifyReply, error: splitSale.SplitSaleRefusal
     not_taken_cents: detail.notTakenCents,
     not_taken_items: detail.notTakenItems,
   });
+}
+
+/** A positive integer id from a JSON body, or null when absent or malformed. */
+function positiveIdOrNull(value: unknown): number | null {
+  const n = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  return typeof n === 'number' && Number.isSafeInteger(n) && n > 0 ? n : null;
 }

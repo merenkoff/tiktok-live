@@ -15,10 +15,16 @@
 //      load by URL at run time); an import edge into one would make the open
 //      platform fail to build without the private sources.
 //
-// Moving between private modules is fine (`fiscal-checkbox` → `../fiscal-core`
-// travels with them). Type-only imports count too: a missing file fails `tsc`
-// just as surely as a missing value. Tests count too: they move with their
-// module.
+//   3. One remote never imports another remote. Each is its own bundle, released
+//      and switched on per store on its own; an import edge between two of them
+//      ships one inside the other — which is how the remote kitchen's code once
+//      came to run in every café's `vertical-cafe` (TechDocs/POS_REMOTE_KITCHEN.md
+//      §11). What two remotes share is a LIBRARY (`fiscal-core`), or the host.
+//
+// A remote importing a shared library is fine (`fiscal-checkbox` →
+// `../fiscal-core` travels with them). Type-only imports count too: a missing
+// file fails `tsc` just as surely as a missing value. Tests count too: they
+// move with their module.
 //
 //   node scripts/check-private-imports.mjs
 
@@ -37,6 +43,12 @@ const PRIVATE = [...privateList.remotes, ...privateList.libraries];
 
 const privateDirs = PRIVATE.map((id) => path.join(modulesRoot, id));
 const isPrivate = (file) => privateDirs.some((dir) => file === dir || file.startsWith(dir + path.sep));
+/** The private REMOTE a file belongs to, or null (open code, or a shared library). */
+const remoteOf = (file) =>
+  privateList.remotes.find((id) => {
+    const dir = path.join(modulesRoot, id);
+    return file === dir || file.startsWith(dir + path.sep);
+  }) ?? null;
 const rel = (file) => path.relative(pos, file).replaceAll(path.sep, '/');
 
 function walk(dir) {
@@ -111,6 +123,12 @@ for (const file of walk(srcRoot)) {
       problems.push(`${rel(file)}:${line}  imports "${spec}" — leaves the private modules by a relative path; use "@host/${rel(target).replace(/^src\//, '')}" or "@pos/platform"`);
     } else if (!fromPrivate && toPrivate) {
       problems.push(`${rel(file)}:${line}  imports "${spec}" — the open platform must not import a private module (${rel(target)})`);
+    } else {
+      const fromRemote = remoteOf(file);
+      const toRemote = remoteOf(target);
+      if (fromRemote && toRemote && fromRemote !== toRemote) {
+        problems.push(`${rel(file)}:${line}  imports "${spec}" — the remote "${fromRemote}" must not import the remote "${toRemote}": each is its own bundle (share code through a library or the host)`);
+      }
     }
   }
 }
@@ -121,4 +139,4 @@ if (problems.length > 0) {
   console.error(`\n${problems.length} problem(s).`);
   process.exit(1);
 }
-console.log(`check-private-imports: OK — ${PRIVATE.length} private modules reach the host only through @host/* or @pos/platform, and nothing open imports them.`);
+console.log(`check-private-imports: OK — ${PRIVATE.length} private modules reach the host only through @host/* or @pos/platform, nothing open imports them, and no remote imports another.`);

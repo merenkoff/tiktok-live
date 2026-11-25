@@ -469,4 +469,16 @@ describe('the rules of this repository', () => {
     assert.equal(classify(real, 'TechDocs/SOME_NEW_DOC.md'), 'unknown');
     assert.equal(classify(real, '.github/workflows/some-new.yml'), 'unknown');
   });
+
+  // A private module's mockups once sat in the public `design/` with the
+  // client's name on them (the remote kitchen's). `design/` is explicit now:
+  // the look of the site and the POS is public by name, a new folder is
+  // nobody's until rules.json says whose.
+  it('publish the design system by name, and nothing new in design/ by default', () => {
+    for (const file of ['design/README.md', 'design/app-icon/app-icon.svg', 'design/icons/ui/check.svg']) {
+      assert.equal(classify(real, file), 'public', file);
+    }
+    assert.equal(classify(real, 'design/remote-kitchen/mockups.html'), 'private');
+    assert.equal(classify(real, 'design/some-new-mockups/index.html'), 'unknown');
+  });
 });

@@ -493,6 +493,9 @@ async function applyLocalStockDelta(
   });
 }
 
+/** Why a receipt with a dish from the remote kitchen will not go through offline. */
+export const REMOTE_ORDER_OFFLINE = 'Замовлення з кухні оплачується лише онлайн — перевірте звʼязок.';
+
 export async function completeSale(payload: {
   items: SaleItemInput[];
   payments: SalePaymentInput[];
@@ -505,11 +508,22 @@ export async function completeSale(payload: {
   open_bottles?: OpenBottleStamp[];
   /** «Покупцю є 18» answered for this receipt (migration 102); queued with it. */
   age_confirmed?: boolean;
+  /**
+   * The remote-kitchen order this receipt pays (TechDocs/POS_REMOTE_KITCHEN.md
+   * §8). Never queued: the kitchen cooks on the server's word, so offline the
+   * sale is refused, and a request that went out unanswered is probed with
+   * the same key rather than rung a second time from the outbox.
+   */
+  remote_order_id?: number | null;
 }, opts: { clientUuid?: string } = {}): Promise<SaleDetail> {
   // Reusing a uuid is how the "server did not answer" probe stays idempotent:
   // the server's own pre-check resolves it to the existing sale, a 409, or a
   // fresh sale — without ever creating a second one.
   const clientUuid = opts.clientUuid ?? crypto.randomUUID();
+  const remote = payload.remote_order_id != null;
+  if (remote && !(navigator.onLine && api.hasLiveJwt())) {
+    throw new Error(REMOTE_ORDER_OFFLINE);
+  }
   const fiscal = api.loadAuth()?.store.fiscal?.enabled === true;
   /** ФН ПРРО for the offline receipt's QR; only set when this sale is stamped. */
   let registerFiscalNumber: string | null = null;
@@ -549,7 +563,8 @@ export async function completeSale(payload: {
       // fiscalised — the sale. Queueing it would decrement stock, mint a
       // synthetic OFF- receipt and show a success screen for a sale we cannot
       // vouch for. Hand back the uuid so the till can probe idempotently.
-      if (fiscal) throw new FiscalSaleUnknownError(clientUuid);
+      // A kitchen order is the same: it may already be cooking.
+      if (fiscal || remote) throw new FiscalSaleUnknownError(clientUuid);
     }
   } else if (fiscal) {
     // A ПРРО receipt is registered at the moment of sale, so a fiscalising

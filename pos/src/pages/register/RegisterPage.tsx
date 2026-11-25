@@ -115,6 +115,12 @@ function kitchenSaleOf(parts: SaleDetail[]): SaleDetail {
  * clothes rail, a bucket of stems and a coffee machine, and everything on the
  * other side of it is not.
  */
+/** The reason shown when «Оплатити» is held: the first module's, in the order they said it. */
+function firstHold(holds: Readonly<Record<string, string>>): string | null {
+  for (const reason of Object.values(holds)) if (reason) return reason;
+  return null;
+}
+
 export function RegisterPage() {
   const shell = usePosShell();
   const auth = useAuthStore((s) => s.auth);
@@ -161,6 +167,11 @@ export function RegisterPage() {
   // R1): drafted on «Чеки», paid here through the exchange checkout.
   const exchange = useCartStore((s) => s.exchange);
   const cancelExchange = useCartStore((s) => s.cancelExchange);
+  // The remote kitchen (TechDocs/POS_REMOTE_KITCHEN.md §8): the order whose
+  // time the guest agreed to. And any module's reason to hold «Оплатити» — the
+  // `remote-kitchen` module's while a kitchen dish has no agreed time yet.
+  const remoteOrderId = useCartStore((s) => s.remoteOrderId);
+  const checkoutHold = useCartStore((s) => firstHold(s.checkoutHolds));
   const online = useOfflineStatus((s) => s.online);
   // What feature modules add to the cart (phase Г2, TechDocs/grocery/PLAN.md
   // §4): a way to finish it other than paying — the debt journal's «Під
@@ -240,6 +251,10 @@ export function RegisterPage() {
     ageConfirmed && adultOnlyLines(lines).length > 0 ? { age_confirmed: true } : {};
   /** «Оплатити»: the buyer's age, then the stamps where a bottle needs one, then the payment screen. */
   const openCheckout = (ageOk = ageConfirmed) => {
+    if (checkoutHold) {
+      setBanner(checkoutHold);
+      return;
+    }
     if (needsAgeCheck(lines, auth?.store.age_check, ageOk)) {
       setAgeSheet(true);
       return;
@@ -622,6 +637,11 @@ export function RegisterPage() {
     setPaying(true);
     setCheckoutError(null);
     try {
+      if (splitMode && remoteOrderId != null) {
+        // One receipt pays the kitchen's order; a two-ФОП cart would be two.
+        setCheckoutError({ message: 'Страви з кухні — окремим чеком: продайте товари іншого ФОП другим чеком.' });
+        return;
+      }
       if (splitMode) {
         await paySplit(payments, cashRounding, opts.clientUuid);
         return;
@@ -634,6 +654,7 @@ export function RegisterPage() {
           customer_id: customer?.id ?? null,
           parked_cart_id: fromParkedId,
           preorder_id: preorderId,
+          ...(remoteOrderId != null ? { remote_order_id: remoteOrderId } : {}),
           // The step the payment screen rounded the cash part by; the server
           // computes the sum itself and files what the customer was shown.
           ...(cashRounding ? { cash_rounding: cashRounding } : {}),

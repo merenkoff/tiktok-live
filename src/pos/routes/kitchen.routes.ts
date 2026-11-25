@@ -21,6 +21,7 @@ import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth } from '../core/auth.js';
 import * as kitchen from '../kitchen.service.js';
 import * as rounds from '../rounds.service.js';
+import * as remoteKitchen from '../remote-kitchen.service.js';
 import { errorMessage } from './_shared.js';
 
 export function registerKitchenRoutes(fastify: FastifyInstance): void {
@@ -28,7 +29,9 @@ export function registerKitchenRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
     try {
-      return await kitchen.listOpenOrders(auth.storeId);
+      // `?with=remote`: a board that knows the third kind (РК3) asks for it.
+      const query = (request.query ?? {}) as { with?: unknown };
+      return await kitchen.listOpenOrders(auth.storeId, { withRemote: query.with === 'remote' });
     } catch (error) {
       if (error instanceof kitchen.KitchenError) {
         return reply.code(409).send({ error: errorMessage(error) });
@@ -96,6 +99,46 @@ export function registerKitchenRoutes(fastify: FastifyInstance): void {
         return reply.code(404).send({ error: errorMessage(error) });
       }
       if (error instanceof kitchen.KitchenError) {
+        return reply.code(409).send({ error: errorMessage(error) });
+      }
+      throw error;
+    }
+  });
+
+  // The same tap for an order this kitchen cooks for a linked cafe (РК3,
+  // TechDocs/POS_REMOTE_KITCHEN.md §11): «Готово», then «Віддали курʼєру» —
+  // the board's `served`. The board is the café vertical's and the remote
+  // kitchen is a module of its own, so the board taps a route of the KITCHEN
+  // here rather than calling that module's routes.
+  fastify.patch('/kitchen/remote-orders/:id/prep', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { prep_status?: unknown };
+    if (body.prep_status !== 'ready' && body.prep_status !== 'served') {
+      return reply.code(400).send({ error: 'prep_status має бути ready або served' });
+    }
+    const orderId = Number(id);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return reply.code(404).send({ error: 'Замовлення кухні не знайдено' });
+    }
+    const actor = { storeId: auth.storeId, staffId: auth.staffId };
+    try {
+      const order =
+        body.prep_status === 'ready'
+          ? await remoteKitchen.markReady(actor, orderId)
+          : await remoteKitchen.markDispatched(actor, orderId);
+      return {
+        id: order.id,
+        prep_status: order.status === 'ready' ? 'ready' : 'served',
+        ready_at: order.ready_at,
+        served_at: order.dispatched_at,
+      };
+    } catch (error) {
+      if (error instanceof remoteKitchen.RemoteKitchenNotFound) {
+        return reply.code(404).send({ error: errorMessage(error) });
+      }
+      if (error instanceof remoteKitchen.RemoteKitchenError) {
         return reply.code(409).send({ error: errorMessage(error) });
       }
       throw error;

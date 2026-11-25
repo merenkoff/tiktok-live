@@ -5,6 +5,8 @@
 // Invariants of the café vertical module, which arrives over the wire and so
 // is invisible to the registry tests.
 
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { verticalCafeModule } from './manifest';
 import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '@host/modules/constants';
@@ -84,5 +86,39 @@ describe('vertical-cafe manifest', () => {
     expect(PLATFORM_VERSION).toBeGreaterThanOrEqual(13);
     expect(REQUIRED_HOST_API).toContain('resolveLineModifiers');
     expect(REQUIRED_HOST_API).toContain('needsModifierSheet');
+  });
+});
+
+function sources(dir: string): string[] {
+  const out: string[] = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...sources(full));
+    else if (/\.(ts|tsx)$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) out.push(full);
+  }
+  return out;
+}
+
+// «Віддалена кухня» is its own module (`remote-kitchen`,
+// TechDocs/POS_REMOTE_KITCHEN.md §11). It was first built inside this one, and
+// then every café downloaded it and its kitchen board polled the requests of
+// a remote kitchen every three seconds, though only a cafe with a linked
+// kitchen needs any of it.
+describe('the café vertical carries none of the remote kitchen', () => {
+  it('fills no slot the remote kitchen owns', () => {
+    expect(verticalCafeModule.checkout).toBeUndefined();
+    expect(verticalCafeModule.till).toBeUndefined();
+  });
+
+  // The board shows a cafe's paid order as a card (data the server sends, as
+  // it does a table's round) and taps it through `/kitchen/remote-orders/:id/prep`,
+  // a route of the KITCHEN's. It never calls the module's own routes, never
+  // polls the requests, never holds the cart.
+  it('never calls the remote kitchen’s routes nor touches the cart’s hold', () => {
+    const offenders = sources(__dirname).filter((file) => {
+      const text = readFileSync(file, 'utf-8');
+      return /['"`]\/remote-kitchen\//.test(text) || /setCheckoutHold|setRemoteOrderId/.test(text);
+    });
+    expect(offenders.map((f) => path.relative(__dirname, f))).toEqual([]);
   });
 });

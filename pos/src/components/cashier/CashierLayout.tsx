@@ -7,6 +7,8 @@ import { useAuthStore } from '@pos/platform';
 import { AppRail } from './AppRail';
 import { BottomNav } from './BottomNav';
 import { OfflineStatusBanner } from './OfflineStatusBanner';
+import { ModuleSlots } from '../../modules/ModuleSlots';
+import { useModuleSlots } from '../../modules/featureSlots';
 
 /**
  * Cashier-shell chrome (rail/bottom nav + offline banner) around whatever a
@@ -19,6 +21,10 @@ import { OfflineStatusBanner } from './OfflineStatusBanner';
  */
 export function CashierLayout({ children }: { children: ReactNode }) {
   const logout = useAuthStore((s) => s.logout);
+  // Modules' strips over every till screen (`till.Banner`, platform 25): the
+  // remote kitchen's «Запити з точок» stands over the kitchen's board this way
+  // without the board — another module's page — knowing it exists.
+  const banners = useModuleSlots('till.Banner');
 
   return (
     // `--lic-h` is the height of the licence notice strip, when a copy without a
@@ -28,6 +34,11 @@ export function CashierLayout({ children }: { children: ReactNode }) {
       <AppRail onLogout={() => void logout()} />
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <OfflineStatusBanner />
+        {banners.length > 0 && (
+          <div className="shrink-0 max-h-[50dvh] overflow-y-auto empty:hidden" data-testid="till-banners">
+            <ModuleSlots slots={banners} slot="till.Banner" props={{}} />
+          </div>
+        )}
         {children}
         <div className="lg:hidden shrink-0">
           <BottomNav onLogout={() => void logout()} />

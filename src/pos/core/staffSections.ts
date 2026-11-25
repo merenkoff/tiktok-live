@@ -87,7 +87,33 @@ export const SECTION_ROUTES: Readonly<Record<string, readonly string[]>> = {
     'GET /kitchen/orders',
     'POST /kitchen/stop-list/:productId',
     'PATCH /kitchen/rounds/:id/prep',
+    'PATCH /kitchen/remote-orders/:id/prep',
     'PATCH /sales/:id/prep',
+  ],
+  // «Віддалена кухня» (TechDocs/POS_REMOTE_KITCHEN.md): a cashier the owner
+  // keeps off it asks no kitchen for a time, and a cook answers none. The
+  // setup read, the kitchen's printer queue and paying the receipt stay open:
+  // the first draws nothing by itself, the second prints for whoever is on
+  // that desktop, and the receipt is selling.
+  'remote-kitchen': [
+    'PUT /remote-kitchen/status',
+    'GET /remote-kitchen/orders',
+    'GET /remote-kitchen/orders/:id',
+    'GET /remote-kitchen/orders/:id/events',
+    'POST /remote-kitchen/orders',
+    'PUT /remote-kitchen/orders/:id/items',
+    'POST /remote-kitchen/orders/:id/phone-quote',
+    'POST /remote-kitchen/orders/:id/guest-declined',
+    'POST /remote-kitchen/orders/:id/paid',
+    'POST /remote-kitchen/orders/:id/arrived',
+    'POST /remote-kitchen/orders/:id/handed',
+    'POST /remote-kitchen/orders/:id/quote',
+    'POST /remote-kitchen/orders/:id/decline',
+    'POST /remote-kitchen/orders/:id/ready',
+    'POST /remote-kitchen/orders/:id/dispatched',
+    'POST /remote-kitchen/orders/:id/delay',
+    'POST /remote-kitchen/orders/:id/cancel',
+    'GET /remote-kitchen/link/items',
   ],
   'vertical-flowers': [
     'POST /bench/showcase',

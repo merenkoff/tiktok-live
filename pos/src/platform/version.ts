@@ -175,7 +175,16 @@ export const POS_API_CLIENT_VERSION = 2;
 //     head. A module built against 24 calling it on an older host would hit
 //     undefined, which is the case this guard exists for. `SkuSeries` joins the
 //     data barrel with it.
-export const PLATFORM_VERSION = 24;
+// 25 (2026-11-25): the remote kitchen (TechDocs/POS_REMOTE_KITCHEN.md §11),
+//     the `remote-kitchen` module. `useCartStore` gained `remoteOrderId` /
+//     `setRemoteOrderId` — the kitchen order the guest agreed to, sent with the
+//     sale — and `checkoutHolds` / `setCheckoutHold(moduleId, reason)`, each
+//     module's own reason «Оплатити» must wait (per module, so one lifting its
+//     hold never lifts another's). The till's frame draws a new feature slot,
+//     `till.Banner` (TechDocs/POS_MODULE_SLOTS.md): a module's strip over every
+//     till screen. A module built against 25 calling the setters on 24 would
+//     hit undefined; a 24 host simply draws no banner.
+export const PLATFORM_VERSION = 25;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

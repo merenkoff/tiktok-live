@@ -60,6 +60,18 @@ export function splitColumns(orders: KitchenOrder[]): {
   };
 }
 
+/** An order cooked for a linked cafe (РК3), paid there, carried by a courier. */
+export function isRemote(order: Pick<KitchenOrder, 'kind'>): boolean {
+  return order.kind === 'remote';
+}
+
+/** `19:40` on the tablet's clock, for «до 19:40». Empty for a bad stamp. */
+export function clockTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 /** A round fired from a table, as opposed to a sale rung at the counter. */
 export function isRound(order: Pick<KitchenOrder, 'kind'>): boolean {
   return order.kind === 'round';
@@ -78,13 +90,20 @@ export function orderLabel(
   order: Pick<KitchenOrder, 'order_no' | 'receipt_number' | 'kind' | 'table_name' | 'title'>
 ): string {
   if (isRound(order)) return order.table_name || order.title || '';
+  // A cafe's order (РК3): «П-12», the number on the guest's slip at the cafe.
+  if (isRemote(order)) return order.order_no != null ? `П-${order.order_no}` : order.title || '';
   return order.order_no != null ? String(order.order_no) : order.receipt_number;
 }
 
 /** "раунд 2" under a table's name; nothing for a counter sale. */
 export function orderSubLabel(
-  order: Pick<KitchenOrder, 'kind' | 'round_seq'>
+  order: Pick<KitchenOrder, 'kind' | 'round_seq' | 'from_store' | 'promised_at'>
 ): string | null {
+  if (isRemote(order)) {
+    const at = order.promised_at ? clockTime(order.promised_at) : '';
+    const where = order.from_store || 'точка';
+    return at ? `${where} · до ${at}` : where;
+  }
   if (!isRound(order) || order.round_seq == null) return null;
   return `раунд ${order.round_seq}`;
 }

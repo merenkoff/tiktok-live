@@ -42,7 +42,7 @@ export interface KitchenOrder {
    * Optional because a server older than К4 sends neither this nor the
    * fields under it; absent reads as `sale`, which is all there was then.
    */
-  kind?: 'sale' | 'round';
+  kind?: 'sale' | 'round' | 'remote';
   /** What the server wants called out: «№ 42», «Чек R-…» or «Стіл 5 · раунд 2». */
   title?: string;
   /** The table a round belongs to; null for a counter sale. */
@@ -58,6 +58,15 @@ export interface KitchenOrder {
   /** The receipt-level note. */
   note: string | null;
   items: KitchenOrderItem[];
+  /**
+   * `remote` only — an order this kitchen cooks for a linked cafe (РК3,
+   * TechDocs/POS_REMOTE_KITCHEN.md §11): when it was promised at the cafe, and
+   * which cafe. Its id is a third table's, so its taps go to
+   * `/kitchen/remote-orders/:id/prep`. The server sends this kind only to a
+   * board that asks (`?with=remote`).
+   */
+  promised_at?: string | null;
+  from_store?: string;
 }
 
 export interface KitchenBoard {

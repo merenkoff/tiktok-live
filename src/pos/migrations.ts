@@ -238,6 +238,7 @@ export const POS_MIGRATIONS = [
   // on the variant and the exact share in the flat table, which this file
   // rebuilds on every boot from now on (TechDocs/POS_VERTICALS.md §7u).
   '116_pos_recipe_yield.sql',
+  '117_pos_remote_kitchen.sql',
 ] as const;
 
 export function readMigration(file: string): string {
