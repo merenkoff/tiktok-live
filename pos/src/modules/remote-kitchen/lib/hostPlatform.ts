@@ -147,6 +147,17 @@ export function isKitchenStore(): boolean {
   return typeof store?.getState === 'function' && store.getState().auth?.store?.remote_kitchen === true;
 }
 
+/**
+ * The signed-in store's id, or null before a login. What a cached answer is
+ * kept under, so signing into another store on the same till never reads the
+ * first store's answer.
+ */
+export function currentStoreId(): number | null {
+  const store = member('useAuthStore') as { getState?: () => { auth?: { store?: { id?: unknown } } | null } };
+  const id = typeof store?.getState === 'function' ? store.getState().auth?.store?.id : undefined;
+  return typeof id === 'number' ? id : null;
+}
+
 /** The server's sentence for a refusal, or ours when there is none. */
 export function serverMessage(error: unknown, fallback: string): string {
   const sent = (error as { response?: { data?: { error?: unknown } } } | null)?.response?.data?.error;

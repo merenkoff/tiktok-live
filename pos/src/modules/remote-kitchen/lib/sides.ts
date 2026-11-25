@@ -7,9 +7,14 @@
 // `GET /remote-kitchen/setup`. The till's banner holds two strips (the
 // kitchen's «Запити з точок» and the cafe's «Замовлення з кухні»), and both
 // start by asking this; one read in flight serves both, and a fresh answer
-// is reused for half a minute.
+// is reused for half a minute — for the same store only, so signing into
+// another store on this till asks again.
+//
+// A store is a cafe while it has a link to a kitchen OR orders it still has
+// to follow (`cafe_orders`): after the super admin revokes the link, what is
+// on its way and a kitchen's unanswered cancel stay on the cafe's till.
 
-import { posRequest } from './hostPlatform';
+import { currentStoreId, posRequest } from './hostPlatform';
 
 export interface StoreSides {
   cafe: boolean;
@@ -22,24 +27,33 @@ export const SIDES_FRESH_MS = 30_000;
 export interface RawSetup {
   as_cafe?: unknown;
   as_kitchen?: unknown;
+  cafe_orders?: unknown;
 }
 
-let cached: { at: number; read: Promise<RawSetup>; sides?: Promise<StoreSides> } | null = null;
+let cached: {
+  at: number;
+  store: number | null;
+  read: Promise<RawSetup>;
+  sides?: Promise<StoreSides>;
+} | null = null;
 
-export function readSides(now: number = Date.now()): Promise<StoreSides> {
-  const read = readSetupShared(now);
+export function readSides(now: number = Date.now(), store: number | null = currentStoreId()): Promise<StoreSides> {
+  const read = readSetupShared(now, store);
   const entry = cached;
   if (entry && entry.read === read && entry.sides) return entry.sides;
-  const sides = read.then((res) => ({ cafe: res?.as_cafe != null, kitchen: res?.as_kitchen != null }));
+  const sides = read.then((res) => ({
+    cafe: res?.as_cafe != null || res?.cafe_orders === true,
+    kitchen: res?.as_kitchen != null,
+  }));
   if (entry && entry.read === read) entry.sides = sides;
   return sides;
 }
 
-/** The same read, whole — shared with `readSides`, fresh for half a minute. */
-export function readSetupShared(now: number = Date.now()): Promise<RawSetup> {
-  if (cached && now - cached.at < SIDES_FRESH_MS) return cached.read;
+/** The same read, whole — shared with `readSides`, fresh for half a minute, for the same store only. */
+export function readSetupShared(now: number = Date.now(), store: number | null = currentStoreId()): Promise<RawSetup> {
+  if (cached && cached.store === store && now - cached.at < SIDES_FRESH_MS) return cached.read;
   const read = posRequest<RawSetup>('get', '/remote-kitchen/setup').then((res) => res ?? {});
-  const entry = { at: now, read };
+  const entry: NonNullable<typeof cached> = { at: now, store, read };
   cached = entry;
   // A failed read is not remembered: the next ask goes to the server again.
   read.catch(() => {

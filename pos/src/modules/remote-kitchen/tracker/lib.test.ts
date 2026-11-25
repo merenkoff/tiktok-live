@@ -4,7 +4,16 @@
 
 import { describe, expect, it } from 'vitest';
 import type { TrackedOrder } from './trackerApi';
-import { itemsLine, minutesLate, nextStep, stageOf, trackedOrders, waitingTooLong } from './lib';
+import {
+  LATE_ARRIVAL_MINUTES,
+  itemsLine,
+  minutesLate,
+  nextStep,
+  receiptOf,
+  stageOf,
+  trackedOrders,
+  waitingTooLong,
+} from './lib';
 
 function order(over: Partial<TrackedOrder> = {}): TrackedOrder {
   return {
@@ -48,10 +57,27 @@ describe('the cafe tracker', () => {
 
   it('walks the four stages and offers the cafe’s next tap only when it is the cafe’s', () => {
     expect(['cooking', 'ready', 'dispatched', 'arrived', 'handed_over'].map(stageOf)).toEqual([0, 0, 1, 2, 3]);
-    expect(nextStep('cooking')).toBeNull();
-    expect(nextStep('ready')?.label).toBe('Привезли');
-    expect(nextStep('dispatched')?.action).toBe('arrived');
-    expect(nextStep('arrived')).toEqual({ action: 'handed', label: 'Видали гостю' });
+    const now = Date.parse('2026-11-25T18:30:00Z');
+    expect(nextStep(order({ status: 'cooking' }), now)).toBeNull();
+    expect(nextStep(order({ status: 'ready' }), now)?.label).toBe('Привезли');
+    expect(nextStep(order({ status: 'dispatched' }), now)?.action).toBe('arrived');
+    expect(nextStep(order({ status: 'arrived' }), now)).toEqual({ action: 'handed', label: 'Видали гостю' });
+  });
+
+  it('lets the cafe close an order the kitchen never moved only well past its promise, and asks first', () => {
+    const promised = Date.parse('2026-11-25T18:40:00Z');
+    const cooking = order({ status: 'cooking' });
+    expect(nextStep(cooking, promised + (LATE_ARRIVAL_MINUTES - 1) * 60_000)).toBeNull();
+    const late = nextStep(cooking, promised + LATE_ARRIVAL_MINUTES * 60_000);
+    expect(late).toMatchObject({ action: 'arrived', label: 'Вже привезли' });
+    expect(late?.confirm).toContain('Кухня не відмітила');
+    expect(nextStep(order({ status: 'paid' }), promised + 3 * 60 * 60_000)?.action).toBe('arrived');
+    expect(nextStep(order({ status: 'cooking', promised_at: null }), promised + 3 * 60 * 60_000)).toBeNull();
+  });
+
+  it('names the cafe’s receipt, and nothing on a server that does not send it', () => {
+    expect(receiptOf(order({ cafe_receipt_number: 'ЧК-000123' }))).toBe('чек ЧК-000123');
+    expect(receiptOf(order())).toBe('');
   });
 
   it('counts lateness up to the cafe’s door, and a two-hour wait after it', () => {
