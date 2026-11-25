@@ -15,13 +15,16 @@
 // all, and polls only then: a cafe's till must not ask for a kitchen's
 // requests all day. A store that is not a kitchen asks again every ten
 // minutes, so a link the super admin made today starts without a restart.
-// Only a visible tab polls, and a failed read changes nothing on screen.
+// Only a visible tab polls, and a failed read changes nothing on screen. A
+// read that started before an answer is dropped (`lib/writeGuard.ts`): it
+// would bring the answered request back for a poll and invite a second tap.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as remoteApi from './remoteApi';
 import type { RemoteRequest } from './remoteApi';
 import { autoConfirmed, clockOffset, newIds, pendingRequests } from './lib';
 import { serverMessage } from '../lib/hostPlatform';
+import { useWriteGuard } from '../lib/writeGuard';
 
 export const REMOTE_POLL_MS = 3000;
 export const NOT_KITCHEN_RECHECK_MS = 10 * 60_000;
@@ -56,6 +59,7 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
   const [busy, setBusy] = useState<ReadonlySet<number>>(new Set());
   const seenRef = useRef<Set<number> | null>(null);
   const mountedRef = useRef(true);
+  const guard = useWriteGuard();
   const onNewRef = useRef(onNew);
   onNewRef.current = onNew;
 
@@ -87,9 +91,14 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
   }, [kitchen, api]);
 
   const refresh = useCallback(async (since?: string): Promise<string | undefined> => {
+    const stamp = guard.stamp();
     try {
       const read = await api.listKitchenSide(since);
       if (!mountedRef.current) return undefined;
+      // A read that began before a tap says what was true before it: drop what
+      // it says, keep its cursor — the tap is itself news, so the next long-poll
+      // comes straight back with the state after it.
+      if (!guard.fresh(stamp)) return read.cursor;
       const pending = pendingRequests(read.orders);
       // The first read is what was already there when the screen opened: no chime.
       if (seenRef.current && newIds(seenRef.current, pending).length > 0) onNewRef.current?.();
@@ -103,7 +112,7 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
       // A blip, or a server without the remote kitchen: the strip stays as it was.
       return undefined;
     }
-  }, [api]);
+  }, [api, guard]);
 
   useEffect(() => {
     if (!kitchen) return;
@@ -143,6 +152,7 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
   const send = useCallback(
     async (order: RemoteRequest, call: () => Promise<unknown>) => {
       setBusy((prev) => new Set(prev).add(order.id));
+      guard.begin();
       try {
         await call();
         if (mountedRef.current) {
@@ -152,6 +162,7 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
       } catch (err) {
         if (mountedRef.current) setBanner(serverMessage(err, 'Не вдалося відповісти — спробуйте ще раз'));
       } finally {
+        guard.end();
         if (mountedRef.current) {
           setBusy((prev) => {
             const next = new Set(prev);
@@ -162,7 +173,7 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
         }
       }
     },
-    [refresh]
+    [guard, refresh]
   );
 
   return {

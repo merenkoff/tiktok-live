@@ -20,7 +20,9 @@
 //     the kitchen, tell the guest, and hold «Оплатити» (`setCheckoutHold`)
 //     until the guest agreed to a time the kitchen still stands by;
 //   - `till.Banner` — «Запити з точок» over every screen of the kitchen's
-//     till, the board above all, without the board knowing it exists;
+//     till, the board above all, without the board knowing it exists; and
+//     on the cafe's till «Замовлення з кухні» (РК5), where its paid orders
+//     are, with «Привезли», «Видали гостю» and the kitchen's cancels;
 //   - «Прийом запитів» on the kitchen's till (`/remote-kitchen`, РК4): the
 //     pause and the queue for the cook, in a kitchen store only;
 //   - «Віддалена кухня» in the owner's cabinet (`/admin/remote-kitchen`, РК4):
@@ -39,7 +41,7 @@ import { lazyWithRetry } from '@host/modules/lazyWithRetry';
 import { isKitchenStore } from './lib/hostPlatform';
 
 const KitchenCheckoutAction = lazyWithRetry(() => import('./checkout/KitchenCheckoutAction'));
-const RemoteKitchenBanner = lazyWithRetry(() => import('./kitchen/RequestsStrip'));
+const RemoteKitchenBanner = lazyWithRetry(() => import('./till/TillBanner'));
 const RemoteKitchenPage = lazyWithRetry(() => import('./admin/RemoteKitchenPage'));
 const KitchenTillPage = lazyWithRetry(() => import('./kitchen/KitchenTillPage'));
 
