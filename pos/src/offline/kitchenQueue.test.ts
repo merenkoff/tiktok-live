@@ -8,7 +8,7 @@
 // confirms it, and rests after a print that failed instead of confirming it.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RoundPrintJob } from '../types';
+import type { RemotePrintJob, RoundPrintJob } from '../types';
 import {
   BAR_PAPER_META_KEY,
   BAR_PRINTER_META_KEY,
@@ -29,6 +29,8 @@ vi.mock('../services/api', () => ({
     hasLiveJwt: vi.fn(() => true),
     roundPrintQueue: vi.fn(),
     markRoundPrinted: vi.fn(async () => undefined),
+    remotePrintQueue: vi.fn(async () => ({ jobs: [] })),
+    markRemotePrinted: vi.fn(async () => undefined),
   },
 }));
 
@@ -111,5 +113,53 @@ describe('drainKitchenQueue', () => {
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     expect(await drainKitchenQueue()).toBe('offline');
     expect(api.roundPrintQueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('drainKitchenQueue — a cafe’s paid orders (remote kitchen, РК3)', () => {
+  const remoteJob = (id: number, kind: 'fire' | 'cancel' = 'fire'): RemotePrintJob => ({
+    remote_order_id: id,
+    kind,
+    order_no: 12,
+    cafe_name: 'Pulcinella Парк',
+    guest_label: 'Стіл 3',
+    note: null,
+    paid_at: '2026-11-25T18:00:00Z',
+    promised_at: '2026-11-25T18:40:00Z',
+    items: [{ product_name: 'Маргарита', variant_label: '', quantity: 2, modifiers: [], note: 'без цибулі' }],
+  });
+
+  it('prints each on the kitchen printer and confirms it with its kind', async () => {
+    meta.set(KITCHEN_PRINTER_META_KEY, 'Kitchen');
+    vi.mocked(api.roundPrintQueue).mockResolvedValue({ jobs: [] });
+    vi.mocked(api.remotePrintQueue).mockResolvedValue({ jobs: [remoteJob(7), remoteJob(8, 'cancel')] });
+    expect(await drainKitchenQueue()).toEqual({ printed: 2 });
+    expect(printKitchenTicket).toHaveBeenCalledTimes(2);
+    const [printer, ticket] = printKitchenTicket.mock.calls[0] as [string, { order_label: string; subtitle: string }];
+    expect(printer).toBe('Kitchen');
+    expect(ticket.order_label).toBe('П-12');
+    expect(ticket.subtitle).toMatch(/^Pulcinella Парк · Стіл 3 · до /);
+    expect((printKitchenTicket.mock.calls[1] as [string, { cancelled?: boolean }])[1].cancelled).toBe(true);
+    expect(api.markRemotePrinted).toHaveBeenNthCalledWith(1, 7, 'fire');
+    expect(api.markRemotePrinted).toHaveBeenNthCalledWith(2, 8, 'cancel');
+  });
+
+  it('keeps printing rounds against a server without the remote queue, and stops asking it for a while', async () => {
+    meta.set(KITCHEN_PRINTER_META_KEY, 'Kitchen');
+    vi.mocked(api.roundPrintQueue).mockResolvedValue({ jobs: [job(1, 'kitchen')] });
+    vi.mocked(api.remotePrintQueue).mockRejectedValue({ response: { status: 404 } });
+    expect(await drainKitchenQueue(() => 1_000)).toEqual({ printed: 1 });
+    vi.mocked(api.roundPrintQueue).mockResolvedValue({ jobs: [] });
+    await drainKitchenQueue(() => 2_000);
+    expect(api.remotePrintQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not confirm a ticket the printer refused', async () => {
+    meta.set(KITCHEN_PRINTER_META_KEY, 'Kitchen');
+    vi.mocked(api.roundPrintQueue).mockResolvedValue({ jobs: [] });
+    vi.mocked(api.remotePrintQueue).mockResolvedValue({ jobs: [remoteJob(7)] });
+    printKitchenTicket.mockRejectedValueOnce('paper out');
+    expect(await drainKitchenQueue()).toEqual({ failed: 'paper out' });
+    expect(api.markRemotePrinted).not.toHaveBeenCalled();
   });
 });

@@ -1012,6 +1012,26 @@ export type TagStation = 'kitchen' | 'bar';
  * (`GET /kitchen/print-queue`, TechDocs/POS_TABLES.md §11). No prices: it is
  * not a receipt.
  */
+/**
+ * A cafe's paid order on the remote kitchen's printer (РК3,
+ * TechDocs/POS_REMOTE_KITCHEN.md §7.2): one ticket per order, no prices.
+ */
+export interface RemotePrintJob {
+  remote_order_id: number;
+  /** `cancel`: the order was called back after its ticket was printed. */
+  kind: 'fire' | 'cancel';
+  /** The kitchen's daily number — printed as «П-12». */
+  order_no: number | null;
+  cafe_name: string;
+  guest_label: string | null;
+  note: string | null;
+  /** ISO — when the cafe paid. */
+  paid_at: string;
+  /** ISO — when the guest was told it would be there. */
+  promised_at: string | null;
+  items: RoundPrintJob['items'];
+}
+
 export interface RoundPrintJob {
   round_id: number;
   /**

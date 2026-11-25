@@ -16,7 +16,7 @@
 
 import { api } from '../services/api';
 import { getMeta } from './db';
-import { roundTicketOf } from '../lib/kitchenTicket';
+import { remoteTicketOf, roundTicketOf } from '../lib/kitchenTicket';
 import { resolveTicketPrinters } from '../lib/kitchenPrinters';
 import { printKitchenTicket } from '../lib/printer';
 import type { TagStation } from '../types';
@@ -25,8 +25,12 @@ const POLL_MS = 5_000;
 const REST_AFTER_FAILURE_MS = 60_000;
 const STATIONS: TagStation[] = ['kitchen', 'bar'];
 
+/** A server without the remote-kitchen queue (404) is not asked again for this long. */
+const REMOTE_UNSUPPORTED_MS = 10 * 60_000;
+
 let busy = false;
 let restUntil = 0;
+let remoteSkipUntil = 0;
 
 export type KitchenDrainOutcome =
   | 'no-printer'
@@ -59,6 +63,29 @@ export async function drainKitchenQueue(now: () => number = Date.now): Promise<K
       await api.markRoundPrinted(job.round_id, job.station, job.kind === 'cancel' ? 'cancel' : 'fire');
       printed += 1;
     }
+
+    // A cafe's paid orders, when this store is a remote kitchen (РК3): the
+    // kitchen's printer, one ticket per order.
+    if (now() >= remoteSkipUntil) {
+      let remote: Awaited<ReturnType<typeof api.remotePrintQueue>>['jobs'] = [];
+      try {
+        remote = (await api.remotePrintQueue()).jobs;
+      } catch (error) {
+        if ((error as { response?: { status?: number } } | null)?.response?.status !== 404) throw error;
+        // An API from before the remote kitchen: the rounds above still print.
+        remoteSkipUntil = now() + REMOTE_UNSUPPORTED_MS;
+      }
+      for (const job of remote) {
+        try {
+          await printKitchenTicket(printers.kitchen.name, remoteTicketOf(job), printers.kitchen.paperWidth);
+        } catch (error) {
+          restUntil = now() + REST_AFTER_FAILURE_MS;
+          return { failed: typeof error === 'string' ? error : String(error) };
+        }
+        await api.markRemotePrinted(job.remote_order_id, job.kind);
+        printed += 1;
+      }
+    }
     return { printed };
   } catch (error) {
     // The server or the network: the next pass asks again.
@@ -81,4 +108,5 @@ export function startKitchenQueue(): void {
 export function resetKitchenQueue(): void {
   busy = false;
   restUntil = 0;
+  remoteSkipUntil = 0;
 }

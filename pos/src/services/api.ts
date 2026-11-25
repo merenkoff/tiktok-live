@@ -23,6 +23,7 @@ import type {
   RefundLineInput,
   RefundOptions,
   RoundPrintJob,
+  RemotePrintJob,
   SaleDetail,
   SkuSeries,
   SplitQuote,
@@ -649,6 +650,22 @@ class PosApi {
       undefined,
       kind === 'cancel' ? { params: { kind } } : undefined
     );
+  }
+
+  /**
+   * The remote kitchen's tickets for cafes' paid orders (РК3), on the same
+   * two-minute lease. A store that is no kitchen gets an empty list.
+   */
+  async remotePrintQueue(): Promise<{ jobs: RemotePrintJob[] }> {
+    const { data } = await this.client.get<{ jobs: RemotePrintJob[] }>('/remote-kitchen/print-queue', {
+      params: { kinds: 'fire,cancel' },
+    });
+    return data;
+  }
+
+  /** This device printed the remote order's ticket; idempotent. */
+  async markRemotePrinted(orderId: number, kind: 'fire' | 'cancel'): Promise<void> {
+    await this.client.post(`/remote-kitchen/print-queue/${orderId}/printed`, undefined, { params: { kind } });
   }
 
   /** What each receipt of a two-register cart will come to; writes nothing. */

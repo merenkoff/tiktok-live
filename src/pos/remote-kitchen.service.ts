@@ -33,6 +33,7 @@ import { pool } from '../db.js';
 import { consumeStockForLine, returnStockForLine } from './composites.service.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import { storeClock } from './core/storeClock.js';
+import { queueRemoteCancelTx, queueRemoteFireTx } from './remote-kitchen-print.service.js';
 
 type DbClient = { query: typeof pool.query };
 
@@ -1093,6 +1094,8 @@ export async function markPaidTx(
       WHERE id = $1`,
     [orderId, saleId, orderNo, quoted]
   );
+  // The kitchen's paper: its desktop prints the ticket (РК3).
+  await queueRemoteFireTx(client, kitchenStoreId, orderId);
   // The kitchen's stock moves now — as a sale, with the order as reference.
   // No kitchen staff did it, so no staff id; the event log says who in the cafe.
   const items = await client.query(
@@ -1377,6 +1380,7 @@ async function cancelLockedTx(
       WHERE id = $1`,
     [orderId, reason]
   );
+  await queueRemoteCancelTx(client, kitchenStoreId, orderId);
   await logEvent(client, orderId, actor, 'cancelled', {
     reason,
     by: actor.storeId === kitchenStoreId ? 'kitchen' : 'cafe',

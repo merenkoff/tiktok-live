@@ -22,6 +22,8 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { ensureSuper } from '../core/superAuth.js';
 import * as rk from '../remote-kitchen.service.js';
+import * as rkPrint from '../remote-kitchen-print.service.js';
+import { readDeviceId } from './_shared.js';
 
 function idOf(value: unknown): number | null {
   const id = Number(value);
@@ -191,6 +193,47 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
       },
     });
   }
+
+  // ── the kitchen's printer (РК3) ─────────────────────────────────
+
+  // The kitchen's desktop takes the tickets of paid orders, as it takes a
+  // table's rounds from `/kitchen/print-queue`. A store that is no kitchen
+  // simply has none.
+  fastify.get('/remote-kitchen/print-queue', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const deviceId = readDeviceId(request);
+    if (!deviceId) {
+      return reply.code(400).send({
+        error: 'device_id_required',
+        message: 'Потрібен заголовок X-POS-Device-ID (касовий застосунок)',
+      });
+    }
+    const rawKinds = String((request.query as { kinds?: unknown }).kinds ?? '').trim();
+    const kinds = rawKinds ? rawKinds.split(',').map((s) => s.trim()) : ['fire', 'cancel'];
+    if (!kinds.every(rkPrint.isRemotePrintKind)) {
+      return reply.code(400).send({ error: 'Вид тікета — «fire» або «cancel»' });
+    }
+    return {
+      jobs: await rkPrint.claimRemotePrintJobs(auth.storeId, deviceId, [
+        ...new Set(kinds as rkPrint.RemotePrintKind[]),
+      ]),
+    };
+  });
+
+  fastify.post('/remote-kitchen/print-queue/:orderId/printed', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const orderId = idOf((request.params as { orderId: string }).orderId);
+    const kind = (request.query as { kind?: unknown }).kind ?? 'fire';
+    if (orderId == null || !rkPrint.isRemotePrintKind(kind)) {
+      return reply.code(404).send({ error: 'Тікет не знайдено' });
+    }
+    if (!(await rkPrint.markRemotePrinted(auth.storeId, orderId, kind))) {
+      return reply.code(404).send({ error: 'Тікет не знайдено' });
+    }
+    return { ok: true };
+  });
 
   // ── the cafe owner's settings (§11 «Налаштування зв'язки») ────────
 

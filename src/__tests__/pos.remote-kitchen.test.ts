@@ -620,4 +620,64 @@ describe.skipIf(!hasDb)('POS remote kitchen («Віддалена кухня»)'
     const gone = await listOpenOrders(kitchen.storeId, { withRemote: true });
     expect(gone.orders.some((o) => o.kind === 'remote' && o.id === order.id)).toBe(false);
   });
+  it('a paid order prints one ticket on the kitchen’s desktop, and a cancel after it prints «СКАСОВАНО»', async () => {
+    await pool.query(`DELETE FROM pos_remote_order_prints WHERE store_id = $1`, [kitchen.storeId]);
+    const queue = (token: string, device = 'kitchen-pc') =>
+      app.inject({
+        method: 'GET',
+        url: '/api/pos/remote-kitchen/print-queue',
+        headers: { ...auth(token), 'x-pos-device-id': device },
+      });
+    const printed = (id: number, kind: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/pos/remote-kitchen/print-queue/${id}/printed?kind=${kind}`,
+        headers: { ...auth(kitchen.sellerToken), 'x-pos-device-id': 'kitchen-pc' },
+      });
+
+    const order = (await ask([{ variant_id: cafePizza, quantity: 2 }])).json();
+    expect((await checkout([{ variant_id: cafePizza, quantity: 2 }], order.id)).statusCode).toBe(201);
+
+    // The cafe has no ticket of its own to take; a device id is required.
+    expect((await queue(cafe.sellerToken)).json().jobs).toEqual([]);
+    expect(
+      (
+        await app.inject({ method: 'GET', url: '/api/pos/remote-kitchen/print-queue', headers: auth(kitchen.sellerToken) })
+      ).statusCode
+    ).toBe(400);
+
+    const taken = (await queue(kitchen.sellerToken)).json().jobs;
+    expect(taken).toHaveLength(1);
+    expect(taken[0]).toMatchObject({
+      remote_order_id: order.id,
+      kind: 'fire',
+      guest_label: 'Стіл 3',
+      items: [expect.objectContaining({ product_name: expect.any(String), quantity: 2, modifiers: [] })],
+    });
+    expect(taken[0].order_no).toBeGreaterThanOrEqual(1);
+    expect(taken[0].promised_at).not.toBeNull();
+    // Leased: a second desktop gets nothing while the first may be printing.
+    expect((await queue(kitchen.sellerToken, 'other-pc')).json().jobs).toEqual([]);
+    expect((await printed(order.id, 'fire')).statusCode).toBe(200);
+    expect((await queue(kitchen.sellerToken)).json().jobs).toEqual([]);
+
+    await step(kitchen.sellerToken, order.id, 'cancel', { reason: 'Згоріла піч' });
+    const cancel = (await queue(kitchen.sellerToken)).json().jobs;
+    expect(cancel).toEqual([expect.objectContaining({ remote_order_id: order.id, kind: 'cancel' })]);
+    expect((await printed(order.id, 'cancel')).statusCode).toBe(200);
+    expect((await printed(999999999, 'fire')).statusCode).toBe(404);
+  });
+
+  it('an order cancelled before the kitchen took its ticket prints nothing', async () => {
+    await pool.query(`DELETE FROM pos_remote_order_prints WHERE store_id = $1`, [kitchen.storeId]);
+    const order = (await ask([{ variant_id: cafePizza, quantity: 1 }])).json();
+    expect((await checkout([{ variant_id: cafePizza, quantity: 1 }], order.id)).statusCode).toBe(201);
+    await step(kitchen.sellerToken, order.id, 'cancel', { reason: 'Немає тіста' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/pos/remote-kitchen/print-queue',
+      headers: { ...auth(kitchen.sellerToken), 'x-pos-device-id': 'kitchen-pc' },
+    });
+    expect(res.json().jobs).toEqual([]);
+  });
 });

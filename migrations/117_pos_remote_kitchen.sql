@@ -231,6 +231,28 @@ CREATE TABLE IF NOT EXISTS pos_remote_order_events (
 CREATE INDEX IF NOT EXISTS idx_pos_remote_order_events_order
   ON pos_remote_order_events (remote_order_id, at, id);
 
+-- ── The kitchen's paper (РК3) ──────────────────────────────────────────────
+
+-- A paid order is a ticket on the kitchen's printer, like a table's round
+-- (109/110): the cafe's till is not where that printer is, so the payment
+-- leaves a job here and the kitchen's desktop takes it, prints it and says so
+-- — the same two-minute lease. A cancel after the ticket was printed or taken
+-- leaves a second job, `cancel`, printed as «СКАСОВАНО».
+CREATE TABLE IF NOT EXISTS pos_remote_order_prints (
+    store_id BIGINT NOT NULL REFERENCES pos_stores(id) ON DELETE CASCADE,
+    remote_order_id BIGINT NOT NULL REFERENCES pos_remote_orders(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('fire', 'cancel')),
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    claimed_by TEXT,
+    claimed_at TIMESTAMPTZ,
+    printed_at TIMESTAMPTZ,
+    PRIMARY KEY (remote_order_id, kind)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pos_remote_order_prints_waiting
+  ON pos_remote_order_prints (store_id, requested_at)
+  WHERE printed_at IS NULL;
+
 -- ── The cafe's receipt line points back ─────────────────────────────────────
 
 -- SET NULL: a request may be purged one day, a sold receipt may not.
@@ -246,5 +268,7 @@ COMMENT ON TABLE pos_remote_orders IS
   'A cafe till''s request to a remote kitchen: time quoted, paid, cooked, carried, handed over.';
 COMMENT ON TABLE pos_remote_order_item_components IS
   'What one unit of a paid remote line took off the kitchen''s shelf; a cancel gives back exactly this.';
+COMMENT ON TABLE pos_remote_order_prints IS
+  'Kitchen tickets of paid remote orders, taken and confirmed by the kitchen''s desktop (lease 2 min).';
 COMMENT ON COLUMN pos_sale_items.remote_order_item_id IS
   'The remote-kitchen line behind this receipt line. Such a line moved no stock in the cafe.';
