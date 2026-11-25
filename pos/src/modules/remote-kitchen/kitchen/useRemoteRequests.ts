@@ -2,20 +2,30 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// The cafe's requests waiting for this kitchen's time (РК3), polled every
-// three seconds — the cafe gives the kitchen a minute to answer, so five
-// would eat a tenth of it. Same plain interval as `useKitchenOrders`.
+// The cafes' requests waiting for this kitchen's time (РК3), polled every
+// three seconds — the cafe gives the kitchen a minute to answer, so five would
+// eat a tenth of it.
+//
+// The strip is drawn over EVERY till screen of a store that has this module
+// (`till.Banner`), so it first asks once whether this store is a kitchen at
+// all, and polls only then: a cafe's till must not ask for a kitchen's
+// requests all day. A store that is not a kitchen asks again every ten
+// minutes, so a link the super admin made today starts without a restart.
+// Only a visible tab polls, and a failed read changes nothing on screen.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as remoteApi from './remoteApi';
 import type { RemoteRequest } from './remoteApi';
-import { newIds, pendingRequests } from './lib/remote';
-import { serverMessage } from './lib/kitchen';
+import { clockOffset, newIds, pendingRequests } from './lib';
+import { serverMessage } from '../lib/hostPlatform';
 
 export const REMOTE_POLL_MS = 3000;
+export const NOT_KITCHEN_RECHECK_MS = 10 * 60_000;
 
 export interface RemoteRequests {
   requests: RemoteRequest[];
+  /** Server time minus device time, from the last read. */
+  offset: number;
   /** A refused answer, in the server's words. */
   banner: string | null;
   /** Ids with an answer on its way, so a second tap does not send it twice. */
@@ -25,8 +35,14 @@ export interface RemoteRequests {
   clearBanner: () => void;
 }
 
-export function useRemoteRequests(enabled: boolean, onNew?: () => void): RemoteRequests {
+function visible(): boolean {
+  return typeof document === 'undefined' || document.visibilityState === 'visible';
+}
+
+export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = remoteApi): RemoteRequests {
+  const [kitchen, setKitchen] = useState(false);
   const [requests, setRequests] = useState<RemoteRequest[]>([]);
+  const [offset, setOffset] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<number>>(new Set());
   const seenRef = useRef<Set<number> | null>(null);
@@ -41,29 +57,49 @@ export function useRemoteRequests(enabled: boolean, onNew?: () => void): RemoteR
     };
   }, []);
 
+  // Am I a kitchen? Once, then again every ten minutes while the answer is no.
+  useEffect(() => {
+    if (kitchen) return;
+    let cancelled = false;
+    const check = () => {
+      api
+        .isKitchen()
+        .then((yes) => {
+          if (!cancelled && yes) setKitchen(true);
+        })
+        .catch(() => undefined);
+    };
+    check();
+    const id = setInterval(check, NOT_KITCHEN_RECHECK_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [kitchen, api]);
+
   const refresh = useCallback(async () => {
     try {
-      const pending = pendingRequests(await remoteApi.listKitchenSide());
+      const read = await api.listKitchenSide();
       if (!mountedRef.current) return;
+      const pending = pendingRequests(read.orders);
       // The first read is what was already there when the screen opened: no chime.
       if (seenRef.current && newIds(seenRef.current, pending).length > 0) onNewRef.current?.();
       seenRef.current = new Set(pending.map((o) => o.id));
+      setOffset(clockOffset(read.now));
       setRequests(pending);
     } catch {
-      // A host or server without the module, or a blip: the panel just stays
-      // as it was. The board above it says when the network is gone.
+      // A blip, or a server without the remote kitchen: the strip stays as it was.
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!kitchen) return;
     void refresh();
     const id = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      void refresh();
+      if (visible()) void refresh();
     }, REMOTE_POLL_MS);
     return () => clearInterval(id);
-  }, [enabled, refresh]);
+  }, [kitchen, refresh]);
 
   const send = useCallback(
     async (order: RemoteRequest, call: () => Promise<unknown>) => {
@@ -89,10 +125,11 @@ export function useRemoteRequests(enabled: boolean, onNew?: () => void): RemoteR
 
   return {
     requests,
+    offset,
     banner,
     busy,
-    answer: (order, minutes) => send(order, () => remoteApi.answerWithTime(order, minutes)),
-    decline: (order, reason) => send(order, () => remoteApi.decline(order, reason)),
+    answer: (order, minutes) => send(order, () => api.answerWithTime(order, minutes)),
+    decline: (order, reason) => send(order, () => api.decline(order, reason)),
     clearBanner: () => setBanner(null),
   };
 }
@@ -115,6 +152,6 @@ export function chime(): void {
     osc.stop(ctx.currentTime + 0.4);
     osc.onended = () => void ctx.close();
   } catch {
-    // No audio on this device, or not before a first tap: the panel still shows.
+    // No audio on this device, or not before a first tap: the strip still shows.
   }
 }

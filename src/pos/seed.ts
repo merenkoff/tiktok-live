@@ -228,6 +228,95 @@ async function registerPassModule(): Promise<void> {
 }
 
 /**
+ * «Віддалена кухня» locally (`remote-kitchen`, TechDocs/POS_REMOTE_KITCHEN.md):
+ * two demo stores — `demo-cafe` asks, `demo-suncity` (a pizza and sushi
+ * delivery, the very case the track was asked for) cooks — linked as the
+ * super admin would link them, both pointed at a locally served bundle on
+ * :5014, and two of the kitchen's dishes on the cafe's menu marked «готується
+ * на кухні». The cafe's card is its own product with the kitchen's name and
+ * price (the cafe sets its own prices), with stock the till never greys,
+ * because a kitchen dish takes nothing off the cafe's shelf.
+ *
+ *   POS_SEED_VERTICAL_CAFE=1 POS_SEED_REMOTE_KITCHEN=1 npm run pos:seed
+ *
+ * `POS_SEED_REMOTE_KITCHEN_CAFE` / `_KITCHEN` name other stores.
+ */
+async function registerRemoteKitchenModule(): Promise<void> {
+  const rk = await import('./remote-kitchen.service.js');
+  const products = await import('./products.service.js');
+  const cafeSlug = process.env.POS_SEED_REMOTE_KITCHEN_CAFE || 'demo-cafe';
+  const kitchenSlug = process.env.POS_SEED_REMOTE_KITCHEN_KITCHEN || 'demo-suncity';
+  const stores = await pool.query(`SELECT id, slug, module_remotes FROM pos_stores WHERE slug = ANY($1::text[])`, [
+    [cafeSlug, kitchenSlug],
+  ]);
+  const cafe = stores.rows.find((r) => r.slug === cafeSlug);
+  const kitchen = stores.rows.find((r) => r.slug === kitchenSlug);
+  if (!cafe || !kitchen) {
+    console.log(`   ${cafeSlug} or ${kitchenSlug} not found — run the migrations first`);
+    return;
+  }
+  const entry = {
+    url: process.env.POS_SEED_REMOTE_KITCHEN_URL || 'http://localhost:5014/remote-entry.js',
+    title: 'Віддалена кухня',
+    routePath: '/remote-kitchen',
+    icon: 'ChefHat',
+    nav: [{ label: 'Віддалена кухня', location: 'cashier-primary', order: 62, icon: 'ChefHat' }],
+  };
+  for (const store of [cafe, kitchen]) {
+    const remotes = (store.module_remotes ?? {}) as Record<string, unknown>;
+    if (!('vertical-cafe' in remotes)) {
+      console.log(`   ${store.slug} has no café vertical — run with POS_SEED_VERTICAL_CAFE=1 (and point it there too)`);
+    }
+    await pool.query(
+      `UPDATE pos_stores
+       SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                            || jsonb_build_object('remote-kitchen', $2::jsonb)
+       WHERE id = $1`,
+      [Number(store.id), JSON.stringify(entry)]
+    );
+  }
+  const link = await rk.createLink({
+    cafe_store_id: Number(cafe.id),
+    kitchen_store_id: Number(kitchen.id),
+    kitchen_title: 'Кухня Sun City',
+    kitchen_phone: '+380000000000',
+    transit_minutes: 10,
+  });
+  const dishes = await pool.query(
+    // Two different dishes, one size each: the cafe's card is named after
+    // the dish, so two sizes of one pizza would land on the same card.
+    `SELECT DISTINCT ON (p.name) v.id, p.name, v.price_cents
+       FROM pos_variants v JOIN pos_products p ON p.id = v.product_id
+      WHERE p.store_id = $1 AND p.is_active AND v.is_active AND p.sellable
+      ORDER BY p.name, v.id LIMIT 2`,
+    [Number(kitchen.id)]
+  );
+  for (const dish of dishes.rows) {
+    const name = String(dish.name);
+    const existing = await pool.query(
+      `SELECT v.id FROM pos_variants v JOIN pos_products p ON p.id = v.product_id
+        WHERE p.store_id = $1 AND p.name = $2 AND v.is_active ORDER BY v.id LIMIT 1`,
+      [Number(cafe.id), name]
+    );
+    let cafeVariantId = existing.rows[0] ? Number(existing.rows[0].id) : null;
+    if (cafeVariantId == null) {
+      const made = await products.createProduct(Number(cafe.id), {
+        name,
+        variants: [{ price_cents: Number(dish.price_cents), unit: 'шт', quantity: 100000 }],
+      } as never);
+      const row = await pool.query(`SELECT id FROM pos_variants WHERE product_id = $1 ORDER BY id LIMIT 1`, [
+        (made as { id: number }).id,
+      ]);
+      cafeVariantId = Number(row.rows[0].id);
+    }
+    await rk.setLinkItem(link, cafeVariantId, Number(dish.id));
+  }
+  console.log(
+    `   remote-kitchen: ${cafeSlug} asks ${kitchenSlug} (${dishes.rows.length} dishes) → ${entry.url}`
+  );
+}
+
+/**
  * Point a demo store at a locally served `debts` bundle (grocery phase Г3,
  * «під запис» — TechDocs/grocery/G3_DEBTS.md).
  *
@@ -520,6 +609,7 @@ async function seed(): Promise<void> {
   if (process.env.POS_SEED_TABLES === '1') await registerTablesModule();
   if (process.env.POS_SEED_DEBTS === '1') await registerDebtsModule();
   if (process.env.POS_SEED_PASS === '1') await registerPassModule();
+  if (process.env.POS_SEED_REMOTE_KITCHEN === '1') await registerRemoteKitchenModule();
   if (process.env.POS_SEED_VERTICAL_GROCERY === '1') await registerGroceryModule();
   if (process.env.POS_SEED_FISCAL_CASHALOT === '1') await registerFiscalCashalotModule();
   console.log('\n✅ Demo store ready (tags ensured)');

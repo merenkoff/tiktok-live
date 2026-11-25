@@ -62,8 +62,8 @@ export interface KitchenOrder {
    * `remote` only — an order this kitchen cooks for a linked cafe (РК3,
    * TechDocs/POS_REMOTE_KITCHEN.md §11): when it was promised at the cafe, and
    * which cafe. Its id is a third table's, so its taps go to
-   * `/remote-kitchen/orders/:id/…`. The server sends this kind only to a board
-   * that asks (`?with=remote`).
+   * `/kitchen/remote-orders/:id/prep`. The server sends this kind only to a
+   * board that asks (`?with=remote`).
    */
   promised_at?: string | null;
   from_store?: string;

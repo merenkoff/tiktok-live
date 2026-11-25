@@ -3,8 +3,17 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { clampPrep, defaultPrep, guestMinutes, newIds, pendingRequests, secondsToAnswer } from './remote';
-import type { RemoteRequest } from '../remoteApi';
+import {
+  clampPrep,
+  clockOffset,
+  defaultPrep,
+  formatWait,
+  guestMinutes,
+  newIds,
+  pendingRequests,
+  secondsToAnswer,
+} from './lib';
+import type { RemoteRequest } from './remoteApi';
 
 function req(over: Partial<RemoteRequest>): RemoteRequest {
   return {
@@ -56,5 +65,21 @@ describe('the kitchen’s request panel', () => {
 
   it('chimes once per new request', () => {
     expect(newIds(new Set([1]), [req({ id: 1 }), req({ id: 2 })])).toEqual([2]);
+  });
+});
+
+describe('the strip’s clock', () => {
+  it('writes the time left as minutes and seconds, hours only when there are any', () => {
+    expect(formatWait(0)).toBe('0:00');
+    expect(formatWait(59)).toBe('0:59');
+    expect(formatWait(245)).toBe('4:05');
+    expect(formatWait(3723)).toBe('1:02:03');
+    expect(formatWait(-5)).toBe('0:00');
+  });
+
+  it('measures the device against the server’s `now`, and trusts nothing it cannot read', () => {
+    expect(clockOffset('2026-11-25T10:00:05.000Z', Date.parse('2026-11-25T10:00:00.000Z'))).toBe(5000);
+    expect(clockOffset(undefined, 1)).toBe(0);
+    expect(clockOffset('не час', 1)).toBe(0);
   });
 });

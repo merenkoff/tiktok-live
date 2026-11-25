@@ -34,11 +34,11 @@ describe('kitchenApi.setPrep', () => {
     });
   });
 
-  it("sends a cafe's order (РК3) to the remote kitchen's own steps", async () => {
+  it("sends a cafe's order (РК3) to the kitchen's own route for it, never to the remote-kitchen module's", async () => {
     await setPrep({ id: 7, kind: 'remote' }, 'ready');
-    expect(posRequest).toHaveBeenLastCalledWith('post', '/remote-kitchen/orders/7/ready', {});
+    expect(posRequest).toHaveBeenLastCalledWith('patch', '/kitchen/remote-orders/7/prep', { prep_status: 'ready' });
     await setPrep({ id: 7, kind: 'remote' }, 'served');
-    expect(posRequest).toHaveBeenLastCalledWith('post', '/remote-kitchen/orders/7/dispatched', {});
+    expect(posRequest).toHaveBeenLastCalledWith('patch', '/kitchen/remote-orders/7/prep', { prep_status: 'served' });
   });
 
   it('treats an order from a pre-К4 server as a sale', async () => {

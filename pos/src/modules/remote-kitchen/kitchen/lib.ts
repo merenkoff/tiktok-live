@@ -2,10 +2,10 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// Pure helpers behind the kitchen's request panel (РК3). Pinned by
-// `remote.test.ts`; nothing here touches React or the network.
+// Pure helpers behind the kitchen's strip «Запити з точок» (РК3). Pinned by
+// `lib.test.ts`; nothing here touches React or the network.
 
-import type { RemoteRequest } from '../remoteApi';
+import type { RemoteRequest } from './remoteApi';
 
 export const STEP_MIN = 5;
 export const MIN_PREP = 5;
@@ -49,4 +49,22 @@ export function secondsToAnswer(deadline: string | null, offset: number, clientN
 /** Ids that were not in the previous read — each is one chime. */
 export function newIds(previous: ReadonlySet<number>, current: RemoteRequest[]): number[] {
   return current.map((o) => o.id).filter((id) => !previous.has(id));
+}
+
+/** «4:05» / «1:02:03» — how long is left to answer. */
+export function formatWait(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(h > 0 ? 2 : 1, '0');
+  const ss = String(sec).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** Server time minus device time, from a read's `now`; 0 when the server sent none. */
+export function clockOffset(serverNow: string | undefined, clientNow = Date.now()): number {
+  if (!serverNow) return 0;
+  const at = new Date(serverNow).getTime();
+  return Number.isNaN(at) ? 0 : at - clientNow;
 }

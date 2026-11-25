@@ -4,7 +4,7 @@
 
 // The kitchen's side of «Віддалена кухня» (РК3, TechDocs/POS_REMOTE_KITCHEN.md):
 // the cafe's requests waiting for a time, and the two answers. Mirrored wire
-// shapes, like `types.ts`: this bundle shares only `@pos/platform` with the host.
+// shapes: this bundle shares only `@pos/platform` with the host.
 
 import { posRequest } from '../lib/hostPlatform';
 
@@ -35,12 +35,26 @@ export interface RemoteRequest {
 }
 
 /**
- * Orders where this store is the kitchen. A store with no link gets an empty
- * list, not an error — the panel then draws nothing.
+ * Is this store a kitchen for some cafe at all? Read before the strip starts
+ * polling: a store that is only a cafe (or has no link) must not ask the
+ * server for a kitchen's requests every three seconds all day.
  */
-export async function listKitchenSide(): Promise<RemoteRequest[]> {
-  const res = await posRequest<{ orders?: RemoteRequest[] }>('get', '/remote-kitchen/orders?side=kitchen');
-  return Array.isArray(res?.orders) ? res.orders : [];
+export async function isKitchen(): Promise<boolean> {
+  const res = await posRequest<{ as_kitchen?: unknown }>('get', '/remote-kitchen/setup');
+  return res?.as_kitchen != null;
+}
+
+/**
+ * Orders where this store is the kitchen, with the server's clock — the
+ * countdown to «кафе вже дзвонить» is the server's deadline, not the device's.
+ * A store with no link gets an empty list, not an error.
+ */
+export async function listKitchenSide(): Promise<{ orders: RemoteRequest[]; now?: string }> {
+  const res = await posRequest<{ orders?: RemoteRequest[]; now?: string }>(
+    'get',
+    '/remote-kitchen/orders?side=kitchen'
+  );
+  return { orders: Array.isArray(res?.orders) ? res.orders : [], now: res?.now };
 }
 
 /** «Встигнемо за N хв» — the cooking time; the server adds the road and rounds up. */

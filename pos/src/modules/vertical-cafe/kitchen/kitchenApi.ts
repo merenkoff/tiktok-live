@@ -29,15 +29,17 @@ export function listOrders(): Promise<KitchenBoard> {
 export function setPrep(
   order: Pick<KitchenOrder, 'id' | 'kind'>,
   status: 'ready' | 'served'
-): Promise<PrepStatusRow | null> {
-  // A cafe's order (РК3): «Готово» is the kitchen's `ready`, «Віддали кур'єру»
-  // is `dispatched`. The answer is the order, not a prep row — nobody reads it.
-  if (order.kind === 'remote') {
-    const step = status === 'ready' ? 'ready' : 'dispatched';
-    return posRequest<unknown>('post', `/remote-kitchen/orders/${order.id}/${step}`, {}).then(() => null);
-  }
+): Promise<PrepStatusRow> {
+  // A cafe's order (РК3, TechDocs/POS_REMOTE_KITCHEN.md §11) has a route of
+  // its own on the KITCHEN's side, like a round: «Готово» is its `ready`,
+  // «Віддали курʼєру» its handover to the courier. The board never calls the
+  // `remote-kitchen` module's routes — that module is another bundle.
   const path =
-    order.kind === 'round' ? `/kitchen/rounds/${order.id}/prep` : `/sales/${order.id}/prep`;
+    order.kind === 'round'
+      ? `/kitchen/rounds/${order.id}/prep`
+      : order.kind === 'remote'
+        ? `/kitchen/remote-orders/${order.id}/prep`
+        : `/sales/${order.id}/prep`;
   return posRequest<PrepStatusRow>('patch', path, { prep_status: status });
 }
 

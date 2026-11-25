@@ -75,7 +75,7 @@ describe('«З кухні» above «Оплатити»', () => {
     render(<KitchenCheckoutAction {...props} lines={[line(20, 1, 'Капучино')]} store={store} />);
     await act(async () => undefined);
     expect(screen.queryByTestId('remote-checkout')).toBeNull();
-    expect(useCartStore.getState().checkoutHold).toBeNull();
+    expect(useCartStore.getState().checkoutHolds['remote-kitchen']).toBeUndefined();
   });
 
   it('asks the kitchen, shows the time, and lets the till pay on the guest’s yes', async () => {
@@ -86,7 +86,7 @@ describe('«З кухні» above «Оплатити»', () => {
     await act(async () => undefined);
 
     expect(screen.getByTestId('remote-checkout').textContent).toContain('Pulcinella кухня · 2 страви');
-    expect(useCartStore.getState().checkoutHold).toMatch(/спершу запитайте кухню/);
+    expect(useCartStore.getState().checkoutHolds['remote-kitchen']).toMatch(/спершу запитайте кухню/);
 
     await userEvent.click(screen.getByRole('button', { name: /Запитати кухню/ }));
     expect(calls.createOrder).toHaveBeenCalledTimes(1);
@@ -108,8 +108,25 @@ describe('«З кухні» above «Оплатити»', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Гість згоден' }));
     expect(screen.getByTestId('remote-checkout-agreed').textContent).toContain('Можна оплачувати');
-    expect(useCartStore.getState().checkoutHold).toBeNull();
+    expect(useCartStore.getState().checkoutHolds['remote-kitchen']).toBeUndefined();
     expect(useCartStore.getState().remoteOrderId).toBe(5);
+  });
+
+  // Holds are kept per module (platform 25): the guest agreeing to the
+  // kitchen's time lifts the kitchen's hold — and only that one.
+  it('lifts only its own hold, never another module’s', async () => {
+    useCartStore.getState().setCheckoutHold('another', 'Інший модуль ще не дозволяє');
+    const calls = api();
+    calls.createOrder.mockResolvedValueOnce(
+      view({ status: 'quoted', quoted_minutes: 30, quote_expires_at: new Date(Date.now() + 300_000).toISOString() })
+    );
+    const store = createRemoteCheckout(calls as never);
+    render(<KitchenCheckoutAction {...props} lines={[line(10, 1, 'Маргарита')]} store={store} />);
+    await act(async () => undefined);
+    await userEvent.click(screen.getByRole('button', { name: /Запитати кухню/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Гість згоден' }));
+
+    expect(useCartStore.getState().checkoutHolds).toEqual({ another: 'Інший модуль ще не дозволяє' });
   });
 
   it('offers the phone when the kitchen is silent', async () => {

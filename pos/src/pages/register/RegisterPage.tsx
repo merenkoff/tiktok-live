@@ -115,6 +115,12 @@ function kitchenSaleOf(parts: SaleDetail[]): SaleDetail {
  * clothes rail, a bucket of stems and a coffee machine, and everything on the
  * other side of it is not.
  */
+/** The reason shown when «Оплатити» is held: the first module's, in the order they said it. */
+function firstHold(holds: Readonly<Record<string, string>>): string | null {
+  for (const reason of Object.values(holds)) if (reason) return reason;
+  return null;
+}
+
 export function RegisterPage() {
   const shell = usePosShell();
   const auth = useAuthStore((s) => s.auth);
@@ -162,10 +168,10 @@ export function RegisterPage() {
   const exchange = useCartStore((s) => s.exchange);
   const cancelExchange = useCartStore((s) => s.cancelExchange);
   // The remote kitchen (TechDocs/POS_REMOTE_KITCHEN.md §8): the order whose
-  // time the guest agreed to, and the cafe module's reason to hold «Оплатити»
-  // while a kitchen dish has no agreed time yet.
+  // time the guest agreed to. And any module's reason to hold «Оплатити» — the
+  // `remote-kitchen` module's while a kitchen dish has no agreed time yet.
   const remoteOrderId = useCartStore((s) => s.remoteOrderId);
-  const checkoutHold = useCartStore((s) => s.checkoutHold);
+  const checkoutHold = useCartStore((s) => firstHold(s.checkoutHolds));
   const online = useOfflineStatus((s) => s.online);
   // What feature modules add to the cart (phase Г2, TechDocs/grocery/PLAN.md
   // §4): a way to finish it other than paying — the debt journal's «Під

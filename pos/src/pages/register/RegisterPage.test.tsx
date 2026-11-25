@@ -451,7 +451,7 @@ describe('RegisterPage — a dish from the remote kitchen (TechDocs/POS_REMOTE_K
   it('does not open the payment while a module holds it, and says why', async () => {
     signIn('clothing');
     ringPizza();
-    useCartStore.getState().setCheckoutHold('Страви з кухні: спершу запитайте кухню, коли буде готово.');
+    useCartStore.getState().setCheckoutHold('remote-kitchen', 'Страви з кухні: спершу запитайте кухню, коли буде готово.');
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
     expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 

@@ -2,28 +2,43 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// «Запити з точок» above the kitchen board (РК3, TechDocs/POS_REMOTE_KITCHEN.md
-// §7.2). A cafe asked how long its order will take; the cook answers with one
-// tap on the suggested time, nudges it by five, or says «Не зможемо». Draws
-// nothing while nothing waits — a kitchen with no linked cafe never sees it.
+// «Запити з точок» (РК3, TechDocs/POS_REMOTE_KITCHEN.md §7.2): a linked cafe
+// asked how long its order will take; the cook answers with one tap on the
+// suggested time, nudges it by five, or says «Не зможемо».
+//
+// This module's `till.Banner`: the host's till frame draws it over every
+// screen — the kitchen's board above all, which is the café vertical's page
+// and carries none of this code. So it draws NOTHING while nothing waits, and
+// in a store that is not a kitchen it does not even poll (`useRemoteRequests`).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RemoteRequest } from './remoteApi';
-import { STEP_MIN, clampPrep, defaultPrep, guestMinutes, secondsToAnswer } from './lib/remote';
-import { formatWait } from './lib/kitchen';
+import { STEP_MIN, clampPrep, defaultPrep, formatWait, guestMinutes, secondsToAnswer } from './lib';
 import { chime, useRemoteRequests } from './useRemoteRequests';
 import { Check, X } from '@pos/platform/ui';
 
 const DECLINE_REASON = 'Кухня зараз не встигає';
 
-export function RemoteRequests({ offset }: { offset: number }) {
-  const { requests, banner, busy, answer, decline, clearBanner } = useRemoteRequests(true, chime);
+/** A tick a second while a countdown shows, none otherwise. */
+function useSecondTick(active: boolean): void {
+  const [, setNow] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setNow((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+}
+
+export function RequestsStrip({ hook = useRemoteRequests }: { hook?: typeof useRemoteRequests } = {}) {
+  const { requests, offset, banner, busy, answer, decline, clearBanner } = hook(chime);
+  useSecondTick(requests.length > 0);
   if (requests.length === 0 && !banner) return null;
 
   return (
     <section
-      className="rounded-2xl bg-amber-50 shadow-[0_0_0_2px_rgb(245,158,11)] px-4 py-3 space-y-3"
+      className="mx-3 my-2 rounded-2xl bg-amber-50 shadow-[0_0_0_2px_rgb(245,158,11)] px-4 py-3 space-y-3"
       data-testid="remote-requests"
+      aria-label="Запити з точок"
     >
       <h2 className="text-[15px] font-bold text-amber-800">Запити з точок · {requests.length}</h2>
       {banner && (
@@ -48,6 +63,11 @@ export function RemoteRequests({ offset }: { offset: number }) {
       </div>
     </section>
   );
+}
+
+/** What the till frame draws (`till.Banner` takes no props). */
+export default function RemoteKitchenBanner() {
+  return <RequestsStrip />;
 }
 
 function RequestCard({

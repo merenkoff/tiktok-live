@@ -191,7 +191,10 @@ type Kind = 'sale' | 'round';
 async function mockKitchen(page: Page, { withRound = false } = {}) {
   const status: Record<Kind, 'new' | 'ready' | 'served'> = { sale: 'new', round: 'new' };
   const taps: Record<Kind, Array<Record<string, unknown>>> = { sale: [], round: [] };
-  await page.route('**/api/pos/kitchen/orders', async (route) =>
+  // `**` at the end: the board asks `/kitchen/orders?with=remote`, and a glob
+  // without it does not match a query string — the read then fell through to
+  // the catch-all `[]`, and the board had no orders array to draw.
+  await page.route('**/api/pos/kitchen/orders**', async (route) =>
     route.fulfill({
       json: {
         orders: [

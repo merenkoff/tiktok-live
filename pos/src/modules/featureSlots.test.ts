@@ -107,6 +107,21 @@ describe('resolveModuleSlots', () => {
     ]);
   });
 
+  // `till.Banner` (platform 25): the remote kitchen's strip over the board.
+  // A feature module's, by the feature rules — a vertical never needs it,
+  // because its own pages are where it draws.
+  it('reads a till banner from the feature module that declares one, in its shells only', () => {
+    const Strip = () => null;
+    const kitchen = remote('remote-kitchen', { till: { Banner: Strip } });
+    expect(resolveModuleSlots('till.Banner', ctx({ shell: 'cashier' }), [...MODULES, kitchen])).toEqual([
+      { moduleId: 'remote-kitchen', value: Strip },
+    ]);
+    const webOnly = remote('remote-kitchen', { shells: ['web'], till: { Banner: Strip } });
+    expect(resolveModuleSlots('till.Banner', ctx({ shell: 'cashier' }), [webOnly])).toEqual([]);
+    expect(resolveModuleSlots('till.Banner', ctx({ role: 'marketer' }), [kitchen])).toEqual([]);
+    expect(resolveModuleSlots('till.Banner', ctx({ vertical: 'clothing' }), MODULES)).toEqual([]);
+  });
+
   it('gives a store with no such modules nothing at all', () => {
     expect(resolveModuleSlots('checkout.Action', ctx({ vertical: 'clothing' }), MODULES)).toEqual([]);
     expect(resolveModuleSlots('customer.Panel', ctx({ vertical: 'clothing' }), MODULES)).toEqual([]);

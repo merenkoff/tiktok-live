@@ -20,7 +20,6 @@ import {
 } from './lib/kitchen';
 import type { KitchenOrder, Station } from './types';
 import { useKitchenOrders } from './useKitchenOrders';
-import { RemoteRequests } from './RemoteRequests';
 import { Check, Clock, X } from '@pos/platform/ui';
 
 const STATION_LABEL: Record<Station, string> = { kitchen: 'кухня', bar: 'бар' };
@@ -62,9 +61,6 @@ export function OrdersTab() {
         </div>
       )}
       {loading && orders.length === 0 && <p className="text-sm text-sq-muted">Завантаження…</p>}
-
-      {/* РК3: a linked cafe asking for a time comes before everything on the board. */}
-      <RemoteRequests offset={offset} />
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr] items-start">
         <Column title="В роботі" tone="blue" testId="kitchen-in-work" empty="Замовлень немає" wide>

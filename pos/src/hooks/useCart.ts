@@ -140,13 +140,15 @@ interface CartStore {
    */
   remoteOrderId: number | null;
   /**
-   * A module's reason the cart cannot be paid yet (a dish from the remote
-   * kitchen with no agreed time). Shown as the banner when «Оплатити» is
-   * pressed; null means nothing holds the payment.
+   * Why the cart cannot be paid yet, per module that says so (a dish from the
+   * remote kitchen with no agreed time). Keyed by the module's id, so one
+   * module lifting its hold never lifts another's. The first one is shown as
+   * the banner when «Оплатити» is pressed; empty means nothing holds it.
    */
-  checkoutHold: string | null;
+  checkoutHolds: Readonly<Record<string, string>>;
   setRemoteOrderId: (id: number | null) => void;
-  setCheckoutHold: (reason: string | null) => void;
+  /** `reason` null lifts this module's hold and leaves every other one. */
+  setCheckoutHold: (moduleId: string, reason: string | null) => void;
   cartDiscount: CartDiscount | null;
   customer: PosCustomer | null;
   setBanner: (msg: string | null) => void;
@@ -281,9 +283,16 @@ export const useCartStore = create<CartStore>((set, get) => ({
   preorderId: null,
   exchange: null,
   remoteOrderId: null,
-  checkoutHold: null,
+  checkoutHolds: {},
   setRemoteOrderId: (id) => set({ remoteOrderId: id }),
-  setCheckoutHold: (reason) => set({ checkoutHold: reason }),
+  setCheckoutHold: (moduleId, reason) =>
+    set((state) => {
+      if ((state.checkoutHolds[moduleId] ?? null) === reason) return state;
+      const next = { ...state.checkoutHolds };
+      if (reason) next[moduleId] = reason;
+      else delete next[moduleId];
+      return { checkoutHolds: next };
+    }),
   cartDiscount: null,
   customer: null,
 
@@ -425,7 +434,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       customer: customer ?? null,
       preorderId: preorderId ?? null,
       remoteOrderId: null,
-      checkoutHold: null,
+      checkoutHolds: {},
       banner: null,
     });
   },
@@ -505,7 +514,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       preorderId: null,
       exchange: null,
       remoteOrderId: null,
-      checkoutHold: null,
+      checkoutHolds: {},
     }),
 
   subtotalCents: () => get().lines.reduce((sum, line) => sum + cartLineCents(line), 0),

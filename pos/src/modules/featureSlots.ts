@@ -48,6 +48,7 @@ import type {
   ModuleId,
   ModuleSettingsSlot,
   ModuleStation,
+  ModuleTillSlot,
 } from './types';
 import { VERTICAL_MODULE_PREFIX, verticalModuleId } from './verticals';
 import { sectionClosedFor, useBlockedSections } from './staffSections';
@@ -58,6 +59,7 @@ interface SlotValues {
   'settings.Card': ModuleSettingsSlot['Card'];
   'analytics.Panels': ModuleAnalyticsSlot['Panels'];
   'hardware.stations': ModuleStation[];
+  'till.Banner': ModuleTillSlot['Banner'];
 }
 
 export type ModuleSlotName = keyof SlotValues;
@@ -68,6 +70,7 @@ const PICKERS: { [K in ModuleSlotName]: (m: AnyModuleDescriptor) => SlotValues[K
   'settings.Card': (m) => m.settings?.Card,
   'analytics.Panels': (m) => m.analytics?.Panels,
   'hardware.stations': (m) => (m.hardware?.stations?.length ? m.hardware.stations : undefined),
+  'till.Banner': (m) => m.till?.Banner,
 };
 
 export interface ModuleSlotContext {
