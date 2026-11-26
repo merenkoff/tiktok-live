@@ -79,7 +79,10 @@ export function registerRemoteKitchenRoutes(fastify: FastifyInstance): void {
           kitchen: await rk.getKitchenStatus(link.kitchen_store_id),
           items: (await rk.listLinkItems(link.id)).map((item) => ({
             cafe_variant_id: item.cafe_variant_id,
-            prep_minutes: item.prep_minutes,
+            // The time the kitchen's suggestion uses (§7.1): measured once there
+            // is a measurement, so the tile's «кухня ≈N хв» says what the
+            // kitchen will answer.
+            prep_minutes: item.measured_minutes ?? item.prep_minutes,
             available: item.available,
           })),
         }

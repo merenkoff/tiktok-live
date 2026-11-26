@@ -95,10 +95,13 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
     try {
       const read = await api.listKitchenSide(since);
       if (!mountedRef.current) return undefined;
-      // A read that began before a tap says what was true before it: drop what
-      // it says, keep its cursor — the tap is itself news, so the next long-poll
-      // comes straight back with the state after it.
-      if (!guard.fresh(stamp)) return read.cursor;
+      // A read that began before a tap (or while one was on its way) says what
+      // was true before it: drop what it says — and its cursor too, which
+      // already counts whatever woke it (a new request, say). Handing back the
+      // cursor this read was SENT with makes the next one answer at once with
+      // the state as it is now; keeping the new one would hold it on the
+      // server for the full wait while that request sits unseen and unrung.
+      if (!guard.fresh(stamp)) return since;
       const pending = pendingRequests(read.orders);
       // The first read is what was already there when the screen opened: no chime.
       if (seenRef.current && newIds(seenRef.current, pending).length > 0) onNewRef.current?.();
@@ -138,7 +141,11 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
         if (stopped) break;
         // No cursor (an older server, a failed read) is the plain poll. The
         // same cursor straight back is a server, or a proxy, that would not
-        // hold the read: poll too, rather than ask in a tight loop.
+        // hold the read: poll too, rather than ask in a tight loop. A read
+        // dropped for a tap hands back the cursor it was sent with: after a
+        // held read that is an immediate re-read the server answers at once,
+        // after a quick one (a write still on its way) the plain pause — so a
+        // slow write cannot make the strip spin.
         const held = cursor !== undefined && (cursor !== sent || Date.now() - started >= 1000);
         if (!held) await pause(REMOTE_POLL_MS);
       }

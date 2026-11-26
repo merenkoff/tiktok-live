@@ -97,7 +97,7 @@ describe('RemoteKitchenPage', () => {
     api.listItems.mockResolvedValue([]);
     api.listDishes.mockResolvedValue([
       { variant_id: 11, name: 'Маргарита', label: '32 см', prep_minutes: 15 },
-      { variant_id: 12, name: 'Карбонара', label: '', prep_minutes: 12 },
+      { variant_id: 12, name: 'Карбонара', label: '', prep_minutes: 12, measured_minutes: 17, measured_orders: 22 },
     ]);
     api.importDishes.mockResolvedValue({
       created: 1,
@@ -112,12 +112,17 @@ describe('RemoteKitchenPage', () => {
           kitchen_name: 'Маргарита',
           kitchen_label: '32 см',
           prep_minutes: 15,
+          measured_minutes: 21,
+          measured_orders: 6,
         },
       ],
     });
     render(<RemoteKitchenPage />);
 
     const list = await screen.findByTestId('rk-import');
+    // The time the kitchen will actually answer with, once its orders measured it.
+    expect(list).toHaveTextContent('Карбонара · ≈17 хв за 22 замовлення');
+    expect(list).toHaveTextContent('Маргарита (32 см) · ≈15 хв');
     await user.click(within(list).getByRole('checkbox', { name: /Маргарита \(32 см\)/ }));
     await user.click(screen.getByRole('button', { name: /Додати в меню кафе/ }));
     expect(api.importDishes).not.toHaveBeenCalled();
@@ -129,6 +134,7 @@ describe('RemoteKitchenPage', () => {
 
     // Marked now, and gone from what is left to import.
     await waitFor(() => expect(screen.getByTestId('rk-marked')).toHaveTextContent('Маргарита (32 см)'));
+    expect(screen.getByTestId('rk-marked')).toHaveTextContent('≈21 хв за 6 замовлень');
     expect(within(screen.getByTestId('rk-import')).queryByText(/Маргарита/)).toBeNull();
   });
 

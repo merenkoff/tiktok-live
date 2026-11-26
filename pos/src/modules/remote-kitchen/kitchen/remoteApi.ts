@@ -50,18 +50,16 @@ export async function isKitchen(): Promise<boolean> {
   return (await readSides()).kitchen;
 }
 
-/**
- * Orders where this store is the kitchen, with the server's clock — the
- * countdown to «кафе вже дзвонить» is the server's deadline, not the device's.
- * A store with no link gets an empty list, not an error.
- */
 /** How long the server may hold a read (§8): under the till's 15 s request timeout. */
 export const LONG_POLL_WAIT_S = 12;
 
 /**
- * The kitchen's list. With `since` (the `cursor` of the last read) the server
- * holds the answer until something changes, up to `LONG_POLL_WAIT_S`. A server
- * older than the long-poll answers at once and sends no `cursor`.
+ * Orders where this store is the kitchen, with the server's clock — the
+ * countdown to «кафе вже дзвонить» is the server's deadline, not the device's.
+ * A store with no link gets an empty list, not an error. With `since` (the
+ * `cursor` of the last read) the server holds the answer until something
+ * changes, up to `LONG_POLL_WAIT_S`. A server older than the long-poll answers
+ * at once and sends no `cursor`.
  */
 export async function listKitchenSide(
   since?: string

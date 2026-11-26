@@ -22,6 +22,7 @@ import {
   type KitchenStatus,
   type LinkItem,
 } from './settingsApi';
+import { dishTime } from './dishTime';
 
 const DEFAULT_AUTO_CONFIRM = 40;
 
@@ -245,7 +246,7 @@ export function CafeKitchenSection({ link, kitchen }: { link: CafeLink; kitchen:
                 <span className="text-sq-muted">
                   {' '}
                   ← {dishText(item.kitchen_name, item.kitchen_label)}
-                  {item.prep_minutes != null ? ` · ≈${item.prep_minutes} хв` : ''}
+                  {dishTime(item) ? ` · ${dishTime(item)}` : ''}
                 </span>
               </span>
               <button
@@ -278,7 +279,7 @@ export function CafeKitchenSection({ link, kitchen }: { link: CafeLink; kitchen:
                   <input type="checkbox" checked={picked.has(dish.variant_id)} onChange={() => toggle(dish.variant_id)} />
                   <span>
                     {name}
-                    {dish.prep_minutes != null && <span className="text-sq-muted"> · ≈{dish.prep_minutes} хв</span>}
+                    {dishTime(dish) && <span className="text-sq-muted"> · {dishTime(dish)}</span>}
                   </span>
                 </label>
                 <input

@@ -55,6 +55,7 @@
 | Охоронці від перекриття cron-ів | `fiscal.service.ts:998` (`retryRunning`), `fiscal/offline/pool.ts:338` (`refillRunning`) | Лише в межах процесу; подвійну обробку насправді запобігає БД (`ledger.ts` — `FOR UPDATE SKIP LOCKED` і оренда `next_attempt_at`), тож це зайва робота, не помилка |
 | Усі cron-и | `src/index.ts:104-228` | Виконує кожен інстанс. Ідемпотентні в БД: скидання броні, парковані кошики, GTIN-ретеншн. `closeDueShifts` захищений `SKIP LOCKED` (`shifts.service.ts`), `retryPendingFiscalDocs` — теж на рівні рядка. **Без захисту:** `reconcileQrPayments` (`15 3 * * *` — двічі зверталась би до Opendatabot; сам `confirmQrPayment` ідемпотентний) і `refillAllStores` (`*/10` — обидва просили б коди в провайдера) |
 | Міграції на старті | `Dockerfile:45` (`node dist/pos/migrate.js && node dist/index.js`), `src/pos/migrate.ts`, `src/db.ts:141` | Без блокування: паралельні `ALTER TABLE` дедлочать (це вже бачили в тестах — `vitest.global-setup.ts`). Зараз рятує те, що том забороняє перекриття деплоїв |
+| Long-poll смуги віддаленої кухні | `src/pos/remote-kitchen.service.ts` (`changeWaiters`, `storeChecks`, `commitWakes`) | Пробудження після коміту доходить лише до екранів, що чекають на тому самому інстансі. Екран на іншому побачить запит кафе за перевіркою магазину раз на 2 с (`LONG_POLL_RECHECK_MS`) замість долі секунди; нічого не губиться (TechDocs/POS_REMOTE_KITCHEN.md §8) |
 
 ### (a) Безпечне за задумом
 
