@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { formatUah } from '@pos/platform';
 import { SectionHead } from '@pos/platform/ui';
 import { serverMessage } from '../lib/hostPlatform';
+import { ordersText } from '../lib/plural';
 import { readReport, type ReportRow } from './settingsApi';
 
 /** Days of the store's calendar, today included: «Сьогодні» is today, not the last 24 hours. */
@@ -120,7 +121,7 @@ export function ReportSection({ side }: { side: 'cafe' | 'kitchen' }): JSX.Eleme
             <li key={row.store_id ?? row.store_name} className="space-y-1" data-testid={`rk-report-row-${row.store_id}`}>
               <p className="text-[15px] font-semibold">
                 {titleOf(row, rows ?? [])}
-                <span className="font-normal text-sq-muted"> · {row.orders} замовлень</span>
+                <span className="font-normal text-sq-muted"> · {ordersText(row.orders)}</span>
               </p>
               {facts.length > 0 && <p className="text-[13px] text-sq-secondary">{facts.join(' · ')}</p>}
               {row.cost_cents != null && (row.cost_cents > 0 || (row.unpriced_lines ?? 0) > 0) && (

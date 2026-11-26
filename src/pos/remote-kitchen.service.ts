@@ -265,24 +265,187 @@ async function logEvent(
   kind: string,
   payload: Record<string, unknown> = {}
 ): Promise<void> {
-  await client.query(
-    `INSERT INTO pos_remote_order_events (remote_order_id, actor_store_id, actor_staff_id, kind, payload)
-     VALUES ($1, $2, $3, $4, $5::jsonb)`,
+  const sides = await client.query(
+    `WITH e AS (
+       INSERT INTO pos_remote_order_events (remote_order_id, actor_store_id, actor_staff_id, kind, payload)
+       VALUES ($1, $2, $3, $4, $5::jsonb)
+     )
+     SELECT cafe_store_id, kitchen_store_id FROM pos_remote_orders WHERE id = $1`,
     [orderId, actor.storeId, actor.staffId, kind, JSON.stringify(payload)]
   );
+  const row = sides.rows[0];
+  if (row) wakeAfterCommit(client, [Number(row.cafe_store_id), Number(row.kitchen_store_id)]);
+}
+
+// ── long-poll (§8, РК4) ─────────────────────────────────────────────
+//
+// A kitchen's screen waits on the server until its list changes. One check
+// per kitchen store serves every screen of it that waits: it reads
+// `kitchenCursor` once and answers each screen whose cursor it no longer is.
+// It runs when one of OUR transactions with an event commits — right after
+// COMMIT, so it sees the change (a wake before it would read the old cursor
+// and go back to sleep) — and every `LONG_POLL_RECHECK_MS` anyway, which is
+// what catches an event written inside someone else's transaction (the
+// cafe's receipt, a voided receipt, a phone order filed at sync) or on
+// another instance. A rolled-back transaction wakes nobody.
+
+interface ChangeWaiter {
+  since: string;
+  gone: () => boolean;
+  finish: () => void;
+}
+
+const changeWaiters = new Map<number, Set<ChangeWaiter>>();
+const storeChecks = new Map<number, { timer: ReturnType<typeof setTimeout> | null; running: boolean; again: boolean }>();
+/** Store ids to wake once each of our own transactions commits, by its client. */
+const commitWakes = new WeakMap<object, Set<number>>();
+
+/** The longest a kitchen's screen is held: under the till's 15 s request timeout. */
+export const LONG_POLL_MAX_S = 12;
+/** How often a kitchen with waiting screens is checked without a wake. */
+export const LONG_POLL_RECHECK_MS = 2000;
+
+function wakeAfterCommit(client: DbClient, storeIds: number[]): void {
+  const pending = commitWakes.get(client);
+  if (pending) {
+    for (const id of storeIds) pending.add(id);
+    return;
+  }
+  // Autocommit: the row is already there.
+  if ((client as unknown) === pool) nudge(storeIds);
+  // Someone else's transaction: it may still roll back, and a check now would
+  // not see it — the store's own recheck does, once it commits.
+}
+
+function nudge(storeIds: Iterable<number>): void {
+  for (const id of storeIds) {
+    if (changeWaiters.get(id)?.size) void checkStore(id);
+  }
+}
+
+/**
+ * One cursor read for every waiting screen of a store. A check asked for while
+ * one is running runs once more after it, so a commit is never missed.
+ */
+async function checkStore(storeId: number): Promise<void> {
+  const state = storeChecks.get(storeId) ?? { timer: null, running: false, again: false };
+  storeChecks.set(storeId, state);
+  if (state.running) {
+    state.again = true;
+    return;
+  }
+  if (state.timer) clearTimeout(state.timer);
+  state.timer = null;
+  state.running = true;
+  try {
+    do {
+      state.again = false;
+      const waiters = changeWaiters.get(storeId);
+      if (!waiters || waiters.size === 0) break;
+      let cursor: string | null = null;
+      try {
+        cursor = await kitchenCursor(storeId);
+      } catch {
+        // A database blip: the waiting screens keep waiting, to their deadline.
+      }
+      for (const waiter of [...waiters]) {
+        if (waiter.gone() || (cursor != null && cursor !== waiter.since)) waiter.finish();
+      }
+    } while (state.again);
+  } finally {
+    state.running = false;
+    if (changeWaiters.get(storeId)?.size) {
+      state.timer = setTimeout(() => void checkStore(storeId), LONG_POLL_RECHECK_MS);
+    } else {
+      changeWaiters.delete(storeId);
+      storeChecks.delete(storeId);
+    }
+  }
+}
+
+/**
+ * What the kitchen's list is made of right now, as one string: how many
+ * events its orders have and the newest. Any committed change moves it — a
+ * count, not only a maximum, so an older transaction committing late counts.
+ */
+export async function kitchenCursor(kitchenStoreId: number): Promise<string> {
+  const row = await pool.query(
+    `SELECT COUNT(e.id)::bigint AS n, COALESCE(MAX(e.id), 0)::bigint AS top
+       FROM pos_remote_orders o
+       JOIN pos_remote_order_events e ON e.remote_order_id = o.id
+      WHERE o.kitchen_store_id = $1
+        AND (o.status = ANY($2::text[]) OR o.updated_at > NOW() - INTERVAL '3 hours')`,
+    [kitchenStoreId, LIVE_STATUSES as unknown as string[]]
+  );
+  return `${row.rows[0]?.n ?? 0}.${row.rows[0]?.top ?? 0}`;
+}
+
+/**
+ * Hold a kitchen's read until its list changes from `since`, `seconds` pass,
+ * or the screen hangs up. Holds no database connection while it waits.
+ */
+export async function waitForKitchenChange(
+  kitchenStoreId: number,
+  since: string,
+  seconds: number,
+  gone: () => boolean = () => false
+): Promise<void> {
+  const ms = Math.min(Math.max(seconds, 0), LONG_POLL_MAX_S) * 1000;
+  if (ms === 0 || gone()) return;
+  if ((await kitchenCursor(kitchenStoreId)) !== since) return;
+  await new Promise<void>((resolve) => {
+    let done = false;
+    const waiter: ChangeWaiter = {
+      since,
+      gone,
+      finish: () => {
+        if (done) return;
+        done = true;
+        clearTimeout(deadline);
+        changeWaiters.get(kitchenStoreId)?.delete(waiter);
+        resolve();
+      },
+    };
+    const deadline = setTimeout(waiter.finish, ms);
+    const set = changeWaiters.get(kitchenStoreId) ?? new Set<ChangeWaiter>();
+    set.add(waiter);
+    changeWaiters.set(kitchenStoreId, set);
+    const state = storeChecks.get(kitchenStoreId);
+    if (!state) {
+      storeChecks.set(kitchenStoreId, {
+        timer: setTimeout(() => void checkStore(kitchenStoreId), LONG_POLL_RECHECK_MS),
+        running: false,
+        again: false,
+      });
+    } else if (!state.timer && !state.running) {
+      state.timer = setTimeout(() => void checkStore(kitchenStoreId), LONG_POLL_RECHECK_MS);
+    }
+  });
+}
+
+/** The waiting screens' bookkeeping, for tests: nothing may be left behind. */
+export function longPollStateForTests(): { waiters: number; checks: number } {
+  let waiters = 0;
+  for (const set of changeWaiters.values()) waiters += set.size;
+  return { waiters, checks: storeChecks.size };
 }
 
 async function inTransaction<T>(work: (client: pg.PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
+  const wakes = new Set<number>();
+  commitWakes.set(client, wakes);
   try {
     await client.query('BEGIN');
     const result = await work(client);
     await client.query('COMMIT');
+    commitWakes.delete(client);
+    nudge(wakes);
     return result;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
+    commitWakes.delete(client);
     client.release();
   }
 }
@@ -342,7 +505,15 @@ export interface KitchenCafeView {
   status: KitchenLink['status'];
   transit_minutes: number;
   /** The kitchen's own dishes this cafe sells — never the cafe's prices or names. */
-  dishes: Array<{ variant_id: number; name: string; label: string; prep_minutes: number | null }>;
+  dishes: Array<{
+    variant_id: number;
+    name: string;
+    label: string;
+    prep_minutes: number | null;
+    /** The median over 14 days (§7.1), once five orders carried the dish; the suggestion uses it. */
+    measured_minutes: number | null;
+    measured_orders: number;
+  }>;
 }
 
 /** The kitchen's «Точки»: who may ask it, and which of its dishes each one sells. */
@@ -364,6 +535,11 @@ export async function listCafesForKitchen(kitchenStoreId: number): Promise<Kitch
       ORDER BY kp.name, kv.label`,
     [links.rows.map((r) => Number(r.id))]
   );
+  const measured = await measuredPrep(
+    pool,
+    kitchenStoreId,
+    dishes.rows.map((d) => Number(d.variant_id))
+  );
   return links.rows.map((link) => ({
     link_id: Number(link.id),
     cafe_name: String(link.cafe_name),
@@ -376,6 +552,8 @@ export async function listCafesForKitchen(kitchenStoreId: number): Promise<Kitch
         name: String(d.name),
         label: String(d.label ?? ''),
         prep_minutes: numOrNull(d.prep_minutes),
+        measured_minutes: measured.get(Number(d.variant_id))?.minutes ?? null,
+        measured_orders: measured.get(Number(d.variant_id))?.orders ?? 0,
       })),
   }));
 }
@@ -517,7 +695,11 @@ export interface LinkItemView {
   cafe_label: string;
   kitchen_name: string;
   kitchen_label: string;
+  /** The time on the kitchen's card. */
   prep_minutes: number | null;
+  /** The kitchen's measured time (§7.1), once five orders carried the dish — what its suggestion uses. */
+  measured_minutes: number | null;
+  measured_orders: number;
   /**
    * Whether the kitchen would cook it today: its dish is live and not on the
    * kitchen's stop list for the KITCHEN's day — the same test `resolveLines`
@@ -543,8 +725,16 @@ export async function listLinkItems(linkId: number): Promise<LinkItemView[]> {
       ORDER BY cp.name, cv.label`,
     [linkId]
   );
-  const kitchenToday =
-    rows.rows.length > 0 ? (await storeClock(pool, Number(rows.rows[0].kitchen_store_id))).today : null;
+  const kitchenStoreId = rows.rows.length > 0 ? Number(rows.rows[0].kitchen_store_id) : null;
+  const kitchenToday = kitchenStoreId != null ? (await storeClock(pool, kitchenStoreId)).today : null;
+  const measured =
+    kitchenStoreId != null
+      ? await measuredPrep(
+          pool,
+          kitchenStoreId,
+          rows.rows.map((row) => Number(row.kitchen_variant_id))
+        )
+      : new Map<number, MeasuredPrep>();
   return rows.rows.map((row) => ({
     cafe_variant_id: Number(row.cafe_variant_id),
     kitchen_variant_id: Number(row.kitchen_variant_id),
@@ -553,6 +743,8 @@ export async function listLinkItems(linkId: number): Promise<LinkItemView[]> {
     kitchen_name: String(row.kitchen_name),
     kitchen_label: String(row.kitchen_label ?? ''),
     prep_minutes: numOrNull(row.prep_minutes),
+    measured_minutes: measured.get(Number(row.kitchen_variant_id))?.minutes ?? null,
+    measured_orders: measured.get(Number(row.kitchen_variant_id))?.orders ?? 0,
     available:
       row.kp_active === true &&
       row.kv_active === true &&
@@ -591,6 +783,9 @@ export interface KitchenDishView {
   name: string;
   label: string;
   prep_minutes: number | null;
+  /** The kitchen's measured time (§7.1), once five orders carried the dish. */
+  measured_minutes: number | null;
+  measured_orders: number;
 }
 
 /**
@@ -614,11 +809,18 @@ export async function listKitchenDishes(link: KitchenLink): Promise<KitchenDishV
       LIMIT 2000`,
     [link.kitchen_store_id]
   );
+  const measured = await measuredPrep(
+    pool,
+    link.kitchen_store_id,
+    rows.rows.map((row) => Number(row.id))
+  );
   return rows.rows.map((row) => ({
     variant_id: Number(row.id),
     name: String(row.name),
     label: String(row.label ?? ''),
     prep_minutes: numOrNull(row.prep_minutes),
+    measured_minutes: measured.get(Number(row.id))?.minutes ?? null,
+    measured_orders: measured.get(Number(row.id))?.orders ?? 0,
   }));
 }
 
@@ -1109,6 +1311,11 @@ async function resolveLines(client: DbClient, link: KitchenLink, lines: ParsedLi
   const byCafe = new Map<number, Record<string, unknown>>();
   for (const row of rows.rows) byCafe.set(Number(row.cafe_variant_id), row);
   const kitchenToday = (await storeClock(client, link.kitchen_store_id)).today;
+  const measured = await measuredPrep(
+    client,
+    link.kitchen_store_id,
+    rows.rows.map((row) => Number(row.kitchen_variant_id))
+  );
 
   return lines.map((line) => {
     const row = byCafe.get(line.cafeVariantId);
@@ -1127,9 +1334,77 @@ async function resolveLines(client: DbClient, link: KitchenLink, lines: ParsedLi
       kitchenVariantId: Number(row.kitchen_variant_id),
       productName: name,
       variantLabel: String(row.cafe_label ?? ''),
-      prepMinutes: numOrNull(row.prep_minutes),
+      // The measured time once there is one (§7.1, РК4); the set time until then.
+      prepMinutes: measured.get(Number(row.kitchen_variant_id))?.minutes ?? numOrNull(row.prep_minutes),
     };
   });
+}
+
+/** A dish's time is measured over this many days … */
+export const MEASURE_DAYS = 14;
+/** … once at least this many paid orders carried it; until then the set time stands. */
+export const MEASURE_MIN_ORDERS = 5;
+/** An order «ready» later than this after payment was forgotten, not cooked: left out. */
+const MEASURE_MAX_MINUTES = 180;
+
+export interface MeasuredPrep {
+  minutes: number;
+  orders: number;
+}
+
+/**
+ * What the kitchen actually takes (§7.1, РК4): per kitchen dish, the median of
+ * «оплачено → Готово» over the cafe orders of the last 14 days that carried
+ * it, rounded up to a minute. Fewer than five orders measure nothing.
+ *
+ * «Готово» is the ORDER's: its slowest dish plus the queue it met. So a dish
+ * is credited only with the orders where it was the slowest by the time on
+ * the cards (ties count; a card with no time counts as 0) — a tiramisu that
+ * rides with pizzas would otherwise be measured as a pizza and quoted 40
+ * minutes on its own. An order the cafe sold offline on the kitchen's word by
+ * phone (§8) is left out too: it is «paid» when the cafe's till syncs, long
+ * after the kitchen started on the call, so its «Готово» measures nothing.
+ */
+export async function measuredPrep(
+  client: Pick<DbClient, 'query'>,
+  kitchenStoreId: number,
+  kitchenVariantIds: number[]
+): Promise<Map<number, MeasuredPrep>> {
+  const out = new Map<number, MeasuredPrep>();
+  if (kitchenVariantIds.length === 0) return out;
+  const rows = await client.query(
+    `SELECT t.variant_id,
+            CEIL(percentile_cont(0.5) WITHIN GROUP (ORDER BY t.minutes))::int AS minutes,
+            COUNT(*)::int AS orders
+       FROM (SELECT DISTINCT o.id, i.kitchen_variant_id AS variant_id,
+                    EXTRACT(EPOCH FROM (o.ready_at - o.paid_at)) / 60.0 AS minutes
+               FROM pos_remote_orders o
+               JOIN pos_remote_order_items i ON i.remote_order_id = o.id
+               JOIN pos_variants v ON v.id = i.kitchen_variant_id
+               JOIN pos_products p ON p.id = v.product_id
+              WHERE o.kitchen_store_id = $1
+                AND i.kitchen_variant_id = ANY($2::bigint[])
+                AND o.paid_at > NOW() - make_interval(days => $3)
+                AND o.ready_at > o.paid_at + INTERVAL '1 minute'
+                AND o.ready_at < o.paid_at + make_interval(mins => $4)
+                AND COALESCE(p.prep_minutes, 0) >= (
+                      SELECT MAX(COALESCE(p2.prep_minutes, 0))
+                        FROM pos_remote_order_items i2
+                        JOIN pos_variants v2 ON v2.id = i2.kitchen_variant_id
+                        JOIN pos_products p2 ON p2.id = v2.product_id
+                       WHERE i2.remote_order_id = o.id)
+                AND NOT EXISTS (
+                      SELECT 1 FROM pos_remote_order_events pe
+                       WHERE pe.remote_order_id = o.id AND pe.kind = 'phone_quoted'
+                         AND pe.payload->>'offline' = 'true')) t
+      GROUP BY t.variant_id
+     HAVING COUNT(*) >= $5`,
+    [kitchenStoreId, kitchenVariantIds, MEASURE_DAYS, MEASURE_MAX_MINUTES, MEASURE_MIN_ORDERS]
+  );
+  for (const row of rows.rows) {
+    out.set(Number(row.variant_id), { minutes: Math.max(1, Number(row.minutes)), orders: Number(row.orders) });
+  }
+  return out;
 }
 
 interface Estimate {

@@ -76,6 +76,89 @@ describe('RequestsStrip', () => {
     expect(api.listKitchenSide).not.toHaveBeenCalled();
   });
 
+  it('long-polls with the server’s cursor: the next read waits on the server, not on a timer', async () => {
+    const api = fakeApi(true, []);
+    let release: (v: { orders: RemoteRequest[]; now: string; cursor: string }) => void = () => undefined;
+    api.listKitchenSide
+      .mockImplementationOnce(async () => ({ orders: [], now: new Date().toISOString(), cursor: '3.10' }) as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve as never;
+          }) as never
+      )
+      .mockImplementationOnce(() => new Promise(() => undefined) as never);
+    render(stripWith(api));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS * 3);
+    });
+    // The second read went out at once with the cursor, and nothing else since: it is held.
+    expect(api.listKitchenSide).toHaveBeenCalledTimes(2);
+    expect(api.listKitchenSide).toHaveBeenLastCalledWith('3.10');
+
+    // A cafe asks: the held read answers and the strip shows it, then waits again.
+    await act(async () => {
+      release({ orders: [request()], now: new Date().toISOString(), cursor: '4.11' });
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(screen.getByTestId('remote-requests')).toHaveTextContent('Pulcinella Park');
+    expect(api.listKitchenSide).toHaveBeenLastCalledWith('4.11');
+  });
+
+  it('a held read that answers while the cook taps is dropped WITH its cursor: the next read comes straight back', async () => {
+    const api = fakeApi(true, []);
+    const other = request({ id: 8, cafe_name: 'Друга точка' });
+    let releaseHeld: (v: unknown) => void = () => undefined;
+    let answered: (v: unknown) => void = () => undefined;
+    api.listKitchenSide
+      // What was there when the screen opened.
+      .mockImplementationOnce(async () => ({ orders: [request()], now: new Date().toISOString(), cursor: '3.10' }) as never)
+      // Held on the server…
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseHeld = resolve;
+          }) as never
+      )
+      // …the read that follows it, and the one after the tap.
+      .mockImplementationOnce(() => new Promise(() => undefined) as never)
+      .mockImplementationOnce(
+        async () => ({ orders: [other], now: new Date().toISOString(), cursor: '6.13' }) as never
+      )
+      .mockImplementation(() => new Promise(() => undefined) as never);
+    api.answerWithTime.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answered = resolve;
+        }) as never
+    );
+    render(stripWith(api));
+    expect(await screen.findByTestId('remote-request-7')).toBeInTheDocument();
+    expect(api.listKitchenSide).toHaveBeenLastCalledWith('3.10');
+
+    // The cook answers #7; while the answer is on its way a second cafe asks,
+    // and the held read comes back with it — and with a cursor that counts it.
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByTestId('remote-answer-7'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+      releaseHeld({ orders: [request(), other], now: new Date().toISOString(), cursor: '5.12' });
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    // Dropped (it predates the tap), and the next read goes with the cursor
+    // it was SENT with, so the server answers it at once — not with '5.12',
+    // which it would hold for the whole wait while #8 sits unseen.
+    expect(screen.queryByText('Друга точка')).not.toBeInTheDocument();
+    expect(api.listKitchenSide).toHaveBeenLastCalledWith('3.10');
+
+    // The answer lands; the read after it shows #8.
+    await act(async () => {
+      answered({});
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(await screen.findByText('Друга точка')).toBeInTheDocument();
+  });
+
   it('in a kitchen with nothing waiting, polls and draws nothing', async () => {
     const api = fakeApi(true, []);
     const { container } = render(stripWith(api));

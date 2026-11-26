@@ -50,17 +50,30 @@ export async function isKitchen(): Promise<boolean> {
   return (await readSides()).kitchen;
 }
 
+/** How long the server may hold a read (§8): under the till's 15 s request timeout. */
+export const LONG_POLL_WAIT_S = 12;
+
 /**
  * Orders where this store is the kitchen, with the server's clock — the
  * countdown to «кафе вже дзвонить» is the server's deadline, not the device's.
- * A store with no link gets an empty list, not an error.
+ * A store with no link gets an empty list, not an error. With `since` (the
+ * `cursor` of the last read) the server holds the answer until something
+ * changes, up to `LONG_POLL_WAIT_S`. A server older than the long-poll answers
+ * at once and sends no `cursor`.
  */
-export async function listKitchenSide(): Promise<{ orders: RemoteRequest[]; now?: string }> {
-  const res = await posRequest<{ orders?: RemoteRequest[]; now?: string }>(
+export async function listKitchenSide(
+  since?: string
+): Promise<{ orders: RemoteRequest[]; now?: string; cursor?: string }> {
+  const query = since ? `&since=${encodeURIComponent(since)}&wait=${LONG_POLL_WAIT_S}` : '';
+  const res = await posRequest<{ orders?: RemoteRequest[]; now?: string; cursor?: unknown }>(
     'get',
-    '/remote-kitchen/orders?side=kitchen'
+    `/remote-kitchen/orders?side=kitchen${query}`
   );
-  return { orders: Array.isArray(res?.orders) ? res.orders : [], now: res?.now };
+  return {
+    orders: Array.isArray(res?.orders) ? res.orders : [],
+    now: res?.now,
+    cursor: typeof res?.cursor === 'string' ? res.cursor : undefined,
+  };
 }
 
 /** «Встигнемо за N хв» — the cooking time; the server adds the road and rounds up. */

@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { SectionHead } from '@pos/platform/ui';
 import { serverMessage } from '../lib/hostPlatform';
 import { listCafes, saveStatus, type KitchenCafe, type KitchenStatus } from './settingsApi';
+import { dishTime } from './dishTime';
 
 const PAUSES = [15, 30, 60] as const;
 
@@ -173,7 +174,10 @@ export function KitchenPointsSection(): JSX.Element {
               ) : (
                 <p className="text-[13px] text-sq-secondary">
                   {cafe.dishes
-                    .map((d) => `${d.label ? `${d.name} (${d.label})` : d.name}${d.prep_minutes != null ? ` ≈${d.prep_minutes} хв` : ''}`)
+                    .map((d) => {
+                      const time = dishTime(d);
+                      return `${d.label ? `${d.name} (${d.label})` : d.name}${time ? ` ${time}` : ''}`;
+                    })
                     .join(', ')}
                 </p>
               )}

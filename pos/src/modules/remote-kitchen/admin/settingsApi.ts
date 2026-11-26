@@ -43,6 +43,9 @@ export interface LinkItem {
   kitchen_name: string;
   kitchen_label: string;
   prep_minutes: number | null;
+  /** The kitchen's measured time (§7.1), once five orders carried the dish; absent from an older server. */
+  measured_minutes?: number | null;
+  measured_orders?: number;
 }
 
 /** The kitchen's dish as the cafe may see it: a name and a time, never a price. */
@@ -51,6 +54,9 @@ export interface KitchenDish {
   name: string;
   label: string;
   prep_minutes: number | null;
+  /** The 14-day median «оплачено → Готово» once five orders carried the dish; absent from an older server. */
+  measured_minutes?: number | null;
+  measured_orders?: number;
 }
 
 export interface KitchenCafe {
