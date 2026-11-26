@@ -140,6 +140,13 @@ interface CartStore {
    */
   remoteOrderId: number | null;
   /**
+   * The time (minutes, road included) the guest agreed to for `remoteOrderId`,
+   * as the till showed it (РК4): the sale sends it, and the server refuses the
+   * receipt if the kitchen changed the time in the seconds before the till
+   * heard. Null from a module that does not say it — then nothing is checked.
+   */
+  remoteQuotedMinutes: number | null;
+  /**
    * Agreed with the remote kitchen by phone, offline (§8, platform 25): the
    * sale carries it as `remote_order_id` would be carried online — queued with
    * the receipt — and the server files the kitchen's order when it arrives.
@@ -154,7 +161,8 @@ interface CartStore {
    * the banner when «Оплатити» is pressed; empty means nothing holds it.
    */
   checkoutHolds: Readonly<Record<string, string>>;
-  setRemoteOrderId: (id: number | null) => void;
+  /** The order the sale pays and the time the guest agreed to (optional: an older module sends none). */
+  setRemoteOrderId: (id: number | null, quotedMinutes?: number | null) => void;
   /** `reason` null lifts this module's hold and leaves every other one. */
   setCheckoutHold: (moduleId: string, reason: string | null) => void;
   /**
@@ -326,8 +334,14 @@ export const useCartStore = create<CartStore>((set, get) => ({
   preorderId: null,
   exchange: null,
   remoteOrderId: null,
+  remoteQuotedMinutes: null,
   checkoutHolds: {},
-  setRemoteOrderId: (id) => set({ remoteOrderId: id }),
+  setRemoteOrderId: (id, quotedMinutes) =>
+    set((state) => {
+      const minutes = id != null && quotedMinutes != null ? quotedMinutes : null;
+      if (state.remoteOrderId === id && state.remoteQuotedMinutes === minutes) return state;
+      return { remoteOrderId: id, remoteQuotedMinutes: minutes };
+    }),
   remotePhone: null,
   setRemotePhone: (agreement) =>
     set((state) => {
@@ -498,6 +512,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       customer: customer ?? null,
       preorderId: preorderId ?? null,
       remoteOrderId: null,
+      remoteQuotedMinutes: null,
       remotePhone: null,
       checkoutHolds: {},
       banner: null,
@@ -579,6 +594,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       preorderId: null,
       exchange: null,
       remoteOrderId: null,
+      remoteQuotedMinutes: null,
       remotePhone: null,
       checkoutHolds: {},
     }),

@@ -83,3 +83,40 @@ describe('the strip’s clock', () => {
     expect(clockOffset('не час', 1)).toBe(0);
   });
 });
+
+describe('time chips and grey cards (РК4)', () => {
+  it('adds the kitchen’s own suggestion to the chips when it is not one of them', async () => {
+    const { chipsFor } = await import('./lib');
+    expect(chipsFor(20)).toEqual([15, 20, 25, 30, 40, 50]);
+    expect(chipsFor(35)).toEqual([15, 20, 25, 30, 35, 40, 50]);
+  });
+
+  it('keeps only the server’s own times the guest may still agree to', async () => {
+    const { autoConfirmed } = await import('./lib');
+    const base = {
+      revision: 1,
+      cafe_name: 'Парк',
+      guest_label: null,
+      note: null,
+      prep_minutes: 15,
+      load_minutes: 0,
+      transit_minutes: 10,
+      suggested_minutes: 25,
+      answer_deadline_at: null,
+      requested_at: '2026-11-25T18:00:00Z',
+      items: [],
+    };
+    const now = Date.parse('2026-11-25T18:01:00Z');
+    const list = autoConfirmed(
+      [
+        { ...base, id: 1, status: 'quoted', quote_source: 'auto', quote_expires_at: '2026-11-25T18:03:00Z' },
+        { ...base, id: 2, status: 'quoted', quote_source: 'auto', quote_expires_at: '2026-11-25T18:00:30Z' },
+        { ...base, id: 3, status: 'quoted', quote_source: 'kitchen', quote_expires_at: '2026-11-25T18:03:00Z' },
+        { ...base, id: 4, status: 'cooking', quote_source: 'auto', quote_expires_at: '2026-11-25T18:03:00Z' },
+      ],
+      0,
+      now
+    );
+    expect(list.map((o) => o.id)).toEqual([1]);
+  });
+});

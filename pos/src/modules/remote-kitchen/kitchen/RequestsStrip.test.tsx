@@ -7,7 +7,7 @@
 // most are what it does NOT do: poll a store that is no kitchen, and take any
 // height while nothing waits.
 
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RequestsStrip } from './RequestsStrip';
@@ -39,6 +39,7 @@ function fakeApi(kitchen: boolean, orders: RemoteRequest[] = []) {
     listKitchenSide: vi.fn(async () => ({ orders, now: new Date().toISOString() })),
     answerWithTime: vi.fn(async () => ({})),
     decline: vi.fn(async () => ({})),
+    declineDishes: vi.fn(async () => ({})),
   };
 }
 
@@ -95,6 +96,111 @@ describe('RequestsStrip', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await user.click(screen.getByTestId('remote-answer-7'));
     expect(api.answerWithTime).toHaveBeenCalledWith(expect.objectContaining({ id: 7, revision: 1 }), 20);
+  });
+
+  it('a chip picks the cooking time in one tap', async () => {
+    const api = fakeApi(true, [request()]);
+    render(stripWith(api));
+    await screen.findByTestId('remote-request-7');
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const chips = screen.getByRole('group', { name: 'Час приготування' });
+    expect(within(chips).getAllByRole('button').map((b) => b.textContent)).toEqual(['15', '20', '25', '30', '40', '50']);
+    await user.click(within(chips).getByRole('button', { name: '40' }));
+    expect(screen.getByTestId('remote-prep')).toHaveTextContent('40 хв');
+    await user.click(screen.getByTestId('remote-answer-7'));
+    expect(api.answerWithTime).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }), 40);
+  });
+
+  it('marks a dish «Немає» and tells the cafe which, instead of a time', async () => {
+    const api = fakeApi(true, [
+      request({
+        items: [
+          { id: 1, product_name: 'Маргарита', variant_label: '', quantity: 1, note: '' },
+          { id: 2, product_name: 'Карбонара', variant_label: '', quantity: 1, note: '' },
+        ],
+      }),
+    ]);
+    render(stripWith(api));
+    await screen.findByTestId('remote-request-7');
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole('button', { name: 'Немає: Карбонара' }));
+    expect(screen.queryByTestId('remote-answer-7')).toBeNull();
+    await user.click(screen.getByTestId('remote-missing-7'));
+    expect(api.declineDishes).toHaveBeenCalledWith(expect.objectContaining({ id: 7, revision: 1 }), [2]);
+  });
+
+  it('shows a time the server confirmed by itself as a grey card, silently, and lets the cook change it', async () => {
+    const onNew = vi.fn();
+    const auto = request({
+      status: 'quoted',
+      quote_source: 'auto',
+      quoted_minutes: 30,
+      quote_expires_at: new Date(Date.now() + 120_000).toISOString(),
+    });
+    const api = fakeApi(true, [auto]);
+    const useFakeApi = () => useRemoteRequests(onNew, api as never);
+    render(<RequestsStrip hook={useFakeApi} />);
+    const card = await screen.findByTestId('remote-auto-7');
+    expect(card).toHaveTextContent('Автопідтверджено: гостю 30 хв');
+    expect(screen.queryByText(/Запити з точок/)).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS + 10);
+    });
+    expect(onNew).not.toHaveBeenCalled();
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(within(card).getByRole('button', { name: 'Змінити час' }));
+    await user.click(within(card).getByRole('button', { name: '30' }));
+    await user.click(screen.getByTestId('remote-requote-7'));
+    expect(api.answerWithTime).toHaveBeenCalledWith(expect.objectContaining({ id: 7, revision: 1 }), 30);
+  });
+
+  it('says the guest’s minutes beside the kitchen’s on the grey card, so «30» there is not taken for the header’s', async () => {
+    const auto = request({
+      status: 'quoted',
+      quote_source: 'auto',
+      quoted_minutes: 30,
+      transit_minutes: 10,
+      quote_expires_at: new Date(Date.now() + 120_000).toISOString(),
+    });
+    render(stripWith(fakeApi(true, [auto])));
+    const card = await screen.findByTestId('remote-auto-7');
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(within(card).getByRole('button', { name: 'Змінити час' }));
+    await user.click(within(card).getByRole('button', { name: '30' }));
+    expect(screen.getByTestId('remote-requote-guest-7')).toHaveTextContent('кухні 30 хв · гостю: 40 хв з дорогою');
+    expect(screen.getByTestId('remote-requote-7')).toHaveTextContent('гостю 40');
+  });
+
+  it('takes a grey card off the second its time to agree runs out, before the next read', async () => {
+    const auto = request({
+      status: 'quoted',
+      quote_source: 'auto',
+      quoted_minutes: 30,
+      quote_expires_at: new Date(Date.now() + 3_000).toISOString(),
+    });
+    const api = fakeApi(true, [auto]);
+    render(stripWith(api));
+    await screen.findByTestId('remote-auto-7');
+    // Every read from now on hangs: only the strip's own clock can take the card off.
+    api.listKitchenSide.mockImplementation(() => new Promise(() => undefined));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    expect(screen.queryByTestId('remote-auto-7')).toBeNull();
+  });
+
+  it('drops a grey card once the guest’s time to agree ran out', async () => {
+    const api = fakeApi(true, [
+      request({ status: 'quoted', quote_source: 'auto', quote_expires_at: new Date(Date.now() - 1000).toISOString() }),
+      request({ id: 8, status: 'quoted', quote_source: 'kitchen', quote_expires_at: new Date(Date.now() + 60_000).toISOString() }),
+    ]);
+    const { container } = render(stripWith(api));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(api.listKitchenSide).toHaveBeenCalled();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('drops a read that started before an answer, so the answered request does not come back', async () => {

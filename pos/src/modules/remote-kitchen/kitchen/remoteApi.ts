@@ -32,6 +32,12 @@ export interface RemoteRequest {
   suggested_minutes: number | null;
   answer_deadline_at: string | null;
   requested_at: string;
+  /** For a time already given: who gave it — the server by itself (`auto`), the kitchen, the cafe's phone. */
+  quote_source?: 'kitchen' | 'auto' | 'phone' | null;
+  /** The whole promise, road included. */
+  quoted_minutes?: number | null;
+  /** Until when the cafe's guest may still agree to it. */
+  quote_expires_at?: string | null;
   items: RemoteRequestItem[];
 }
 
@@ -69,6 +75,44 @@ export function answerWithTime(order: Pick<RemoteRequest, 'id' | 'revision'>, mi
 export function decline(order: Pick<RemoteRequest, 'id' | 'revision'>, reason: string): Promise<unknown> {
   return posRequest<unknown>('post', `/remote-kitchen/orders/${order.id}/decline`, {
     reason,
+    revision: order.revision,
+  });
+}
+
+/** The server keeps a reason of at most this many characters. */
+export const REASON_MAX = 160;
+
+/**
+ * «Немає: Маргарита 50 см, Тірамісу» — each dish with its size (two sizes of
+ * one pizza are two different answers), once, and cut at a comma rather than
+ * mid-name when the list is longer than the server keeps.
+ */
+export function missingReason(items: ReadonlyArray<Pick<RemoteRequestItem, 'product_name' | 'variant_label'>>): string | undefined {
+  const names = [...new Set(items.map((i) => (i.variant_label ? `${i.product_name} ${i.variant_label}` : i.product_name)))];
+  if (names.length === 0) return undefined;
+  let reason = 'Немає:';
+  for (const [index, name] of names.entries()) {
+    const next = `${reason}${index === 0 ? ' ' : ', '}${name}`;
+    const more = names.length - index - 1;
+    // Room for « та ще N» after it, if anything follows.
+    if (next.length + (more > 0 ? ` та ще ${more}`.length : 0) > REASON_MAX) {
+      return `${reason} та ще ${names.length - index}`.slice(0, REASON_MAX);
+    }
+    reason = next;
+  }
+  return reason;
+}
+
+/** «Немає» by a dish: the cafe gets the lines back marked, and asks again without them. */
+export function declineDishes(
+  order: Pick<RemoteRequest, 'id' | 'revision' | 'items'>,
+  itemIds: number[]
+): Promise<unknown> {
+  // The cafe's till shows the reason, not the item list: name the dishes in it.
+  const reason = missingReason(order.items.filter((i) => itemIds.includes(i.id)));
+  return posRequest<unknown>('post', `/remote-kitchen/orders/${order.id}/decline`, {
+    reason,
+    problems: itemIds.map((item_id) => ({ item_id, problem: 'unavailable' })),
     revision: order.revision,
   });
 }

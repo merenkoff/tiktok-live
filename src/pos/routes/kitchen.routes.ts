@@ -145,6 +145,34 @@ export function registerKitchenRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // «+10 хв» on the same card: the kitchen will be late, and says so before
+  // the cafe finds out from the guest. The promise moves at the cafe too
+  // (`delayed_minutes` on its tracker). The board's own route, for the same
+  // reason as the tap above.
+  fastify.post('/kitchen/remote-orders/:id/delay', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { minutes?: unknown };
+    const orderId = Number(id);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return reply.code(404).send({ error: 'Замовлення кухні не знайдено' });
+    }
+    const actor = { storeId: auth.storeId, staffId: auth.staffId };
+    try {
+      const order = await remoteKitchen.delayOrder(actor, orderId, { minutes: body.minutes });
+      return { id: order.id, promised_at: order.promised_at };
+    } catch (error) {
+      if (error instanceof remoteKitchen.RemoteKitchenNotFound) {
+        return reply.code(404).send({ error: errorMessage(error) });
+      }
+      if (error instanceof remoteKitchen.RemoteKitchenError) {
+        return reply.code(409).send({ error: errorMessage(error) });
+      }
+      throw error;
+    }
+  });
+
   fastify.patch('/sales/:id/prep', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;

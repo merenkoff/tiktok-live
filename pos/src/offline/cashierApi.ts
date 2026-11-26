@@ -158,6 +158,8 @@ export const cashierApi = {
      * without a connection rather than queueing it.
      */
     remote_order_id?: number | null;
+    /** The time the guest agreed to for `remote_order_id` (РК4); the server refuses another. */
+    remote_quoted_minutes?: number | null;
     /**
      * Kitchen dishes agreed by phone (РК5, §8) — the offline counterpart of
      * `remote_order_id`: queued with the receipt and replayed with it.

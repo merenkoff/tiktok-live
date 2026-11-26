@@ -96,6 +96,12 @@ export interface KitchenOrder {
    * `/dispatched`, never to `/sales/:id/prep` — the id is another table's.
    */
   promised_at?: string | null;
+  /**
+   * The same promise less the courier's road (`transit_minutes` of the order):
+   * the time the kitchen must hand the order over for the guest to get it at
+   * `promised_at`. Past it, the card goes red and «+10 хв» tells the cafe.
+   */
+  cook_by?: string | null;
   from_store?: string;
 }
 
@@ -270,6 +276,7 @@ export async function listOpenOrders(
 async function openRemoteOrders(storeId: number): Promise<KitchenOrder[]> {
   const heads = await pool.query(
     `SELECT o.id, o.order_no, o.status, o.paid_at, o.requested_at, o.ready_at, o.promised_at,
+            o.promised_at - make_interval(mins => COALESCE(o.transit_minutes, 0)) AS cook_by,
             o.guest_label, o.note, cs.name AS cafe_name
        FROM pos_remote_orders o
        JOIN pos_stores cs ON cs.id = o.cafe_store_id
@@ -325,6 +332,7 @@ async function openRemoteOrders(storeId: number): Promise<KitchenOrder[]> {
       note: notes.length > 0 ? notes.join(' · ') : null,
       items: itemsByOrder.get(Number(row.id)) ?? [],
       promised_at: isoOrNull(row.promised_at),
+      cook_by: isoOrNull(row.cook_by),
       from_store: cafeName,
     };
   });

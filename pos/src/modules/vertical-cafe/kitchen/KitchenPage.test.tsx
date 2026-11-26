@@ -216,6 +216,49 @@ describe('KitchenPage', () => {
     expect(posRequest).toHaveBeenCalledWith('patch', '/kitchen/rounds/9/prep', { prep_status: 'served' });
   });
 
+  it('a cafe’s order turns red past its due time, and «+10 хв» moves the promise', async () => {
+    let cookBy = Date.now() - 210_000;
+    const remote = () => ({
+      id: 5,
+      kind: 'remote',
+      title: 'Pulcinella Park · П-12',
+      order_no: 12,
+      receipt_number: '',
+      prep_status: 'new',
+      created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+      ready_at: null,
+      staff_name: '',
+      note: null,
+      promised_at: new Date(cookBy + 10 * 60_000).toISOString(),
+      cook_by: new Date(cookBy).toISOString(),
+      from_store: 'Pulcinella Park',
+      items: [{ id: 50, product_name: 'Маргарита', variant_label: '', quantity: 1, modifiers: [], note: '', stations: ['kitchen'] }],
+    });
+    posRequest.mockImplementation(async (method: string, path: string, body?: { minutes?: number }) => {
+      if (method === 'get' && path === '/kitchen/orders?with=remote') return { orders: [remote()], now: new Date().toISOString() };
+      if (method === 'post' && path === '/kitchen/remote-orders/5/delay') {
+        cookBy += (body?.minutes ?? 0) * 60_000;
+        return { id: 5, promised_at: new Date(cookBy).toISOString() };
+      }
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<KitchenPage />);
+    const card = await screen.findByTestId('kitchen-order-remote-5');
+    expect(within(card).getByTestId('kitchen-order-late')).toHaveTextContent('Запізнюємось на 4 хв');
+
+    await user.click(within(card).getByTestId('kitchen-delay-remote-5'));
+    expect(posRequest).toHaveBeenCalledWith('post', '/kitchen/remote-orders/5/delay', { minutes: 10 });
+    await waitFor(() => expect(within(screen.getByTestId('kitchen-order-remote-5')).queryByTestId('kitchen-order-late')).toBeNull());
+  });
+
+  it('puts no «+10 хв» on the café’s own orders', async () => {
+    renderWithProviders(<KitchenPage />);
+    const card = await screen.findByTestId('kitchen-order-sale-7');
+    expect(within(card).queryByTestId('kitchen-delay-sale-7')).toBeNull();
+    expect(within(card).queryByTestId('kitchen-order-late')).toBeNull();
+  });
+
   it('draws a card nobody carried from exactly as before', async () => {
     renderWithProviders(<KitchenPage />);
     const card = await screen.findByTestId('kitchen-order-sale-7');

@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as remoteApi from './remoteApi';
 import type { RemoteRequest } from './remoteApi';
-import { clockOffset, newIds, pendingRequests } from './lib';
+import { autoConfirmed, clockOffset, newIds, pendingRequests } from './lib';
 import { serverMessage } from '../lib/hostPlatform';
 import { useWriteGuard } from '../lib/writeGuard';
 
@@ -27,6 +27,8 @@ export const NOT_KITCHEN_RECHECK_MS = 10 * 60_000;
 
 export interface RemoteRequests {
   requests: RemoteRequest[];
+  /** Times the server confirmed by itself that the cook may still change (grey cards, no chime). */
+  confirmed: RemoteRequest[];
   /** Server time minus device time, from the last read. */
   offset: number;
   /** A refused answer, in the server's words. */
@@ -35,6 +37,8 @@ export interface RemoteRequests {
   busy: ReadonlySet<number>;
   answer: (order: RemoteRequest, minutes: number) => Promise<void>;
   decline: (order: RemoteRequest, reason: string) => Promise<void>;
+  /** «Немає» by dish: the lines go back to the cafe marked. */
+  declineDishes: (order: RemoteRequest, itemIds: number[]) => Promise<void>;
   clearBanner: () => void;
 }
 
@@ -45,6 +49,7 @@ function visible(): boolean {
 export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = remoteApi): RemoteRequests {
   const [kitchen, setKitchen] = useState(false);
   const [requests, setRequests] = useState<RemoteRequest[]>([]);
+  const [confirmed, setConfirmed] = useState<RemoteRequest[]>([]);
   const [offset, setOffset] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<number>>(new Set());
@@ -90,8 +95,10 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
       // The first read is what was already there when the screen opened: no chime.
       if (seenRef.current && newIds(seenRef.current, pending).length > 0) onNewRef.current?.();
       seenRef.current = new Set(pending.map((o) => o.id));
-      setOffset(clockOffset(read.now));
+      const offsetNow = clockOffset(read.now);
+      setOffset(offsetNow);
       setRequests(pending);
+      setConfirmed(autoConfirmed(read.orders, offsetNow));
     } catch {
       // A blip, or a server without the remote kitchen: the strip stays as it was.
     }
@@ -112,7 +119,10 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
       guard.begin();
       try {
         await call();
-        if (mountedRef.current) setRequests((prev) => prev.filter((o) => o.id !== order.id));
+        if (mountedRef.current) {
+          setRequests((prev) => prev.filter((o) => o.id !== order.id));
+          setConfirmed((prev) => prev.filter((o) => o.id !== order.id));
+        }
       } catch (err) {
         if (mountedRef.current) setBanner(serverMessage(err, 'Не вдалося відповісти — спробуйте ще раз'));
       } finally {
@@ -132,11 +142,13 @@ export function useRemoteRequests(onNew?: () => void, api: typeof remoteApi = re
 
   return {
     requests,
+    confirmed,
     offset,
     banner,
     busy,
     answer: (order, minutes) => send(order, () => api.answerWithTime(order, minutes)),
     decline: (order, reason) => send(order, () => api.decline(order, reason)),
+    declineDishes: (order, itemIds) => send(order, () => api.declineDishes(order, itemIds)),
     clearBanner: () => setBanner(null),
   };
 }

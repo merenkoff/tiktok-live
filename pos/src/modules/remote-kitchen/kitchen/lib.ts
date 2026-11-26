@@ -11,6 +11,32 @@ export const STEP_MIN = 5;
 export const MIN_PREP = 5;
 export const MAX_PREP = 180;
 
+/** «Чипи часу» (§7.2): the cook's usual answers, one tap each. */
+export const TIME_CHIPS = [15, 20, 25, 30, 40, 50] as const;
+
+/** The chips, with the kitchen's own suggestion among them when it is not one of them. */
+export function chipsFor(suggested: number): number[] {
+  const chips: number[] = [...TIME_CHIPS];
+  if (!chips.includes(suggested)) chips.push(suggested);
+  return chips.sort((a, b) => a - b);
+}
+
+/**
+ * Orders the server confirmed by itself (`quote_source = 'auto'`) whose time
+ * the cafe's guest may still agree to: the grey cards, where the cook can
+ * still «Змінити час» or say «Не зможемо». Oldest first.
+ */
+export function autoConfirmed(orders: RemoteRequest[], offset: number, clientNow = Date.now()): RemoteRequest[] {
+  const now = clientNow + offset;
+  return orders
+    .filter((o) => o.status === 'quoted' && o.quote_source === 'auto')
+    .filter((o) => {
+      const until = o.quote_expires_at ? Date.parse(o.quote_expires_at) : NaN;
+      return Number.isFinite(until) && until > now;
+    })
+    .sort((a, b) => a.requested_at.localeCompare(b.requested_at) || a.id - b.id);
+}
+
 /** Only what still waits for the kitchen's word, oldest first. */
 export function pendingRequests(orders: RemoteRequest[]): RemoteRequest[] {
   return orders

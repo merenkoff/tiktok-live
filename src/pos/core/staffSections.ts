@@ -88,6 +88,7 @@ export const SECTION_ROUTES: Readonly<Record<string, readonly string[]>> = {
     'POST /kitchen/stop-list/:productId',
     'PATCH /kitchen/rounds/:id/prep',
     'PATCH /kitchen/remote-orders/:id/prep',
+    'POST /kitchen/remote-orders/:id/delay',
     'PATCH /sales/:id/prep',
   ],
   // «Віддалена кухня» (TechDocs/POS_REMOTE_KITCHEN.md): a cashier the owner

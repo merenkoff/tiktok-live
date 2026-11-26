@@ -55,14 +55,16 @@ function harness(opts: { phone?: boolean } = {}) {
   const cart = {
     hold: null as string | null,
     remoteOrderId: null as number | null,
+    quoted: null as number | null,
     phone: null as { minutes: number; agreed_at: string } | null,
   };
   const controls = {
     setCheckoutHold: (r: string | null) => {
       cart.hold = r;
     },
-    setRemoteOrderId: (id: number | null) => {
+    setRemoteOrderId: (id: number | null, quotedMinutes?: number | null) => {
       cart.remoteOrderId = id;
+      cart.quoted = quotedMinutes ?? null;
     },
     ...(opts.phone === false
       ? {}
@@ -116,6 +118,26 @@ describe('the remote-kitchen checkout', () => {
     expect(h.store.phase()).toBe('agreed');
     expect(h.cart.hold).toBeNull();
     expect(h.cart.remoteOrderId).toBe(5);
+  });
+
+  it('takes back the guest’s yes when the kitchen changes a time the server gave by itself', async () => {
+    await ready(h);
+    h.api.createOrder.mockResolvedValueOnce(
+      view({ status: 'quoted', quote_source: 'auto', quoted_minutes: 25, quote_expires_at: at(300) })
+    );
+    await h.store.ask();
+    h.store.agree();
+    expect(h.cart.remoteOrderId).toBe(5);
+    // The sale carries the time the guest agreed to: the server refuses another.
+    expect(h.cart.quoted).toBe(25);
+
+    h.api.readOrder.mockResolvedValueOnce(
+      view({ status: 'quoted', quote_source: 'kitchen', quoted_minutes: 40, quote_expires_at: at(300) })
+    );
+    await h.store.refresh();
+    expect(h.store.phase()).toBe('quoted');
+    expect(h.cart.remoteOrderId).toBeNull();
+    expect(h.cart.hold).toMatch(/чи згоден/);
   });
 
   it('says nothing in a store without a remote kitchen', async () => {

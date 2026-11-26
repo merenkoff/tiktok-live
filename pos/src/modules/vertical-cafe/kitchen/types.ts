@@ -66,6 +66,8 @@ export interface KitchenOrder {
    * board that asks (`?with=remote`).
    */
   promised_at?: string | null;
+  /** `remote` only: `promised_at` less the courier's road — when the kitchen is due. */
+  cook_by?: string | null;
   from_store?: string;
 }
 

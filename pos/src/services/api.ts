@@ -553,6 +553,8 @@ class PosApi {
      * §8). Online only: the kitchen's stock and its clock live on the server.
      */
     remote_order_id?: number | null;
+    /** The time the guest agreed to for `remote_order_id` (РК4); the server refuses another. */
+    remote_quoted_minutes?: number | null;
     /**
      * Kitchen dishes agreed with the kitchen by phone while offline (РК5, §8):
      * the server files the kitchen's order, already cooking, with the sale.

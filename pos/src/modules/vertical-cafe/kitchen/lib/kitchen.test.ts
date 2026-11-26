@@ -17,6 +17,7 @@ import {
   orderKey,
   orderLabel,
   orderSubLabel,
+  remoteDue,
   serverMessage,
   splitColumns,
   waitSeconds,
@@ -214,5 +215,25 @@ describe('what of a round the waiters carried («Роздача»)', () => {
     expect(carriedSummary({ items: [item(3, 0), item(2)] })).toBeNull();
     // A counter sale's lines carry no such field at all.
     expect(carriedSummary({ items: [item(1)] })).toBeNull();
+  });
+});
+
+describe('a cafe’s order against its promise (РК4)', () => {
+  const NOW = Date.parse('2026-11-25T12:00:00Z');
+  const remote = (cookBy: string | null, promised: string | null = null) =>
+    order({ kind: 'remote', cook_by: cookBy, promised_at: promised });
+
+  it('is due at the kitchen one road before the guest, and late past it', () => {
+    expect(remoteDue(remote('2026-11-25T12:20:00Z'), 0, NOW)).toEqual({ tone: 'ok', lateMinutes: 0 });
+    expect(remoteDue(remote('2026-11-25T12:04:00Z'), 0, NOW)).toEqual({ tone: 'warn', lateMinutes: 0 });
+    expect(remoteDue(remote('2026-11-25T11:52:30Z'), 0, NOW)).toEqual({ tone: 'late', lateMinutes: 8 });
+    // A tablet ten minutes slow still sees it late by the server's clock.
+    expect(remoteDue(remote('2026-11-25T12:05:00Z'), 600_000, NOW)?.tone).toBe('late');
+  });
+
+  it('falls back to the promise from an older server, and leaves everything else alone', () => {
+    expect(remoteDue(remote(null, '2026-11-25T11:59:00Z'), 0, NOW)).toEqual({ tone: 'late', lateMinutes: 1 });
+    expect(remoteDue(remote(null, null), 0, NOW)).toBeNull();
+    expect(remoteDue(order({ kind: 'sale' }), 0, NOW)).toBeNull();
   });
 });

@@ -14,7 +14,7 @@ vi.mock('../lib/hostPlatform', () => ({
   posRequest: (...a: unknown[]) => posRequest(...a),
 }));
 
-const { listOrders, setPrep, setStopListed } = await import('./kitchenApi');
+const { delayRemote, listOrders, setPrep, setStopListed } = await import('./kitchenApi');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -51,6 +51,9 @@ describe('kitchenApi', () => {
   it('reads the board and toggles the stop-list where the server expects', async () => {
     await listOrders();
     expect(posRequest).toHaveBeenLastCalledWith('get', '/kitchen/orders?with=remote');
+
+    await delayRemote(7, 10);
+    expect(posRequest).toHaveBeenLastCalledWith('post', '/kitchen/remote-orders/7/delay', { minutes: 10 });
 
     await setStopListed(42, true);
     expect(posRequest).toHaveBeenLastCalledWith('post', '/kitchen/stop-list/42', {

@@ -65,6 +65,30 @@ export function isRemote(order: Pick<KitchenOrder, 'kind'>): boolean {
   return order.kind === 'remote';
 }
 
+/** How much «+10 хв» adds to a cafe's promise. */
+export const REMOTE_DELAY_MIN = 10;
+/** Closer than this to the kitchen's due time, a cafe's card turns amber. */
+export const REMOTE_WARN_S = 300;
+
+/**
+ * A cafe's order against its promise, not against its wait: `late` once the
+ * kitchen's due time (`cook_by`, else `promised_at`) has passed, `warn` in the
+ * five minutes before, with the minutes past due for «Запізнюємось на N хв».
+ * Null for anything that is not a cafe's order or carries no promise.
+ */
+export function remoteDue(
+  order: Pick<KitchenOrder, 'kind' | 'cook_by' | 'promised_at'>,
+  offset: number,
+  clientNow = Date.now()
+): { tone: WaitTone; lateMinutes: number } | null {
+  if (!isRemote(order)) return null;
+  const due = new Date(order.cook_by ?? order.promised_at ?? '').getTime();
+  if (Number.isNaN(due)) return null;
+  const left = Math.floor((due - (clientNow + offset)) / 1000);
+  if (left < 0) return { tone: 'late', lateMinutes: Math.max(1, Math.ceil(-left / 60)) };
+  return { tone: left <= REMOTE_WARN_S ? 'warn' : 'ok', lateMinutes: 0 };
+}
+
 /** `19:40` on the tablet's clock, for «до 19:40». Empty for a bad stamp. */
 export function clockTime(iso: string): string {
   const d = new Date(iso);
